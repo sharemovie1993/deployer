@@ -79,8 +79,8 @@ while ($true) {
                 Write-Host "    Repo: $($p.RepoUrl)" -ForegroundColor Gray
             }
             Write-Host ""
-            $pId = Read-Host "Pilih nomor proyek"
-            $selectedProj = $PROJECTS | Where-Object { $_.ID -eq $pId }
+            $projId = Read-Host "Pilih nomor proyek"
+            $selectedProj = $PROJECTS | Where-Object { $_.ID -eq $projId }
 
             if ($null -eq $selectedProj) {
                 Write-Host "Nomor proyek tidak valid!" -ForegroundColor Red
