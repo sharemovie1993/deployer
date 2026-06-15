@@ -118,12 +118,39 @@ while ($true) {
             Show-Header "Sedang Memproses - $($selectedProj.Name)"
             
             # Cek Git
-            Write-Host "Memeriksa Git..." -NoNewline
-            try { git --version | Out-Null; Write-Host " OK" -ForegroundColor Green } catch {
-                Write-Host " GAGAL" -ForegroundColor Red
-                Write-Host "Git harus terpasang di sistem untuk mengunduh kode!" -ForegroundColor Red
-                Wait-Key
-                continue
+            Write-Host "Memeriksa Git... " -NoNewline
+            $hasGit = $false
+            try {
+                git --version | Out-Null
+                Write-Host "OK" -ForegroundColor Green
+                $hasGit = $true
+            } catch {
+                Write-Host "BELUM TERPASANG" -ForegroundColor Yellow
+                $hasWinget = $null -ne (Get-Command winget -ErrorAction SilentlyContinue)
+                if ($hasWinget) {
+                    Write-Host "Sistem mendeteksi Windows Package Manager (winget) tersedia." -ForegroundColor Cyan
+                    Write-Host "Apakah Anda ingin memasang Git secara otomatis?"
+                    Write-Host "Tekan [Y] untuk memasang Git, atau tombol lain untuk melewatinya."
+                    $gitKey = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+                    if ($gitKey.Character -eq 'y' -or $gitKey.Character -eq 'Y') {
+                        Write-Host "Memulai pemasangan Git... Mohon tunggu..." -ForegroundColor Cyan
+                        Start-Process winget -ArgumentList "install Git.Git --silent --accept-package-agreements --accept-source-agreements" -Wait
+                        try {
+                            git --version | Out-Null
+                            Write-Host "Git berhasil terpasang!" -ForegroundColor Green
+                            $hasGit = $true
+                        } catch {
+                            Write-Host "Pemasangan selesai. Anda perlu membuka kembali terminal baru untuk menjalankan perintah git." -ForegroundColor Yellow
+                            $hasGit = $true
+                        }
+                    }
+                }
+                
+                if (-not $hasGit) {
+                    Write-Host "Git harus terpasang di sistem untuk mengunduh kode!" -ForegroundColor Red
+                    Wait-Key
+                    continue
+                }
             }
 
             # Clone / Pull Kode
