@@ -4,6 +4,12 @@
 
 $ErrorActionPreference = "Stop"
 
+# Mengonfigurasi ExecutionPolicy agar berkas script global npm (seperti PM2) dapat berjalan
+try {
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue
+} catch {}
+
+
 # Registrasi Seluruh Repositori Proyek dari GitHub Anda
 $PROJECTS = @(
     @{
