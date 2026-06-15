@@ -15,10 +15,12 @@ Proyek pertama yang terdaftar secara bawaan adalah **Project Yatim (Mustahiq Car
 
 ## Panduan Penggunaan
 
-### 1. Di Lingkungan Windows (PowerShell)
-Buka PowerShell (disarankan Run as Administrator) di folder repositori ini, lalu jalankan:
+### 1. Di Lingkungan Windows
+Cukup klik ganda (double-click) berkas **`run.bat`** di dalam folder ini untuk menjalankan deployer secara otomatis dengan bypass kebijakan eksekusi (*Execution Policy*).
+
+Atau Anda dapat menjalankannya via PowerShell dengan perintah:
 ```powershell
-./deploy-manager.ps1
+powershell -ExecutionPolicy Bypass -File .\deploy-manager.ps1
 ```
 
 ### 2. Di Lingkungan Linux (Bash)
