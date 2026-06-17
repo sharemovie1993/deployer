@@ -46,8 +46,23 @@ $PROJECTS = @(
         RepoUrl = "https://github.com/sharemovie1993/Project-POS.git"
         DefaultDir = "C:\apps\project-pos"
         HasDeployScript = $false
+    },
+    @{
+        ID = 6
+        Name = "Caddy Gateway (Automated SSL & Reverse Proxy)"
+        RepoUrl = ""
+        DefaultDir = "C:\Users\SERVER-DELL\Documents\deployer\caddy-setup"
+        HasDeployScript = $true
+    },
+    @{
+        ID = 7
+        Name = "Server Lisensi (Licensing Server VPS)"
+        RepoUrl = "https://github.com/sharemovie1993/server-lisensi.git"
+        DefaultDir = "C:\Users\SERVER-DELL\Documents\Project-Server-Lisensi"
+        HasDeployScript = $true
     }
 )
+
 
 function Show-Header {
     param ($Title)
@@ -160,31 +175,35 @@ while ($true) {
             }
 
             # Clone / Pull Kode
-            if (Test-Path $installDir) {
-                Write-Host "Folder target sudah ada. Memperbarui kode via git pull..." -ForegroundColor Yellow
-                Push-Location $installDir
-                try {
-                    git fetch origin
-                    git reset --hard origin/main
-                    Write-Host "Kode berhasil diperbarui ke versi terbaru!" -ForegroundColor Green
-                } catch {
-                    Write-Host "Gagal melakukan pembaruan git. Pastikan folder tersebut adalah repositori git yang valid." -ForegroundColor Red
+            if ($selectedProj.RepoUrl) {
+                if (Test-Path $installDir) {
+                    Write-Host "Folder target sudah ada. Memperbarui kode via git pull..." -ForegroundColor Yellow
+                    Push-Location $installDir
+                    try {
+                        git fetch origin
+                        git reset --hard origin/main
+                        Write-Host "Kode berhasil diperbarui ke versi terbaru!" -ForegroundColor Green
+                    } catch {
+                        Write-Host "Gagal melakukan pembaruan git. Pastikan folder tersebut adalah repositori git yang valid." -ForegroundColor Red
+                        Pop-Location
+                        Wait-Key
+                        continue
+                    }
                     Pop-Location
-                    Wait-Key
-                    continue
+                } else {
+                    Write-Host "Folder target tidak ditemukan. Melakukan git clone..." -ForegroundColor Yellow
+                    New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+                    try {
+                        git clone --depth 1 $selectedProj.RepoUrl $installDir
+                        Write-Host "Clone sukses!" -ForegroundColor Green
+                    } catch {
+                        Write-Host "Gagal mengkloning repositori dari GitHub!" -ForegroundColor Red
+                        Wait-Key
+                        continue
+                    }
                 }
-                Pop-Location
             } else {
-                Write-Host "Folder target tidak ditemukan. Melakukan git clone..." -ForegroundColor Yellow
-                New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-                try {
-                    git clone --depth 1 $selectedProj.RepoUrl $installDir
-                    Write-Host "Clone sukses!" -ForegroundColor Green
-                } catch {
-                    Write-Host "Gagal mengkloning repositori dari GitHub!" -ForegroundColor Red
-                    Wait-Key
-                    continue
-                }
+                Write-Host "Proyek lokal terdeteksi (tidak memerlukan Git clone/pull)." -ForegroundColor Green
             }
 
             # Panggil skrip deploy internal proyek
