@@ -81,20 +81,30 @@ function Run-RemoteScript {
 
 Show-Log "Menghubungkan ke VPS ($TARGET_IP) untuk konfigurasi SWAP..."
 
-# Membaca isi berkas setup-swap.sh yang sudah kita buat sebelumnya
 $swapScriptPath = Join-Path $PSScriptRoot "setup-swap.sh"
 if (-not (Test-Path $swapScriptPath)) {
     throw "Skrip setup-swap.sh tidak ditemukan di $PSScriptRoot"
 }
-$swapScriptContent = Get-Content -Path $swapScriptPath -Raw
 
-# Bungkus eksekusi dengan menyuplai password sudo secara otomatis
-$remoteScript = @"
-echo '$SUDO_PASS' | sudo -S bash -c '$($swapScriptContent -replace "'", "'\\''")'
-"@
+# 1. SCP berkas setup-swap.sh ke /tmp/setup-swap.sh di VPS
+Show-Log "Menyalin skrip konfigurasi SWAP ke VPS..."
+$localScriptPath = "$env:TEMP\setup-swap-temp.sh"
+$scriptContent = Get-Content -Path $swapScriptPath -Raw
+$scriptContent = $scriptContent -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText($localScriptPath, $scriptContent)
 
-# Jalankan skrip di VPS target
-Run-RemoteScript -ScriptContent $remoteScript -SSHCmd $SSH_NEW -SCPCmd $SCP_NEW -TargetUser $TARGET_USER -TargetIP $TARGET_IP
+Invoke-Expression "$SCP_NEW `"$localScriptPath`" ${TARGET_USER}@${TARGET_IP}:/tmp/setup-swap.sh"
+if ($LASTEXITCODE -ne 0) {
+    throw "Gagal menyalin berkas setup-swap.sh ke VPS target."
+}
+
+# 2. Jalankan secara remote menggunakan sudo
+Show-Log "Menjalankan skrip setup SWAP di VPS..."
+$runCmd = "$SSH_NEW `"echo '$SUDO_PASS' | sudo -S bash /tmp/setup-swap.sh auto`""
+Invoke-Expression $runCmd
+if ($LASTEXITCODE -ne 0) {
+    throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE"
+}
 
 Show-Header "SETUP SWAP SELESAI"
 Show-Log "Konfigurasi SWAP Space dinamis berhasil diaktifkan secara remote!" "Green"
