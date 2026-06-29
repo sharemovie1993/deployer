@@ -4,6 +4,9 @@
 
 $ErrorActionPreference = "Stop"
 
+$LOG_FILE = "$PSScriptRoot\manager-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').log"
+Start-Transcript -Path $LOG_FILE -Append -Force | Out-Null
+
 # Mengonfigurasi ExecutionPolicy agar berkas script global npm (seperti PM2) dapat berjalan
 try {
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue
@@ -407,6 +410,7 @@ while ($true) {
 
         "5" {
             Write-Host "Keluar dari program. Terima kasih." -ForegroundColor Cyan
+            Stop-Transcript
             Exit
         }
         "6" {

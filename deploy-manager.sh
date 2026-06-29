@@ -11,6 +11,13 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Setup Logging
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_FILE="$SCRIPT_DIR/manager-\$(date +%Y-%m-%d-%H%M%S).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo -e "${CYAN}Logging dimulai ke berkas: $LOG_FILE${NC}"
+
 # Metadata Proyek Terdaftar
 declare -A PROJ_NAMES
 declare -A PROJ_REPOS

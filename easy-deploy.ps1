@@ -265,7 +265,13 @@ Show-Log "Melakukan clone repository dan konfigurasi project..." "Yellow"
 $setupScript = @"
 set -e
 
-# 1. Kloning / Update Repo
+# 1. Setup Logging di VPS
+mkdir -p /var/www/$TARGET_SUBDIR
+exec > >(tee -a /var/www/$TARGET_SUBDIR/deploy.log) 2>&1
+
+echo "=== MEMULAI REMOTE DEPLOYMENT - $(date) ==="
+
+# 2. Kloning / Update Repo
 cd /var/www
 if [ ! -d "/var/www/$TARGET_SUBDIR/.git" ]; then
     rm -rf /var/www/$TARGET_SUBDIR || true

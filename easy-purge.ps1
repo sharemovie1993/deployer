@@ -1,5 +1,8 @@
 $ErrorActionPreference = "Stop"
 
+$LOG_FILE = "$PSScriptRoot\purge-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').log"
+Start-Transcript -Path $LOG_FILE -Append -Force | Out-Null
+
 function Show-Log {
     param([string]$Message, [string]$Color = "Cyan")
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Message" -ForegroundColor $Color
@@ -125,4 +128,5 @@ Show-Header "FACTORY RESET SELESAI"
 Write-Host "Semua konfigurasi dan file yang terkait dengan Server Lisensi telah dilenyapkan." -ForegroundColor Green
 Write-Host "VPS Anda kini sudah kembali seperti Kertas Kosong." -ForegroundColor Green
 Write-Host ""
+Stop-Transcript
 Read-Host "Tekan [ENTER] untuk kembali ke menu utama..."
