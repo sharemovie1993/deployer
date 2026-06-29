@@ -314,12 +314,17 @@ if [ "$IS_ABSENTA" = "True" ]; then
     fi
 fi
 
-# Opsi WireGuard untuk Server Lisensi
-if [ "$IS_SERVER_LISENSI" = "True" ]; then
-    echo "Menginstal WireGuard untuk Server Lisensi..."
+# Opsi WireGuard untuk Server Lisensi dan Absenta (Easy Tunnel Built-in)
+if [ "$IS_SERVER_LISENSI" = "True" ] || [ "$IS_ABSENTA" = "True" ]; then
+    echo "Menginstal WireGuard..."
     echo '$SUDO_PASS' | sudo -S apt-get install -y wireguard
     echo '$SUDO_PASS' | sudo -S sysctl -w net.ipv4.ip_forward=1
     echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+    
+    # Configure passwordless sudo for WireGuard
+    echo "Mengonfigurasi passwordless sudo untuk WireGuard..."
+    echo "$NEW_USER ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg" | echo '$SUDO_PASS' | sudo -S tee /etc/sudoers.d/90-wireguard >/dev/null
+    echo '$SUDO_PASS' | sudo -S chmod 440 /etc/sudoers.d/90-wireguard
 fi
 
 # Siapkan folder target
