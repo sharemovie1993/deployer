@@ -45,6 +45,7 @@ echo -e "----------------------------------------------------------"
 # Target total memori (RAM + SWAP) adalah 8GB (8192MB) agar aman kompilasi NodeJS
 TARGET_TOTAL_MB=8192
 REC_SWAP_MB=0
+DISK_CRITICAL=false
 
 if [ $TOTAL_RAM_MB -ge $TARGET_TOTAL_MB ]; then
     # Jika RAM fisik sudah >= 8GB, secara umum tidak butuh swap tambahan untuk build
@@ -69,6 +70,7 @@ if [ $SAFE_SWAP_LIMIT_MB -le 0 ]; then
     echo -e "${RED}Peringatan: Ruang disk kosong sangat kritis (${FREE_DISK_GB} GB)!${NC}"
     echo -e "Tidak aman untuk membuat SWAP baru."
     REC_SWAP_MB=0
+    DISK_CRITICAL=true
 elif [ $REC_SWAP_MB -gt $SAFE_SWAP_LIMIT_MB ]; then
     echo -e "${YELLOW}Peringatan: Disk terbatas. Mengurangi ukuran SWAP rekomendasi ke batas aman...${NC}"
     REC_SWAP_MB=$SAFE_SWAP_LIMIT_MB
@@ -95,8 +97,11 @@ else
         INTERACTIVE=true
     fi
 
-    if [ "$REC_SWAP_MB" -eq 0 ]; then
-        echo -e "${GREEN}Memori sistem Anda sudah memadai (RAM + SWAP >= 8GB).${NC}"
+    if [ "$DISK_CRITICAL" = true ]; then
+        echo -e "${RED}Pembuatan SWAP dilewati secara otomatis untuk mencegah disk penuh (Disk Full).${NC}"
+        exit 0
+    elif [ "$REC_SWAP_MB" -eq 0 ]; then
+        echo -e "${GREEN}Memori sistem Anda sudah memadai (RAM >= 8GB).${NC}"
         if [ "$INTERACTIVE" = true ]; then
             read -p "Apakah Anda tetap ingin membuat SWAP baru secara paksa? (y/N): " force_swap
             if [[ "$force_swap" =~ ^[yY]$ ]]; then
