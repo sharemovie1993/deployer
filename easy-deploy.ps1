@@ -273,12 +273,13 @@ exec > >(tee -a /var/www/$TARGET_SUBDIR/deploy.log) 2>&1
 echo "=== MEMULAI REMOTE DEPLOYMENT - $(date) ==="
 
 # 2. Kloning / Update Repo
-cd /var/www
 if [ ! -d "/var/www/$TARGET_SUBDIR/.git" ]; then
-    rm -rf /var/www/$TARGET_SUBDIR || true
-    git clone $REPO_URL $TARGET_SUBDIR
+    echo '$SUDO_PASS' | sudo -S rm -rf /var/www/$TARGET_SUBDIR || true
+    echo '$SUDO_PASS' | sudo -S mkdir -p /var/www/$TARGET_SUBDIR
+    echo '$SUDO_PASS' | sudo -S chown -R $NEW_USER:$NEW_USER /var/www/$TARGET_SUBDIR
+    git clone $REPO_URL /var/www/$TARGET_SUBDIR
 else
-    cd $TARGET_SUBDIR
+    cd /var/www/$TARGET_SUBDIR
     git fetch origin
     git reset --hard origin/main || git reset --hard origin/master
 fi
@@ -335,17 +336,18 @@ if [ "$IS_ABSENTA" = "True" ]; then
     pm2 save
 
     # Configure Caddyfile
-    echo "$TARGET_DOMAIN, *.$TARGET_DOMAIN {" > /etc/caddy/Caddyfile
-    echo "    reverse_proxy /api/* localhost:$B_PORT" >> /etc/caddy/Caddyfile
-    echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /etc/caddy/Caddyfile
-    echo "    reverse_proxy /* localhost:$F_PORT" >> /etc/caddy/Caddyfile
-    echo "    encode gzip zstd" >> /etc/caddy/Caddyfile
+    echo "$TARGET_DOMAIN, *.$TARGET_DOMAIN {" > /tmp/Caddyfile
+    echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
+    echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
+    echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
+    echo "    encode gzip zstd" >> /tmp/Caddyfile
     if [ ! -z "$CF_TOKEN" ]; then
-        echo "    tls {" >> /etc/caddy/Caddyfile
-        echo "        dns cloudflare $CF_TOKEN" >> /etc/caddy/Caddyfile
-        echo "    }" >> /etc/caddy/Caddyfile
+        echo "    tls {" >> /tmp/Caddyfile
+        echo "        dns cloudflare $CF_TOKEN" >> /tmp/Caddyfile
+        echo "    }" >> /tmp/Caddyfile
     fi
-    echo "}" >> /etc/caddy/Caddyfile
+    echo "}" >> /tmp/Caddyfile
+    echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
     
 elif [ "$IS_SERVER_LISENSI" = "True" ]; then
     # deployment Server Lisensi
@@ -412,10 +414,11 @@ else
     pm2 save
     
     # Configure Caddyfile
-    echo "$TARGET_DOMAIN {" > /etc/caddy/Caddyfile
-    echo "    reverse_proxy /* localhost:$B_PORT" >> /etc/caddy/Caddyfile
-    echo "    encode gzip zstd" >> /etc/caddy/Caddyfile
-    echo "}" >> /etc/caddy/Caddyfile
+    echo "$TARGET_DOMAIN {" > /tmp/Caddyfile
+    echo "    reverse_proxy /* localhost:$B_PORT" >> /tmp/Caddyfile
+    echo "    encode gzip zstd" >> /tmp/Caddyfile
+    echo "}" >> /tmp/Caddyfile
+    echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
 fi
 
 # Restart Caddy to apply changes
