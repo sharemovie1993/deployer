@@ -156,7 +156,12 @@ if ($IS_SERVER_LISENSI -eq "True") {
     $LICENSE_KEY = (Read-Host "Masukkan Kunci Lisensi Absenta (Kosongkan jika belum ada)").Trim()
     
     $DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [postgresql://postgres:123123123@localhost:5432/absensi]").Trim()
-    if ([string]::IsNullOrWhiteSpace($DB_URL)) { $DB_URL = "postgresql://postgres:123123123@localhost:5432/absensi" }
+    if ([string]::IsNullOrWhiteSpace($DB_URL)) {
+        $DB_URL = "postgresql://postgres:123123123@localhost:5432/absensi"
+    } else {
+        if ($DB_URL.StartsWith("[")) { $DB_URL = $DB_URL.Substring(1) }
+        if ($DB_URL.EndsWith("]")) { $DB_URL = $DB_URL.Substring(0, $DB_URL.Length - 1) }
+    }
     
     $INSTALL_POSTGRES = (Read-Host "Apakah Anda ingin memasang PostgreSQL Server di VPS Linux secara otomatis? [y/N]").Trim()
     if ([string]::IsNullOrWhiteSpace($INSTALL_POSTGRES)) { $INSTALL_POSTGRES = "N" }
