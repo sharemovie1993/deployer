@@ -4,7 +4,9 @@
 
 $ErrorActionPreference = "Stop"
 
-$LOG_FILE = "$PSScriptRoot\manager-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').log"
+$LOG_DIR = Join-Path $PSScriptRoot "logs"
+if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null }
+$LOG_FILE = Join-Path $LOG_DIR "manager-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').log"
 Start-Transcript -Path $LOG_FILE -Append -Force | Out-Null
 
 # Mengonfigurasi ExecutionPolicy agar berkas script global npm (seperti PM2) dapat berjalan
