@@ -247,17 +247,29 @@ fi
 
 # Install Caddy
 if [ -f /tmp/caddy_offline ]; then
-    echo "Memasang Caddy menggunakan berkas kustom offline..."
-    if ! command -v caddy &>/dev/null; then
-        echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-        echo '$SUDO_PASS' | sudo -S apt-get update -y
-        echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
+    NEEDS_COPY=true
+    if [ -f /usr/bin/caddy ]; then
+        MD5_OFFLINE=$(md5sum /tmp/caddy_offline | awk '{print $1}')
+        MD5_INSTALLED=$(md5sum /usr/bin/caddy | awk '{print $1}')
+        if [ "$MD5_OFFLINE" = "$MD5_INSTALLED" ]; then
+            echo "Caddy kustom offline sudah sama dengan yang terpasang. Melewati pembaruan binary."
+            NEEDS_COPY=false
+        fi
     fi
-    echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
-    echo '$SUDO_PASS' | sudo -S cp /tmp/caddy_offline /usr/bin/caddy
-    echo '$SUDO_PASS' | sudo -S chmod +x /usr/bin/caddy
+
+    if [ "$NEEDS_COPY" = "true" ]; then
+        echo "Memasang Caddy menggunakan berkas kustom offline..."
+        if ! command -v caddy &>/dev/null; then
+            echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+            echo '$SUDO_PASS' | sudo -S apt-get update -y
+            echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
+        fi
+        echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
+        echo '$SUDO_PASS' | sudo -S cp /tmp/caddy_offline /usr/bin/caddy
+        echo '$SUDO_PASS' | sudo -S chmod +x /usr/bin/caddy
+    fi
 else
     if ! command -v caddy &>/dev/null; then
         echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
