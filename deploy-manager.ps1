@@ -276,7 +276,7 @@ while ($true) {
             Show-Header "Pilih Target / Jenis Quick Update"
             Write-Host " 1) Windows Lokal (Pull & Build)" -ForegroundColor White
             Write-Host " 2) VPS Linux Remote (Pull & Build)" -ForegroundColor White
-            Write-Host " 3) Update Konfigurasi Terowongan/Lisensi VPS Remote (Hanya .env + Restart)" -ForegroundColor White
+            Write-Host " 3) Update Base Domain Easy-Tunnel dan Lisensi Server (Remote)" -ForegroundColor White
             Write-Host " 0) Batal" -ForegroundColor White
             Write-Host ""
             $target = Read-Host "Pilih opsi [0-3]"

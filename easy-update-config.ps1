@@ -17,7 +17,7 @@ function Show-Header {
     param([string]$Title)
     Clear-Host
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    Write-Host "            EASY UPDATE CONFIG - VPS TUNNEL CONFIG TUNER                  " -ForegroundColor Yellow -Bold
+    Write-Host "        UPDATE BASE DOMAIN EASY-TUNNEL DAN LISENSI SERVER                 " -ForegroundColor Yellow -Bold
     Write-Host "==========================================================================" -ForegroundColor Cyan
     if ($Title) {
         Write-Host " -> $Title" -ForegroundColor Green
@@ -79,12 +79,12 @@ function Run-RemoteScript {
     if ($LASTEXITCODE -ne 0) { throw "Eksekusi script remote gagal." }
 }
 
-Show-Header "Melakukan Pembaruan Konfigurasi Remote via SSH"
+Show-Header "Update Base Domain Easy-Tunnel dan Lisensi Server"
 Show-Log "Menghubungkan ke VPS ($NEW_IP)..." "Yellow"
 
 $updateScript = "@
 set -e
-echo "==== Memulai Update Konfigurasi VPS ===="
+echo "==== Memulai Update Base Domain & Lisensi Server ===="
 cd /var/www/project-absenta
 
 echo "Mengubah konfigurasi .env backend..."
@@ -106,9 +106,9 @@ fi
 echo "Memuat ulang PM2 untuk menerapkan perubahan..."
 pm2 reload ecosystem.config.js || pm2 reload project-absenta || pm2 restart all
 
-echo "============================================="
-echo "   UPDATE KONFIGURASI VPS BERHASIL SELESAI!  "
-echo "============================================="
+echo "=========================================================="
+echo "   UPDATE BASE DOMAIN & LISENSI SERVER SELESAI SAKSES!    "
+echo "=========================================================="
 "@
 
 try {
