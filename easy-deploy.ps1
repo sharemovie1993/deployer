@@ -246,12 +246,25 @@ if ! command -v pm2 &>/dev/null; then
 fi
 
 # Install Caddy
-if ! command -v caddy &>/dev/null; then
-    echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-    echo '$SUDO_PASS' | sudo -S apt-get update -y
-    echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
+if [ -f /tmp/caddy_offline ]; then
+    echo "Memasang Caddy menggunakan berkas kustom offline..."
+    if ! command -v caddy &>/dev/null; then
+        echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+        echo '$SUDO_PASS' | sudo -S apt-get update -y
+        echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
+    fi
+    echo '$SUDO_PASS' | sudo -S cp /tmp/caddy_offline /usr/bin/caddy
+    echo '$SUDO_PASS' | sudo -S chmod +x /usr/bin/caddy
+else
+    if ! command -v caddy &>/dev/null; then
+        echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+        echo '$SUDO_PASS' | sudo -S apt-get update -y
+        echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
+    fi
 fi
 
 # Buat Caddyfile placeholder dengan hak akses write
@@ -296,6 +309,12 @@ echo '$SUDO_PASS' | sudo -S mkdir -p /var/www/$TARGET_SUBDIR
 echo '$SUDO_PASS' | sudo -S chown ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
 echo 'Provisioning dasar selesai.'
 "@
+
+$LOCAL_CADDY = Join-Path $PSScriptRoot "caddy-bin\caddy"
+if (Test-Path $LOCAL_CADDY) {
+    Show-Log "Menemukan Caddy Offline lokal. Menyalin ke VPS target..." "Yellow"
+    & scp -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "$LOCAL_CADDY" "${NEW_USER}@${NEW_IP}:/tmp/caddy_offline"
+}
 
 Run-RemoteScript -ScriptContent $provisionScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
 Show-Log "Instalasi dependensi di VPS target selesai." "Green"
