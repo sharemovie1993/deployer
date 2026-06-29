@@ -97,7 +97,10 @@ echo '$SUDO_PASS' | sudo -S bash -c '$($swapScriptContent -replace "'", "'\\''")
 Run-RemoteScript -ScriptContent $remoteScript -SSHCmd $SSH_NEW -SCPCmd $SCP_NEW -TargetUser $TARGET_USER -TargetIP $TARGET_IP
 
 Show-Header "SETUP SWAP SELESAI"
-Show-Log "Konfigurasi SWAP Space sebesar 4GB berhasil diaktifkan secara remote!" "Green"
+Show-Log "Konfigurasi SWAP Space dinamis berhasil diaktifkan secara remote!" "Green"
+Write-Host ""
+Write-Host "Seluruh jalannya proses ini telah dicatat di berkas log:" -ForegroundColor Yellow
+Write-Host " -> $LOG_FILE" -ForegroundColor Cyan
 Write-Host ""
 Stop-Transcript
 Read-Host "Tekan [ENTER] untuk kembali ke menu utama..."
