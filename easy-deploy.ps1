@@ -127,10 +127,24 @@ $CF_TOKEN = ""
 $DB_URL = ""
 $INSTALL_POSTGRES = "N"
 $INSTALL_REDIS = "N"
+$DEPLOY_SCENARIO = "hybrid"
 
 if ($IS_SERVER_LISENSI -eq "True") {
     Write-Host "Menggunakan port default untuk Server Lisensi." -ForegroundColor Gray
 } elseif ($IS_ABSENTA -eq "True") {
+    Write-Host "Pilih Skenario Deployment:" -ForegroundColor White
+    Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, e.g. https://app.absenta.id)"
+    Write-Host " 2) Lokal Sekolah (Akses via IP LAN langsung tanpa Caddy, e.g. http://10.10.10.163:5175)"
+    Write-Host " 3) Hybrid (Lokal Sekolah + Caddy Proxy, e.g. http://10.10.10.163)"
+    $scenarioChoice = Read-Host "Pilih [1-3] (Default: 1)"
+    
+    $DEPLOY_SCENARIO = "saas"
+    if ($scenarioChoice -eq "2") {
+        $DEPLOY_SCENARIO = "local"
+    } elseif ($scenarioChoice -eq "3") {
+        $DEPLOY_SCENARIO = "hybrid"
+    }
+
     $B_PORT = (Read-Host "Masukkan Port Backend [3003]").Trim()
     if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = "3003" }
     
@@ -148,10 +162,34 @@ if ($IS_SERVER_LISENSI -eq "True") {
     $INSTALL_REDIS = (Read-Host "Apakah Anda ingin memasang Redis Server di VPS Linux secara otomatis? [y/N]").Trim()
     if ([string]::IsNullOrWhiteSpace($INSTALL_REDIS)) { $INSTALL_REDIS = "N" }
     
-    $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (Opsional, untuk DNS Challenge Wildcard SSL)").Trim()
+    $CF_TOKEN = ""
+    if ($DEPLOY_SCENARIO -eq "saas") {
+        $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (Opsional, untuk DNS Challenge Wildcard SSL)").Trim()
+    }
 } else {
     $B_PORT = (Read-Host "Masukkan Port Aplikasi [3000]").Trim()
     if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = "3000" }
+}
+
+$SCHEME = "https"
+if ($TARGET_DOMAIN -match "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$") {
+    $SCHEME = "http"
+}
+if ($DEPLOY_SCENARIO -eq "local") {
+    $SCHEME = "http"
+}
+
+# Tentukan nilai URL sesuai skenario
+if ($DEPLOY_SCENARIO -eq "local") {
+    $BACKEND_API_URL = "http://${TARGET_DOMAIN}:${B_PORT}/api"
+    $BACKEND_APP_URL = "http://${TARGET_DOMAIN}:${B_PORT}"
+    $BACKEND_FRONTEND_URL = "http://${TARGET_DOMAIN}:${F_PORT}"
+    $FRONTEND_API_BASE_URL = "http://${TARGET_DOMAIN}:${B_PORT}/api"
+} else {
+    $BACKEND_API_URL = "${SCHEME}://${TARGET_DOMAIN}/api"
+    $BACKEND_APP_URL = "${SCHEME}://${TARGET_DOMAIN}"
+    $BACKEND_FRONTEND_URL = "${SCHEME}://${TARGET_DOMAIN}"
+    $FRONTEND_API_BASE_URL = "/api"
 }
 
 # Perbaiki permission SSH Key agar Windows OpenSSH tidak memblokirnya
@@ -298,19 +336,19 @@ if [ "$IS_ABSENTA" = "True" ]; then
     sed -i "s|^REDIS_MODE=.*|REDIS_MODE=single|g" absenta_backend/.env
     sed -i "s|^REDIS_URL=.*|REDIS_URL=redis://localhost:6379|g" absenta_backend/.env
     sed -i "s|^LICENSE_KEY=.*|LICENSE_KEY=$LICENSE_KEY|g" absenta_backend/.env
-    sed -i "s|^API_URL=.*|API_URL=https://$TARGET_DOMAIN/api|g" absenta_backend/.env
-    sed -i "s|^APP_URL=.*|APP_URL=https://$TARGET_DOMAIN|g" absenta_backend/.env
-    sed -i "s|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://$TARGET_DOMAIN|g" absenta_backend/.env
-    sed -i "s|^PUBLIC_INVOICE_BASE_URL=.*|PUBLIC_INVOICE_BASE_URL=https://$TARGET_DOMAIN|g" absenta_backend/.env
-    sed -i "s|^PUBLIC_APP_SCHEME=.*|PUBLIC_APP_SCHEME=https|g" absenta_backend/.env
+    sed -i "s|^API_URL=.*|API_URL=$BACKEND_API_URL|g" absenta_backend/.env
+    sed -i "s|^APP_URL=.*|APP_URL=$BACKEND_APP_URL|g" absenta_backend/.env
+    sed -i "s|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=$BACKEND_APP_URL|g" absenta_backend/.env
+    sed -i "s|^PUBLIC_INVOICE_BASE_URL=.*|PUBLIC_INVOICE_BASE_URL=$BACKEND_APP_URL|g" absenta_backend/.env
+    sed -i "s|^PUBLIC_APP_SCHEME=.*|PUBLIC_APP_SCHEME=$SCHEME|g" absenta_backend/.env
     sed -i "s|^PUBLIC_DOMAIN_BASE=.*|PUBLIC_DOMAIN_BASE=$TARGET_DOMAIN|g" absenta_backend/.env
     sed -i "s|^MAIN_DOMAIN=.*|MAIN_DOMAIN=$TARGET_DOMAIN|g" absenta_backend/.env
     sed -i "s|^TENANT_BASE_DOMAIN=.*|TENANT_BASE_DOMAIN=$TARGET_DOMAIN|g" absenta_backend/.env
-    sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://$TARGET_DOMAIN|g" absenta_backend/.env
+    sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=$BACKEND_FRONTEND_URL|g" absenta_backend/.env
     
     # Frontend Setup
     cp absenta_frontend/.env.example absenta_frontend/.env || true
-    sed -i "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=/api|g" absenta_frontend/.env
+    sed -i "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=$FRONTEND_API_BASE_URL|g" absenta_frontend/.env
     sed -i "s|^VITE_PROXY_TARGET=.*|VITE_PROXY_TARGET=http://localhost:$B_PORT|g" absenta_frontend/.env
     sed -i "s|^PORT=.*|PORT=$F_PORT|g" absenta_frontend/.env
 
@@ -336,29 +374,33 @@ if [ "$IS_ABSENTA" = "True" ]; then
     pm2 save
 
     # Configure Caddyfile
-    # Deteksi apakah domain target merupakan IP address atau Domain
-    if [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        CADDY_HOSTS="$TARGET_DOMAIN"
-    else
-        if [ ! -z "$CF_TOKEN" ]; then
-            CADDY_HOSTS="$TARGET_DOMAIN, *.$TARGET_DOMAIN"
-        else
+    if [ "$DEPLOY_SCENARIO" != "local" ]; then
+        # Deteksi apakah domain target merupakan IP address atau Domain
+        if [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             CADDY_HOSTS="$TARGET_DOMAIN"
+        else
+            if [ ! -z "$CF_TOKEN" ]; then
+                CADDY_HOSTS="$TARGET_DOMAIN, *.$TARGET_DOMAIN"
+            else
+                CADDY_HOSTS="$TARGET_DOMAIN"
+            fi
         fi
-    fi
 
-    echo "$CADDY_HOSTS {" > /tmp/Caddyfile
-    echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
-    echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
-    echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
-    echo "    encode gzip zstd" >> /tmp/Caddyfile
-    if [ ! -z "$CF_TOKEN" ]; then
-        echo "    tls {" >> /tmp/Caddyfile
-        echo "        dns cloudflare $CF_TOKEN" >> /tmp/Caddyfile
-        echo "    }" >> /tmp/Caddyfile
+        echo "$CADDY_HOSTS {" > /tmp/Caddyfile
+        echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
+        echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
+        echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
+        echo "    encode gzip zstd" >> /tmp/Caddyfile
+        if [ ! -z "$CF_TOKEN" ]; then
+            echo "    tls {" >> /tmp/Caddyfile
+            echo "        dns cloudflare $CF_TOKEN" >> /tmp/Caddyfile
+            echo "    }" >> /tmp/Caddyfile
+        fi
+        echo "}" >> /tmp/Caddyfile
+        echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
+    else
+        echo "Skenario Lokal terdeteksi. Melewati konfigurasi Caddy Reverse Proxy."
     fi
-    echo "}" >> /tmp/Caddyfile
-    echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
     
 elif [ "$IS_SERVER_LISENSI" = "True" ]; then
     # deployment Server Lisensi
