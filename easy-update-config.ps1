@@ -82,7 +82,7 @@ function Run-RemoteScript {
 Show-Header "Update Base Domain Easy-Tunnel dan Lisensi Server"
 Show-Log "Menghubungkan ke VPS ($NEW_IP)..." "Yellow"
 
-$updateScript = "@
+$updateScript = @"
 set -e
 echo "==== Memulai Update Base Domain & Lisensi Server ===="
 cd /var/www/project-absenta
