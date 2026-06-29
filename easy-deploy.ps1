@@ -255,6 +255,7 @@ if [ -f /tmp/caddy_offline ]; then
         echo '$SUDO_PASS' | sudo -S apt-get update -y
         echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
     fi
+    echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
     echo '$SUDO_PASS' | sudo -S cp /tmp/caddy_offline /usr/bin/caddy
     echo '$SUDO_PASS' | sudo -S chmod +x /usr/bin/caddy
 else
