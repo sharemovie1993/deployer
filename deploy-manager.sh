@@ -47,6 +47,12 @@ PROJ_REPOS[5]="https://github.com/sharemovie1993/Project-POS.git"
 PROJ_DIRS[5]="/var/www/project-pos"
 PROJ_HAS_SCRIPT[5]=false
 
+# 6. Caddy Gateway
+PROJ_NAMES[6]="Caddy Gateway (Automated SSL & Reverse Proxy)"
+PROJ_REPOS[6]=""
+PROJ_DIRS[6]="/var/www/caddy-setup"
+PROJ_HAS_SCRIPT[6]=true
+
 function show_header() {
     clear
     echo -e "${CYAN}==========================================================================${NC}"
@@ -74,8 +80,8 @@ while true; do
     case $menu_choice in
         1)
             show_header "Pilih Proyek Yang Ingin Di-deploy"
-            # Loop manual sesuai ID urut dari 1 ke 5
-            for id in 1 2 3 4 5; do
+            # Loop manual sesuai ID urut dari 1 ke 6
+            for id in 1 2 3 4 5 6; do
                 name="${PROJ_NAMES[$id]}"
                 repo="${PROJ_REPOS[$id]}"
                 has_script="${PROJ_HAS_SCRIPT[$id]}"
@@ -136,17 +142,21 @@ while true; do
             fi
 
             show_header "Memproses Deployment - $name"
-            if [ -d "$install_dir" ]; then
-                echo -e "${YELLOW}Folder target sudah ada. Memperbarui kode via git fetch & reset...${NC}"
-                cd "$install_dir"
-                git fetch origin
-                git reset --hard origin/main
-                cd - > /dev/null
+            if [ ! -z "$repo" ]; then
+                if [ -d "$install_dir" ]; then
+                    echo -e "${YELLOW}Folder target sudah ada. Memperbarui kode via git fetch & reset...${NC}"
+                    cd "$install_dir"
+                    git fetch origin
+                    git reset --hard origin/main
+                    cd - > /dev/null
+                else
+                    echo -e "${YELLOW}Folder target tidak ada. Membuat folder dan mengkloning...${NC}"
+                    sudo mkdir -p "$install_dir"
+                    sudo chown -R $USER:$USER "$install_dir"
+                    git clone --depth 1 "$repo" "$install_dir"
+                fi
             else
-                echo -e "${YELLOW}Folder target tidak ada. Membuat folder dan mengkloning...${NC}"
-                sudo mkdir -p "$install_dir"
-                sudo chown -R $USER:$USER "$install_dir"
-                git clone --depth 1 "$repo" "$install_dir"
+                echo -e "${GREEN}Proyek lokal terdeteksi (tidak memerlukan Git clone/pull).${NC}"
             fi
 
             # Panggil skrip deploy internal
