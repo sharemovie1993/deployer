@@ -336,7 +336,18 @@ if [ "$IS_ABSENTA" = "True" ]; then
     pm2 save
 
     # Configure Caddyfile
-    echo "$TARGET_DOMAIN, *.$TARGET_DOMAIN {" > /tmp/Caddyfile
+    # Deteksi apakah domain target merupakan IP address atau Domain
+    if [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        CADDY_HOSTS="$TARGET_DOMAIN"
+    else
+        if [ ! -z "$CF_TOKEN" ]; then
+            CADDY_HOSTS="$TARGET_DOMAIN, *.$TARGET_DOMAIN"
+        else
+            CADDY_HOSTS="$TARGET_DOMAIN"
+        fi
+    fi
+
+    echo "$CADDY_HOSTS {" > /tmp/Caddyfile
     echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
     echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
     echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
