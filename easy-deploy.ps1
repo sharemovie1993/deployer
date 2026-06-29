@@ -330,8 +330,11 @@ if [ "$IS_SERVER_LISENSI" = "True" ] || [ "$IS_ABSENTA" = "True" ]; then
     
     # Configure passwordless sudo for WireGuard
     echo "Mengonfigurasi passwordless sudo untuk WireGuard..."
-    echo "$NEW_USER ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg" | echo '$SUDO_PASS' | sudo -S tee /etc/sudoers.d/90-wireguard >/dev/null
+    echo "$NEW_USER ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg" > /tmp/90-wireguard
+    echo '$SUDO_PASS' | sudo -S cp /tmp/90-wireguard /etc/sudoers.d/90-wireguard
+    echo '$SUDO_PASS' | sudo -S chown root:root /etc/sudoers.d/90-wireguard
     echo '$SUDO_PASS' | sudo -S chmod 440 /etc/sudoers.d/90-wireguard
+    rm -f /tmp/90-wireguard
 fi
 
 # Siapkan folder target

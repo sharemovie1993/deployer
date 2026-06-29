@@ -111,8 +111,11 @@ if ! command -v wg-quick &> /dev/null; then
     echo '$SUDO_PASS' | sudo -S sysctl -w net.ipv4.ip_forward=1
     echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
     echo "Mengonfigurasi passwordless sudo untuk WireGuard..."
-    echo "$NEW_USER ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg" | echo '$SUDO_PASS' | sudo -S tee /etc/sudoers.d/90-wireguard >/dev/null
+    echo "$NEW_USER ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg" > /tmp/90-wireguard
+    echo '$SUDO_PASS' | sudo -S cp /tmp/90-wireguard /etc/sudoers.d/90-wireguard
+    echo '$SUDO_PASS' | sudo -S chown root:root /etc/sudoers.d/90-wireguard
     echo '$SUDO_PASS' | sudo -S chmod 440 /etc/sudoers.d/90-wireguard
+    rm -f /tmp/90-wireguard
 fi
 
 echo "Menarik kode terbaru dari branch main..."
