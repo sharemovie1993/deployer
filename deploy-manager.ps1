@@ -273,62 +273,75 @@ while ($true) {
         }
 
         "2" {
-            Show-Header "Pilih Proyek Untuk Quick Update"
-            $quickProjects = $PROJECTS | Where-Object { $_.HasQuickUpdate -eq $true }
-            
-            if ($quickProjects.Count -eq 0) {
-                Write-Host "Belum ada proyek yang mendukung Quick Update." -ForegroundColor Yellow
-                Wait-Key
-                continue
-            }
-
-            foreach ($p in $quickProjects) {
-                Write-Host " $($p.ID)) $($p.Name)" -ForegroundColor White
-            }
+            Show-Header "Pilih Target Quick Update"
+            Write-Host " 1) Windows Lokal" -ForegroundColor White
+            Write-Host " 2) VPS Linux Remote" -ForegroundColor White
+            Write-Host " 0) Batal" -ForegroundColor White
             Write-Host ""
-            $projId = Read-Host "Pilih nomor proyek"
-            $selectedProj = $quickProjects | Where-Object { $_.ID -eq $projId }
+            $target = Read-Host "Pilih target [0-2]"
 
-            if ($null -eq $selectedProj) {
-                Write-Host "Nomor proyek tidak valid!" -ForegroundColor Red
-                Wait-Key
-                continue
-            }
+            if ($target -eq "1") {
+                Show-Header "Pilih Proyek Untuk Quick Update Lokal"
+                $quickProjects = $PROJECTS | Where-Object { $_.HasQuickUpdate -eq $true }
+                
+                if ($quickProjects.Count -eq 0) {
+                    Write-Host "Belum ada proyek yang mendukung Quick Update." -ForegroundColor Yellow
+                    Wait-Key
+                    continue
+                }
 
-            $installDir = $selectedProj.DefaultDir
-            if (-not (Test-Path $installDir)) {
-                Write-Host "Folder proyek $installDir tidak ditemukan! Lakukan Full Wizard dulu." -ForegroundColor Red
-                Wait-Key
-                continue
-            }
+                foreach ($p in $quickProjects) {
+                    Write-Host " $($p.ID)) $($p.Name)" -ForegroundColor White
+                }
+                Write-Host ""
+                $projId = Read-Host "Pilih nomor proyek"
+                $selectedProj = $quickProjects | Where-Object { $_.ID -eq $projId }
 
-            Write-Host "Memulai Quick Update untuk $($selectedProj.Name)..." -ForegroundColor Cyan
-            Push-Location $installDir
-            
-            # Pull kode terbaru terlebih dahulu agar script quick-update.ps1 versi terbaru dimuat ke memori
-            Write-Host "Menarik kode terbaru dari GitHub..." -ForegroundColor Yellow
-            try {
-                git fetch origin main
-                git reset --hard origin/main
-                Write-Host "Kode berhasil diperbarui!" -ForegroundColor Green
-            } catch {
-                Write-Host "Gagal memperbarui kode repositori sebelum menjalankan update cepat." -ForegroundColor Red
+                if ($null -eq $selectedProj) {
+                    Write-Host "Nomor proyek tidak valid!" -ForegroundColor Red
+                    Wait-Key
+                    continue
+                }
+
+                $installDir = $selectedProj.DefaultDir
+                if (-not (Test-Path $installDir)) {
+                    Write-Host "Folder proyek $installDir tidak ditemukan! Lakukan Full Wizard dulu." -ForegroundColor Red
+                    Wait-Key
+                    continue
+                }
+
+                Write-Host "Memulai Quick Update untuk $($selectedProj.Name)..." -ForegroundColor Cyan
+                Push-Location $installDir
+                
+                # Pull kode terbaru terlebih dahulu agar script quick-update.ps1 versi terbaru dimuat ke memori
+                Write-Host "Menarik kode terbaru dari GitHub..." -ForegroundColor Yellow
+                try {
+                    git fetch origin main
+                    git reset --hard origin/main
+                    Write-Host "Kode berhasil diperbarui!" -ForegroundColor Green
+                } catch {
+                    Write-Host "Gagal memperbarui kode repositori sebelum menjalankan update cepat." -ForegroundColor Red
+                    Pop-Location
+                    Wait-Key
+                    continue
+                }
+
+                if (Test-Path "quick-update.ps1") {
+                    try {
+                        & powershell -NoProfile -ExecutionPolicy Bypass -File .\quick-update.ps1
+                    } catch {
+                        Write-Host "Terjadi kesalahan saat menjalankan quick-update.ps1." -ForegroundColor Red
+                    }
+                } else {
+                    Write-Host "Error: File quick-update.ps1 tidak ditemukan!" -ForegroundColor Red
+                }
                 Pop-Location
                 Wait-Key
-                continue
             }
-
-            if (Test-Path "quick-update.ps1") {
-                try {
-                    & powershell -NoProfile -ExecutionPolicy Bypass -File .\quick-update.ps1
-                } catch {
-                    Write-Host "Terjadi kesalahan saat menjalankan quick-update.ps1." -ForegroundColor Red
-                }
-            } else {
-                Write-Host "Error: File quick-update.ps1 tidak ditemukan!" -ForegroundColor Red
+            elseif ($target -eq "2") {
+                # Panggil skrip quick update remote
+                & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "easy-update-remote.ps1")
             }
-            Pop-Location
-            Wait-Key
         }
 
         "3" {
