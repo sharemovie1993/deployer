@@ -103,6 +103,18 @@ set -e
 echo "==== Memulai Update Cepat Proyek Absenta ===="
 cd /var/www/$TARGET_SUBDIR
 
+# Pastikan WireGuard terpasang (jika belum ada)
+if ! command -v wg-quick &> /dev/null; then
+    echo "WireGuard/openresolv tidak terdeteksi. Menginstal via apt..."
+    echo '$SUDO_PASS' | sudo -S apt-get update -y
+    echo '$SUDO_PASS' | sudo -S apt-get install -y wireguard openresolv
+    echo '$SUDO_PASS' | sudo -S sysctl -w net.ipv4.ip_forward=1
+    echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+    echo "Mengonfigurasi passwordless sudo untuk WireGuard..."
+    echo "$NEW_USER ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg" | echo '$SUDO_PASS' | sudo -S tee /etc/sudoers.d/90-wireguard >/dev/null
+    echo '$SUDO_PASS' | sudo -S chmod 440 /etc/sudoers.d/90-wireguard
+fi
+
 echo "Menarik kode terbaru dari branch main..."
 git fetch origin main
 git reset --hard origin/main
