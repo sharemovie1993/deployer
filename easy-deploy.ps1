@@ -316,8 +316,7 @@ fi
 
 # Opsi WireGuard untuk Server Lisensi dan Absenta (Easy Tunnel Built-in)
 if [ "$IS_SERVER_LISENSI" = "True" ] || [ "$IS_ABSENTA" = "True" ]; then
-    echo "Menginstal WireGuard..."
-    echo '$SUDO_PASS' | sudo -S apt-get install -y wireguard
+    echo '$SUDO_PASS' | sudo -S apt-get install -y wireguard openresolv
     echo '$SUDO_PASS' | sudo -S sysctl -w net.ipv4.ip_forward=1
     echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
     
