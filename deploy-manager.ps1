@@ -418,7 +418,12 @@ while ($true) {
         "6" {
             $migrateScript = Join-Path $PSScriptRoot "easy-migrate.ps1"
             if (Test-Path $migrateScript) {
-                & $migrateScript
+                try {
+                    & $migrateScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-migrate: $_" -ForegroundColor Red
+                    Wait-Key
+                }
             } else {
                 Write-Host "Script easy-migrate.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
@@ -427,7 +432,12 @@ while ($true) {
         "7" {
             $purgeScript = Join-Path $PSScriptRoot "easy-purge.ps1"
             if (Test-Path $purgeScript) {
-                & $purgeScript
+                try {
+                    & $purgeScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-purge: $_" -ForegroundColor Red
+                    Wait-Key
+                }
             } else {
                 Write-Host "Script easy-purge.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
@@ -436,7 +446,12 @@ while ($true) {
         "8" {
             $deployScript = Join-Path $PSScriptRoot "easy-deploy.ps1"
             if (Test-Path $deployScript) {
-                & $deployScript
+                try {
+                    & $deployScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-deploy: $_" -ForegroundColor Red
+                    Wait-Key
+                }
             } else {
                 Write-Host "Script easy-deploy.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
@@ -445,7 +460,12 @@ while ($true) {
         "9" {
             $hardeningScript = Join-Path $PSScriptRoot "easy-hardening.ps1"
             if (Test-Path $hardeningScript) {
-                & $hardeningScript
+                try {
+                    & $hardeningScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-hardening: $_" -ForegroundColor Red
+                    Wait-Key
+                }
             } else {
                 Write-Host "Script easy-hardening.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
@@ -454,7 +474,12 @@ while ($true) {
         "10" {
             $swapScript = Join-Path $PSScriptRoot "easy-swap.ps1"
             if (Test-Path $swapScript) {
-                & $swapScript
+                try {
+                    & $swapScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-swap: $_" -ForegroundColor Red
+                    Wait-Key
+                }
             } else {
                 Write-Host "Script easy-swap.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
@@ -463,7 +488,12 @@ while ($true) {
         "11" {
             $resizeScript = Join-Path $PSScriptRoot "easy-resize.ps1"
             if (Test-Path $resizeScript) {
-                & $resizeScript
+                try {
+                    & $resizeScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-resize: $_" -ForegroundColor Red
+                    Wait-Key
+                }
             } else {
                 Write-Host "Script easy-resize.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
