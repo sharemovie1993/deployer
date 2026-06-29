@@ -63,22 +63,6 @@ $rule = New-Object System.Security.AccessControl.FileSystemAccessRule([System.Se
 $acl.AddAccessRule($rule)
 Set-Acl -Path $SAFE_KEY -AclObject $acl
 
-$SSH_NEW = "ssh -i `"$SAFE_KEY`" -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP}"
-$SCP_NEW = "scp -i `"$SAFE_KEY`" -o StrictHostKeyChecking=no"
-
-function Run-RemoteScript {
-    param([string]$ScriptContent, [string]$SSHCmd, [string]$SCPCmd, [string]$TargetUser, [string]$TargetIP)
-    $tempScript = "$env:TEMP\remote_script.sh"
-    $ScriptContent = $ScriptContent -replace "`r`n", "`n"
-    [System.IO.File]::WriteAllText($tempScript, $ScriptContent)
-    Invoke-Expression "$SCPCmd `"$tempScript`" ${TargetUser}@${TargetIP}:/tmp/remote_script.sh"
-    $runCmd = "$SSHCmd `"bash /tmp/remote_script.sh`""
-    Invoke-Expression $runCmd
-    if ($LASTEXITCODE -ne 0) {
-        throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE"
-    }
-}
-
 Show-Log "Menghubungkan ke VPS ($TARGET_IP) untuk konfigurasi SWAP..."
 
 $swapScriptPath = Join-Path $PSScriptRoot "setup-swap.sh"
@@ -93,15 +77,14 @@ $scriptContent = Get-Content -Path $swapScriptPath -Raw
 $scriptContent = $scriptContent -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText($localScriptPath, $scriptContent)
 
-Invoke-Expression "$SCP_NEW `"$localScriptPath`" ${TARGET_USER}@${TARGET_IP}:/tmp/setup-swap.sh"
+& scp -i "$SAFE_KEY" -o StrictHostKeyChecking=no "$localScriptPath" "${TARGET_USER}@${TARGET_IP}:/tmp/setup-swap.sh"
 if ($LASTEXITCODE -ne 0) {
     throw "Gagal menyalin berkas setup-swap.sh ke VPS target."
 }
 
 # 2. Jalankan secara remote menggunakan sudo
 Show-Log "Menjalankan skrip setup SWAP di VPS..."
-$runCmd = "$SSH_NEW `"echo '$SUDO_PASS' | sudo -S bash /tmp/setup-swap.sh auto`""
-Invoke-Expression $runCmd
+& ssh -i "$SAFE_KEY" -o StrictHostKeyChecking=no "${TARGET_USER}@${TARGET_IP}" "echo '$SUDO_PASS' | sudo -S bash /tmp/setup-swap.sh auto"
 if ($LASTEXITCODE -ne 0) {
     throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE"
 }

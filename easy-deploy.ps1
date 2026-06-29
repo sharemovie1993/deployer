@@ -202,17 +202,20 @@ $rule = New-Object System.Security.AccessControl.FileSystemAccessRule([System.Se
 $acl.AddAccessRule($rule)
 Set-Acl -Path $SAFE_NEW_KEY -AclObject $acl
 
-$SSH_NEW = "ssh -i `"$SAFE_NEW_KEY`" -o StrictHostKeyChecking=no ${NEW_USER}@${NEW_IP}"
-$SCP_NEW = "scp -i `"$SAFE_NEW_KEY`" -o StrictHostKeyChecking=no"
-
 function Run-RemoteScript {
-    param([string]$ScriptContent, [string]$SSHCmd, [string]$SCPCmd, [string]$TargetUser, [string]$TargetIP)
+    param([string]$ScriptContent, [string]$KeyPath, [string]$TargetUser, [string]$TargetIP)
     $tempScript = "$env:TEMP\remote_script.sh"
     $ScriptContent = $ScriptContent -replace "`r`n", "`n"
     [System.IO.File]::WriteAllText($tempScript, $ScriptContent)
-    Invoke-Expression "$SCPCmd `"$tempScript`" ${TargetUser}@${TargetIP}:/tmp/remote_script.sh"
-    $runCmd = "$SSHCmd `"bash /tmp/remote_script.sh`""
-    Invoke-Expression $runCmd
+    
+    # Run SCP directly
+    & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$tempScript" "${TargetUser}@${TargetIP}:/tmp/remote_script.sh"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Gagal menyalin script ke VPS menggunakan SCP."
+    }
+    
+    # Run SSH directly
+    & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${TargetIP}" "bash /tmp/remote_script.sh"
     if ($LASTEXITCODE -ne 0) {
         throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE"
     }
@@ -292,7 +295,7 @@ echo '$SUDO_PASS' | sudo -S chown ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDI
 echo 'Provisioning dasar selesai.'
 "@
 
-Run-RemoteScript -ScriptContent $provisionScript -SSHCmd $SSH_NEW -SCPCmd $SCP_NEW -TargetUser $NEW_USER -TargetIP $NEW_IP
+Run-RemoteScript -ScriptContent $provisionScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
 Show-Log "Instalasi dependensi di VPS target selesai." "Green"
 
 # ---------------------------------------------------------
@@ -508,7 +511,7 @@ echo ""
 cp /tmp/deploy.log /var/www/$TARGET_SUBDIR/deploy.log || true
 "@
 
-Run-RemoteScript -ScriptContent $setupScript -SSHCmd $SSH_NEW -SCPCmd $SCP_NEW -TargetUser $NEW_USER -TargetIP $NEW_IP
+Run-RemoteScript -ScriptContent $setupScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
 
 Show-Header "DEPLOY SELESAI!"
 Show-Log "Proyek '$PROJ_NAME' berhasil di-deploy ke $TARGET_DOMAIN!" "Green"

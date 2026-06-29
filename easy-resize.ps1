@@ -63,9 +63,6 @@ $rule = New-Object System.Security.AccessControl.FileSystemAccessRule([System.Se
 $acl.AddAccessRule($rule)
 Set-Acl -Path $SAFE_KEY -AclObject $acl
 
-$SSH_NEW = "ssh -i `"$SAFE_KEY`" -o StrictHostKeyChecking=no ${TARGET_USER}@${TARGET_IP}"
-$SCP_NEW = "scp -i `"$SAFE_KEY`" -o StrictHostKeyChecking=no"
-
 Show-Log "Menghubungkan ke VPS ($TARGET_IP) untuk proses resize disk..."
 
 $resizeScriptPath = Join-Path $PSScriptRoot "setup-resize.sh"
@@ -80,15 +77,14 @@ $scriptContent = Get-Content -Path $resizeScriptPath -Raw
 $scriptContent = $scriptContent -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText($localScriptPath, $scriptContent)
 
-Invoke-Expression "$SCP_NEW `"$localScriptPath`" ${TARGET_USER}@${TARGET_IP}:/tmp/setup-resize.sh"
+& scp -i "$SAFE_KEY" -o StrictHostKeyChecking=no "$localScriptPath" "${TARGET_USER}@${TARGET_IP}:/tmp/setup-resize.sh"
 if ($LASTEXITCODE -ne 0) {
     throw "Gagal menyalin berkas setup-resize.sh ke VPS target."
 }
 
 # 2. Jalankan secara remote menggunakan sudo
 Show-Log "Menjalankan skrip resize di VPS..."
-$runCmd = "$SSH_NEW `"echo '$SUDO_PASS' | sudo -S bash /tmp/setup-resize.sh`""
-Invoke-Expression $runCmd
+& ssh -i "$SAFE_KEY" -o StrictHostKeyChecking=no "${TARGET_USER}@${TARGET_IP}" "echo '$SUDO_PASS' | sudo -S bash /tmp/setup-resize.sh"
 if ($LASTEXITCODE -ne 0) {
     throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE"
 }
