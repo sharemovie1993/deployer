@@ -249,15 +249,15 @@ fi
 if [ -f /tmp/caddy_offline ]; then
     NEEDS_COPY=true
     if [ -f /usr/bin/caddy ]; then
-        MD5_OFFLINE=$(md5sum /tmp/caddy_offline | awk '{print $1}')
-        MD5_INSTALLED=$(md5sum /usr/bin/caddy | awk '{print $1}')
-        if [ "$MD5_OFFLINE" = "$MD5_INSTALLED" ]; then
+        MD5_OFFLINE=`$(md5sum /tmp/caddy_offline | awk '{print `$1}')
+        MD5_INSTALLED=`$(md5sum /usr/bin/caddy | awk '{print `$1}')
+        if [ "`$MD5_OFFLINE" = "`$MD5_INSTALLED" ]; then
             echo "Caddy kustom offline sudah sama dengan yang terpasang. Melewati pembaruan binary."
             NEEDS_COPY=false
         fi
     fi
 
-    if [ "$NEEDS_COPY" = "true" ]; then
+    if [ "`$NEEDS_COPY" = "true" ]; then
         echo "Memasang Caddy menggunakan berkas kustom offline..."
         if ! command -v caddy &>/dev/null; then
             echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
