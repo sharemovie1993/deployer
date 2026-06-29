@@ -306,7 +306,7 @@ set -e
 
 # 1. Setup Logging di VPS
 mkdir -p /var/www/$TARGET_SUBDIR
-exec > >(tee -a /var/www/$TARGET_SUBDIR/deploy.log) 2>&1
+exec > >(tee -a /tmp/deploy.log) 2>&1
 
 echo "=== MEMULAI REMOTE DEPLOYMENT - $(date) ==="
 
@@ -504,6 +504,8 @@ if [ "$IS_SERVER_LISENSI" = "True" ]; then
 fi
 echo -e "\e[1;36m==========================================================\e[0m"
 echo ""
+# Salin log akhir ke folder target proyek
+cp /tmp/deploy.log /var/www/$TARGET_SUBDIR/deploy.log || true
 "@
 
 Run-RemoteScript -ScriptContent $setupScript -SSHCmd $SSH_NEW -SCPCmd $SCP_NEW -TargetUser $NEW_USER -TargetIP $NEW_IP
