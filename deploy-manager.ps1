@@ -246,8 +246,15 @@ while ($true) {
             Write-Host ""
             Write-Host "Menjalankan skrip deploy internal (deploy.ps1) pada proyek target..." -ForegroundColor Cyan
             Push-Location $installDir
-            if (Test-Path "deploy.ps1") {
+            if (Test-Path -Path "$installDir\deploy.ps1") {
                 try {
+                    # Salin Caddy.exe offline jika tersedia ke folder target
+                    $localCaddyExe = Join-Path $PSScriptRoot "caddy-bin\caddy.exe"
+                    if (Test-Path $localCaddyExe) {
+                        Write-Host "Menyalin Caddy.exe offline lokal ke folder target..." -ForegroundColor Cyan
+                        Copy-Item -Path $localCaddyExe -Destination $installDir -Force -ErrorAction SilentlyContinue
+                    }
+
                     # Jalankan dengan RunAs Administrator agar Caddy bisa install service & trust certificate
                     $deployCmd = "Push-Location '$installDir'; & powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1; Pop-Location; Read-Host 'Selesai. Tekan ENTER...'"
                     Start-Process powershell -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $deployCmd -Verb RunAs -Wait
