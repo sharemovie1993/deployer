@@ -130,6 +130,7 @@ $DB_URL = ""
 $INSTALL_POSTGRES = "N"
 $INSTALL_REDIS = "N"
 $DEPLOY_SCENARIO = "hybrid"
+$TUNNEL_BASE_DOMAIN = "tefatjkt.net"
 
 if ($IS_SERVER_LISENSI -eq "True") {
     Write-Host "Menggunakan port default untuk Server Lisensi." -ForegroundColor Gray
@@ -154,6 +155,9 @@ if ($IS_SERVER_LISENSI -eq "True") {
     if ([string]::IsNullOrWhiteSpace($F_PORT)) { $F_PORT = "5175" }
     
     $LICENSE_KEY = (Read-Host "Masukkan Kunci Lisensi Absenta (Kosongkan jika belum ada)").Trim()
+    
+    $TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [tefatjkt.net]").Trim()
+    if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = "tefatjkt.net" }
     
     $DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [postgresql://postgres:123123123@localhost:5432/absensi]").Trim()
     if ([string]::IsNullOrWhiteSpace($DB_URL)) {
@@ -382,6 +386,7 @@ if [ "$IS_ABSENTA" = "True" ]; then
     sed -i "s|^REDIS_MODE=.*|REDIS_MODE=single|g" absenta_backend/.env
     sed -i "s|^REDIS_URL=.*|REDIS_URL=redis://localhost:6379|g" absenta_backend/.env
     sed -i "s|^LICENSE_KEY=.*|LICENSE_KEY=$LICENSE_KEY|g" absenta_backend/.env
+    sed -i "s|^EASY_TUNNEL_BASE_DOMAIN=.*|EASY_TUNNEL_BASE_DOMAIN=$TUNNEL_BASE_DOMAIN|g" absenta_backend/.env
     sed -i "s|^API_URL=.*|API_URL=$BACKEND_API_URL|g" absenta_backend/.env
     sed -i "s|^APP_URL=.*|APP_URL=$BACKEND_APP_URL|g" absenta_backend/.env
     sed -i "s|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=$BACKEND_APP_URL|g" absenta_backend/.env
