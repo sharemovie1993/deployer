@@ -99,9 +99,8 @@ while ($true) {
     Write-Host " 10) Setup SWAP Space 4GB Linux (Remote)"
     Write-Host " 11) Perluas Partisi Disk Linux VM/VPS (Remote)"
     Write-Host " 12) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
-    Write-Host " 13) Update Konfigurasi Terowongan/Lisensi VPS (Remote)"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [1-13]"
+    $choice = Read-Host "Pilih opsi [1-12]"
 
     switch ($choice) {
         "1" {
@@ -274,12 +273,13 @@ while ($true) {
         }
 
         "2" {
-            Show-Header "Pilih Target Quick Update"
-            Write-Host " 1) Windows Lokal" -ForegroundColor White
-            Write-Host " 2) VPS Linux Remote" -ForegroundColor White
+            Show-Header "Pilih Target / Jenis Quick Update"
+            Write-Host " 1) Windows Lokal (Pull & Build)" -ForegroundColor White
+            Write-Host " 2) VPS Linux Remote (Pull & Build)" -ForegroundColor White
+            Write-Host " 3) Update Konfigurasi Terowongan/Lisensi VPS Remote (Hanya .env + Restart)" -ForegroundColor White
             Write-Host " 0) Batal" -ForegroundColor White
             Write-Host ""
-            $target = Read-Host "Pilih target [0-2]"
+            $target = Read-Host "Pilih opsi [0-3]"
 
             if ($target -eq "1") {
                 Show-Header "Pilih Proyek Untuk Quick Update Lokal"
@@ -342,6 +342,10 @@ while ($true) {
             elseif ($target -eq "2") {
                 # Panggil skrip quick update remote
                 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "easy-update-remote.ps1")
+            }
+            elseif ($target -eq "3") {
+                # Panggil skrip quick update config remote
+                & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "easy-update-config.ps1")
             }
         }
 
@@ -644,20 +648,6 @@ while ($true) {
                 }
             } else {
                 Write-Host "Script easy-setup-ssh.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
-                Wait-Key
-            }
-        }
-        "13" {
-            $configScript = Join-Path $PSScriptRoot "easy-update-config.ps1"
-            if (Test-Path $configScript) {
-                try {
-                    & powershell -NoProfile -ExecutionPolicy Bypass -File $configScript
-                } catch {
-                    Write-Host "[ERROR] Gagal menjalankan easy-update-config: $_" -ForegroundColor Red
-                    Wait-Key
-                }
-            } else {
-                Write-Host "Script easy-update-config.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }
