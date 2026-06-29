@@ -98,8 +98,9 @@ while ($true) {
     Write-Host " 9) Server Hardening (Firewall, Fail2Ban, Keamanan SSH)"
     Write-Host " 10) Setup SWAP Space 4GB Linux (Remote)"
     Write-Host " 11) Perluas Partisi Disk Linux VM/VPS (Remote)"
+    Write-Host " 12) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [1-11]"
+    $choice = Read-Host "Pilih opsi [1-12]"
 
     switch ($choice) {
         "1" {
@@ -498,6 +499,20 @@ while ($true) {
                 }
             } else {
                 Write-Host "Script easy-resize.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
+                Wait-Key
+            }
+        }
+        "12" {
+            $sshSetupScript = Join-Path $PSScriptRoot "easy-setup-ssh.ps1"
+            if (Test-Path $sshSetupScript) {
+                try {
+                    & $sshSetupScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-setup-ssh: $_" -ForegroundColor Red
+                    Wait-Key
+                }
+            } else {
+                Write-Host "Script easy-setup-ssh.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }
