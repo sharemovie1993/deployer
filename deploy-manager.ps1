@@ -99,8 +99,9 @@ while ($true) {
     Write-Host " 10) Setup SWAP Space 4GB Linux (Remote)"
     Write-Host " 11) Perluas Partisi Disk Linux VM/VPS (Remote)"
     Write-Host " 12) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
+    Write-Host " 13) Update Konfigurasi Terowongan/Lisensi VPS (Remote)"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [1-12]"
+    $choice = Read-Host "Pilih opsi [1-13]"
 
     switch ($choice) {
         "1" {
@@ -643,6 +644,20 @@ while ($true) {
                 }
             } else {
                 Write-Host "Script easy-setup-ssh.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
+                Wait-Key
+            }
+        }
+        "13" {
+            $configScript = Join-Path $PSScriptRoot "easy-update-config.ps1"
+            if (Test-Path $configScript) {
+                try {
+                    & powershell -NoProfile -ExecutionPolicy Bypass -File $configScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-update-config: $_" -ForegroundColor Red
+                    Wait-Key
+                }
+            } else {
+                Write-Host "Script easy-update-config.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }
