@@ -49,7 +49,8 @@ if (-not (Test-Path $NEW_KEY_SOURCE)) {
     exit
 }
 
-$SUDO_PASS = "g1g1G1NGSUL*!2"
+$SUDO_PASS = (Read-Host "Masukkan password sudo VPS Anda [g1g1G1NGSUL*!2]").Trim()
+if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "g1g1G1NGSUL*!2" }
 
 # ---------------------------------------------------------
 # PEMILIHAN PROYEK
