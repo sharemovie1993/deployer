@@ -189,7 +189,7 @@ Show-Log "Menghubungkan ke VPS ($NEW_IP) untuk instalasi dependensi..." "Yellow"
 $provisionScript = @"
 set -e
 echo '$SUDO_PASS' | sudo -S apt-get update -y
-echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw
+echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw build-essential
 
 # Install Node 20
 if ! command -v node &>/dev/null; then
