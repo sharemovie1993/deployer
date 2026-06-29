@@ -30,7 +30,7 @@ Show-Header "Persiapan Koneksi VPS Target"
 $NEW_IP = (Read-Host "Masukkan IP VPS Target (Contoh: 103.196.155.87)").Trim()
 $NEW_USER = "asepsuryadi"
 
-$TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama (Contoh: tefatjkt.net)").Trim()
+$TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama (Contoh: absenta.id)").Trim()
 
 if ([string]::IsNullOrWhiteSpace($NEW_IP) -or [string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) {
     Write-Host "IP dan Domain Utama tidak boleh kosong!" -ForegroundColor Red
@@ -130,7 +130,7 @@ $DB_URL = ""
 $INSTALL_POSTGRES = "N"
 $INSTALL_REDIS = "N"
 $DEPLOY_SCENARIO = "hybrid"
-$TUNNEL_BASE_DOMAIN = "tefatjkt.net"
+$TUNNEL_BASE_DOMAIN = "absenta.id"
 $LICENSE_SERVER_URL = "https://api.absenta.id"
 
 if ($IS_SERVER_LISENSI -eq "True") {
@@ -157,8 +157,8 @@ if ($IS_SERVER_LISENSI -eq "True") {
     
     $LICENSE_KEY = (Read-Host "Masukkan Kunci Lisensi Absenta (Kosongkan jika belum ada)").Trim()
     
-    $TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [tefatjkt.net]").Trim()
-    if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = "tefatjkt.net" }
+    $TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [absenta.id]").Trim()
+    if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = "absenta.id" }
     
     $LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [https://api.absenta.id]").Trim()
     if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = "https://api.absenta.id" }
