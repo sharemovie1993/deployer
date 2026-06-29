@@ -391,7 +391,7 @@ if [ "$IS_ABSENTA" = "True" ]; then
             fi
         fi
 
-        echo "$CADDY_HOSTS {" > /tmp/Caddyfile
+        echo "`$CADDY_HOSTS {" > /tmp/Caddyfile
         echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
         echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
         echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
