@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # setup-swap.sh
-# Skrip otomatis untuk membuat dan mengaktifkan 4GB SWAP Space di Linux.
+# Skrip otomatis untuk membuat dan mengaktifkan SWAP Space secara dinamis di Linux.
+# Skrip ini mendeteksi kapasitas RAM fisik, SWAP yang ada, dan ruang disk kosong secara pintar.
 # Harus dijalankan dengan hak akses root atau sudo.
 
 set -e
@@ -14,7 +15,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo -e "${CYAN}==========================================================${NC}"
-echo -e "${YELLOW}         AUTOMATIC 4GB SWAP CONFIGURATION FOR LINUX       ${NC}"
+echo -e "${YELLOW}         SMART AUTOMATIC SWAP CONFIGURATION FOR LINUX     ${NC}"
 echo -e "${CYAN}==========================================================${NC}"
 
 # 1. Pastikan dijalankan sebagai root/sudo
@@ -24,59 +25,151 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 2. Cek apakah swap sudah aktif
-CURRENT_SWAP=$(swapon --show --noheadings)
-if [ ! -z "$CURRENT_SWAP" ]; then
-    echo -e "${GREEN}SWAP saat ini sudah aktif di sistem:${NC}"
-    swapon --show
-    echo -e "\n${YELLOW}Apakah Anda ingin tetap membuat swap tambahan sebesar 4GB? (y/N)${NC}"
-    read -p "Pilihan: " confirm_add
-    if [[ ! "$confirm_add" =~ ^[yY]$ ]]; then
-        echo -e "${GREEN}Proses dibatalkan. SWAP yang ada tetap dipertahankan.${NC}"
-        exit 0
+# 2. Deteksi Spesifikasi Sistem
+TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+TOTAL_SWAP_MB=$(free -m | awk '/^Swap:/{print $2}')
+FREE_DISK_MB=$(df -m / | awk 'NR==2 {print $4}')
+
+# Konversi ke GB untuk tampilan
+TOTAL_RAM_GB=$(awk "BEGIN {printf \"%.1f\", $TOTAL_RAM_MB / 1024}")
+TOTAL_SWAP_GB=$(awk "BEGIN {printf \"%.1f\", $TOTAL_SWAP_MB / 1024}")
+FREE_DISK_GB=$(awk "BEGIN {printf \"%.1f\", $FREE_DISK_MB / 1024}")
+
+echo -e "Spesifikasi Server Terdeteksi:"
+echo -e " - RAM Fisik       : ${GREEN}${TOTAL_RAM_GB} GB${NC} (${TOTAL_RAM_MB} MB)"
+echo -e " - SWAP Aktif      : ${GREEN}${TOTAL_SWAP_GB} GB${NC} (${TOTAL_SWAP_MB} MB)"
+echo -e " - Ruang Disk (/)  : ${GREEN}${FREE_DISK_GB} GB${NC} (${FREE_DISK_MB} MB free)"
+echo -e "----------------------------------------------------------"
+
+# 3. Kalkulasi Rekomendasi Pintar
+# Target total memori (RAM + SWAP) adalah 8GB (8192MB) agar aman kompilasi NodeJS
+TARGET_TOTAL_MB=8192
+REC_SWAP_MB=0
+
+if [ $TOTAL_RAM_MB -ge $TARGET_TOTAL_MB ]; then
+    # Jika RAM fisik sudah >= 8GB, secara umum tidak butuh swap tambahan untuk build
+    REC_SWAP_MB=0
+else
+    # Butuh swap = Target - RAM yang ada
+    REC_SWAP_MB=$((TARGET_TOTAL_MB - TOTAL_RAM_MB))
+    
+    # Berikan batas aman minimal 2GB swap dan maksimal 8GB swap
+    if [ $REC_SWAP_MB -lt 2048 ]; then
+        REC_SWAP_MB=2048
+    elif [ $REC_SWAP_MB -gt 8192 ]; then
+        REC_SWAP_MB=8192
     fi
+fi
+
+# Batasi ukuran SWAP agar menyisakan minimal 3GB disk kosong untuk sistem
+MIN_FREE_DISK_LIMIT_MB=3072
+SAFE_SWAP_LIMIT_MB=$((FREE_DISK_MB - MIN_FREE_DISK_LIMIT_MB))
+
+if [ $SAFE_SWAP_LIMIT_MB -le 0 ]; then
+    echo -e "${RED}Peringatan: Ruang disk kosong sangat kritis (${FREE_DISK_GB} GB)!${NC}"
+    echo -e "Tidak aman untuk membuat SWAP baru."
+    REC_SWAP_MB=0
+elif [ $REC_SWAP_MB -gt $SAFE_SWAP_LIMIT_MB ]; then
+    echo -e "${YELLOW}Peringatan: Disk terbatas. Mengurangi ukuran SWAP rekomendasi ke batas aman...${NC}"
+    REC_SWAP_MB=$SAFE_SWAP_LIMIT_MB
+    # Batas bawah absolut agar tidak membuat swap terlalu kecil
+    if [ $REC_SWAP_MB -lt 1024 ]; then
+        REC_SWAP_MB=1024
+    fi
+fi
+
+REC_SWAP_GB=$(awk "BEGIN {printf \"%.1f\", $REC_SWAP_MB / 1024}")
+
+# 4. Tentukan Ukuran SWAP Akhir
+INPUT_GB=$1
+FINAL_SWAP_MB=0
+
+if [ ! -z "$INPUT_GB" ] && [ "$INPUT_GB" != "auto" ]; then
+    # Jika dipanggil dengan parameter manual (contoh: ./setup-swap.sh 4)
+    FINAL_SWAP_MB=$((INPUT_GB * 1024))
+    echo -e "Menggunakan ukuran kustom dari argumen: ${GREEN}${INPUT_GB} GB${NC}"
+else
+    # Deteksi shell interaktif vs otomatis (non-interaktif)
+    INTERACTIVE=false
+    if [ -t 0 ]; then
+        INTERACTIVE=true
+    fi
+
+    if [ "$REC_SWAP_MB" -eq 0 ]; then
+        echo -e "${GREEN}Memori sistem Anda sudah memadai (RAM + SWAP >= 8GB).${NC}"
+        if [ "$INTERACTIVE" = true ]; then
+            read -p "Apakah Anda tetap ingin membuat SWAP baru secara paksa? (y/N): " force_swap
+            if [[ "$force_swap" =~ ^[yY]$ ]]; then
+                read -p "Masukkan ukuran SWAP baru (dalam GB, contoh: 4): " custom_gb
+                FINAL_SWAP_MB=$((custom_gb * 1024))
+            else
+                echo -e "Selesai. Melewati pembuatan SWAP."
+                exit 0
+            fi
+        else
+            echo -e "Melewati pembuatan SWAP secara otomatis."
+            exit 0
+        fi
+    else
+        echo -e "Rekomendasi ukuran SWAP baru: ${GREEN}${REC_SWAP_GB} GB${NC}"
+        
+        if [ "$INTERACTIVE" = true ]; then
+            read -p "Buat SWAP sebesar ${REC_SWAP_GB} GB? [Y/n] (Atau ketik angka GB kustom): " user_choice
+            if [ -z "$user_choice" ] || [[ "$user_choice" =~ ^[yY]$ ]]; then
+                FINAL_SWAP_MB=$REC_SWAP_MB
+            elif [[ "$user_choice" =~ ^[0-9]+$ ]]; then
+                FINAL_SWAP_MB=$((user_choice * 1024))
+            else
+                echo -e "Proses dibatalkan."
+                exit 0
+            fi
+        else
+            # Jika non-interaktif, pakai rekomendasi otomatis hasil kalkulasi pintar
+            echo -e "Menjalankan secara otomatis (Non-Interaktif). Memakai ukuran rekomendasi: ${REC_SWAP_GB} GB."
+            FINAL_SWAP_MB=$REC_SWAP_MB
+        fi
+    fi
+fi
+
+# Validasi akhir batas disk sebelum mulai menulis
+if [ $FINAL_SWAP_MB -gt $FREE_DISK_MB ]; then
+    echo -e "${RED}Error: Ukuran SWAP ($((FINAL_SWAP_MB/1024)) GB) melebihi sisa disk kosong (${FREE_DISK_GB} GB)!${NC}"
+    exit 1
 fi
 
 SWAP_PATH="/swapfile"
 
-# Jika file swap sudah ada sebelumnya, hapus/matikan dulu untuk menghindari error
+# 5. Eksekusi Pembuatan SWAP
 if [ -f "$SWAP_PATH" ]; then
-    echo -e "${YELLOW}Menemukan berkas swap lama di $SWAP_PATH. Menonaktifkan...${NC}"
+    echo -e "\n${YELLOW}Menonaktifkan berkas swap lama di $SWAP_PATH...${NC}"
     swapoff "$SWAP_PATH" || true
     rm -f "$SWAP_PATH"
 fi
 
-# 3. Membuat file swap sebesar 4GB
-echo -e "\n${YELLOW}[1/4] Membuat berkas swap sebesar 4GB di $SWAP_PATH...${NC}"
-# Menggunakan fallocate (cepat) atau dd (fallback) jika fallocate tidak didukung sistem file
-if fallocate -l 4G "$SWAP_PATH" 2>/dev/null; then
+echo -e "\n${YELLOW}[1/4] Membuat berkas swap sebesar $((FINAL_SWAP_MB)) MB di $SWAP_PATH...${NC}"
+if fallocate -l "${FINAL_SWAP_MB}M" "$SWAP_PATH" 2>/dev/null; then
     echo -e "${GREEN}Berkas swap berhasil dibuat menggunakan fallocate.${NC}"
 else
-    echo -e "fallocate tidak didukung. Mencoba membuat menggunakan dd (proses ini membutuhkan waktu 10-30 detik)..."
-    dd if=/dev/zero of="$SWAP_PATH" bs=1M count=4096 status=progress
+    echo -e "fallocate tidak didukung. Mencoba membuat menggunakan dd (mungkin memakan waktu)..."
+    dd if=/dev/zero of="$SWAP_PATH" bs=1M count="$FINAL_SWAP_MB" status=progress
     echo -e "${GREEN}Berkas swap berhasil dibuat menggunakan dd.${NC}"
 fi
 
-# 4. Mengatur hak akses aman
 echo -e "\n${YELLOW}[2/4] Mengatur hak akses berkas (chmod 600)...${NC}"
 chmod 600 "$SWAP_PATH"
-echo -e "${GREEN}Hak akses berhasil diatur.${NC}"
 
-# 5. Format berkas menjadi swap area
 echo -e "\n${YELLOW}[3/4] Melakukan format berkas swap...${NC}"
 mkswap "$SWAP_PATH"
-echo -e "${GREEN}Format swap selesai.${NC}"
 
-# 6. Mengaktifkan swap
 echo -e "\n${YELLOW}[4/4] Mengaktifkan SWAP Space...${NC}"
 swapon "$SWAP_PATH"
 echo -e "${GREEN}SWAP berhasil diaktifkan!${NC}"
 
-# 7. Daftarkan secara permanen di /etc/fstab agar tetap aktif setelah reboot
+# Daftarkan secara permanen di /etc/fstab
 if ! grep -q "$SWAP_PATH" /etc/fstab; then
     echo -e "\nMendaftarkan swap ke /etc/fstab agar permanen..."
     echo "$SWAP_PATH none swap sw 0 0" >> /etc/fstab
-    echo -e "${GREEN}Swap berhasil didaftarkan secara permanen.${NC}"
+    echo -e "${GREEN}Swap berhasil terdaftar secara permanen.${NC}"
 else
     echo -e "\nSwap sudah terdaftar di /etc/fstab (dilewati)."
 fi
@@ -84,6 +177,5 @@ fi
 echo -e "\n${GREEN}==========================================================${NC}"
 echo -e "${GREEN}              KONFIGURASI SWAP BERHASIL!                  ${NC}"
 echo -e "${GREEN}==========================================================${NC}"
-echo -e "Status memori sistem saat ini:"
 free -h
 echo -e "=========================================================="
