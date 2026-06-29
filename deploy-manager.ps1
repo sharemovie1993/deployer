@@ -332,65 +332,175 @@ while ($true) {
         }
 
         "3" {
-            while ($true) {
-                Show-Header "Manajemen Layanan PM2"
-                $pm2Path = Get-Command pm2 -ErrorAction SilentlyContinue
-                if (-not $pm2Path) {
-                    Write-Host "PM2 tidak terpasang di sistem ini." -ForegroundColor Red
-                    Wait-Key
-                    break
+            Show-Header "Pilih Target Manajemen PM2"
+            Write-Host " 1) Windows Lokal" -ForegroundColor White
+            Write-Host " 2) VPS Linux Remote" -ForegroundColor White
+            Write-Host " 0) Batal" -ForegroundColor White
+            Write-Host ""
+            $pm2Target = Read-Host "Pilih target [0-2]"
+            
+            if ($pm2Target -eq "1") {
+                while ($true) {
+                    Show-Header "Manajemen Layanan PM2 (Lokal)"
+                    $pm2Path = Get-Command pm2 -ErrorAction SilentlyContinue
+                    if (-not $pm2Path) {
+                        Write-Host "PM2 tidak terpasang di sistem ini." -ForegroundColor Red
+                        Wait-Key
+                        break
+                    }
+
+                    Write-Host "--- Status Saat Ini ---" -ForegroundColor Yellow
+                    & pm2 status
+                    Write-Host ""
+                    Write-Host "Opsi Manajemen:"
+                    Write-Host " 1) Refresh / Lihat Status Terbaru"
+                    Write-Host " 2) Restart Semua Layanan (Restart All)"
+                    Write-Host " 3) Stop Semua Layanan (Stop All)"
+                    Write-Host " 4) Simpan Konfigurasi Saat Ini (PM2 Save)"
+                    Write-Host " 5) Bersihkan Log (Flush Logs)"
+                    Write-Host " 6) Matikan PM2 Daemon (PM2 Kill)"
+                    Write-Host " 7) Lihat Log Aplikasi (Real-time)"
+                    Write-Host " 0) Kembali ke Target Selection"
+                    Write-Host ""
+                    $pm2Choice = Read-Host "Pilih aksi [0-7]"
+
+                    switch ($pm2Choice) {
+                        "1" { continue }
+                        "2" { & pm2 restart all; Write-Host "Semua layanan berhasil di-restart." -ForegroundColor Green; Start-Sleep -Seconds 2 }
+                        "3" { & pm2 stop all; Write-Host "Semua layanan berhasil dihentikan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
+                        "4" { & pm2 save; Write-Host "Konfigurasi PM2 berhasil disimpan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
+                        "5" { & pm2 flush; Write-Host "Semua log berhasil dibersihkan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
+                        "6" { 
+                            $confirmKill = Read-Host "Anda yakin ingin mematikan daemon PM2? (Layanan akan mati total) [y/N]"
+                            if ($confirmKill -eq 'y' -or $confirmKill -eq 'Y') {
+                                & pm2 kill
+                                Write-Host "PM2 Daemon berhasil dimatikan." -ForegroundColor Green
+                                Start-Sleep -Seconds 2
+                                break
+                            }
+                        }
+                        "7" {
+                            Show-Header "Pilih Log Aplikasi"
+                            Write-Host " 1) Lihat SEMUA Log (Gabungan)"
+                            Write-Host " 2) Pilih Aplikasi Spesifik"
+                            Write-Host " 0) Batal"
+                            $logChoice = Read-Host "Pilih [0-2]"
+                            
+                            if ($logChoice -eq "1") {
+                                Write-Host "Menampilkan semua log (Tekan Ctrl+C untuk berhenti)..." -ForegroundColor Cyan
+                                & pm2 logs
+                            } elseif ($logChoice -eq "2") {
+                                & pm2 status
+                                $appName = Read-Host "Masukkan NAMA atau ID aplikasi (misal: absenta-backend:3003)"
+                                if (-not [string]::IsNullOrWhiteSpace($appName)) {
+                                    Write-Host "Menampilkan log untuk '$appName' (Tekan Ctrl+C untuk berhenti)..." -ForegroundColor Cyan
+                                    & pm2 logs $appName --lines 50
+                                }
+                            }
+                        }
+                        "0" { break }
+                    }
+                }
+            } elseif ($pm2Target -eq "2") {
+                Show-Header "Manajemen PM2 Remote VPS"
+                Write-Host "Masukkan IP VPS Target [10.10.10.163]: " -NoNewline
+                $ip = (Read-Host).Trim()
+                if ([string]::IsNullOrWhiteSpace($ip)) { $ip = "10.10.10.163" }
+
+                Write-Host "Masukkan Username [asepsuryadi]: " -NoNewline
+                $user = (Read-Host).Trim()
+                if ([string]::IsNullOrWhiteSpace($user)) { $user = "asepsuryadi" }
+
+                Write-Host "Pilih SSH Key:"
+                Write-Host " 1) nginxonly.pem"
+                Write-Host " 2) ls-key.pem"
+                Write-Host " 3) Manual..."
+                $keyChoice = Read-Host "Pilih [1]"
+                if ([string]::IsNullOrWhiteSpace($keyChoice) -or $keyChoice -eq "1") {
+                    $keyPath = Join-Path $PSScriptRoot "nginxonly.pem"
+                } elseif ($keyChoice -eq "2") {
+                    $keyPath = Join-Path $PSScriptRoot "ls-key.pem"
+                } else {
+                    $keyPath = Read-Host "Masukkan path file .pem"
                 }
 
-                Write-Host "--- Status Saat Ini ---" -ForegroundColor Yellow
-                & pm2 status
-                Write-Host ""
-                Write-Host "Opsi Manajemen:"
-                Write-Host " 1) Refresh / Lihat Status Terbaru"
-                Write-Host " 2) Restart Semua Layanan (Restart All)"
-                Write-Host " 3) Stop Semua Layanan (Stop All)"
-                Write-Host " 4) Simpan Konfigurasi Saat Ini (PM2 Save)"
-                Write-Host " 5) Bersihkan Log (Flush Logs)"
-                Write-Host " 6) Matikan PM2 Daemon (PM2 Kill)"
-                Write-Host " 7) Lihat Log Aplikasi (Real-time)"
-                Write-Host " 0) Kembali ke Menu Utama"
-                Write-Host ""
-                $pm2Choice = Read-Host "Pilih aksi [0-7]"
+                if (-not (Test-Path $keyPath)) {
+                    Write-Host "File SSH Key tidak ditemukan!" -ForegroundColor Red
+                    Wait-Key
+                    return
+                }
 
-                switch ($pm2Choice) {
-                    "1" { continue }
-                    "2" { & pm2 restart all; Write-Host "Semua layanan berhasil di-restart." -ForegroundColor Green; Start-Sleep -Seconds 2 }
-                    "3" { & pm2 stop all; Write-Host "Semua layanan berhasil dihentikan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
-                    "4" { & pm2 save; Write-Host "Konfigurasi PM2 berhasil disimpan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
-                    "5" { & pm2 flush; Write-Host "Semua log berhasil dibersihkan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
-                    "6" { 
-                        $confirmKill = Read-Host "Anda yakin ingin mematikan daemon PM2? (Layanan akan mati total) [y/N]"
+                while ($true) {
+                    Show-Header "Manajemen Layanan PM2 (Remote VPS: $ip)"
+                    Write-Host "--- Status Saat Ini di VPS ---" -ForegroundColor Yellow
+                    & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 status"
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-Host "Gagal terhubung ke VPS target atau PM2 tidak terpasang di VPS." -ForegroundColor Red
+                        Wait-Key
+                        break
+                    }
+                    
+                    Write-Host ""
+                    Write-Host "Opsi Manajemen Remote:"
+                    Write-Host " 1) Refresh / Lihat Status Terbaru"
+                    Write-Host " 2) Restart Semua Layanan (Restart All)"
+                    Write-Host " 3) Stop Semua Layanan (Stop All)"
+                    Write-Host " 4) Simpan Konfigurasi PM2 (PM2 Save)"
+                    Write-Host " 5) Bersihkan Log Remote (Flush Logs)"
+                    Write-Host " 6) Matikan PM2 Daemon Remote (PM2 Kill)"
+                    Write-Host " 7) Lihat Log Aplikasi Remote (Real-time)"
+                    Write-Host " 0) Kembali ke Target Selection"
+                    Write-Host ""
+                    $remoteChoice = Read-Host "Pilih aksi [0-7]"
+                    
+                    if ($remoteChoice -eq "0") { break }
+                    elseif ($remoteChoice -eq "1") { continue }
+                    elseif ($remoteChoice -eq "2") {
+                        & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 restart all"
+                        Write-Host "Semua layanan remote berhasil di-restart." -ForegroundColor Green
+                        Start-Sleep -Seconds 2
+                    }
+                    elseif ($remoteChoice -eq "3") {
+                        & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 stop all"
+                        Write-Host "Semua layanan remote berhasil dihentikan." -ForegroundColor Green
+                        Start-Sleep -Seconds 2
+                    }
+                    elseif ($remoteChoice -eq "4") {
+                        & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 save"
+                        Write-Host "Konfigurasi PM2 remote berhasil disimpan." -ForegroundColor Green
+                        Start-Sleep -Seconds 2
+                    }
+                    elseif ($remoteChoice -eq "5") {
+                        & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 flush"
+                        Write-Host "Semua log remote berhasil dibersihkan." -ForegroundColor Green
+                        Start-Sleep -Seconds 2
+                    }
+                    elseif ($remoteChoice -eq "6") {
+                        $confirmKill = Read-Host "Anda yakin ingin mematikan daemon PM2 remote? [y/N]"
                         if ($confirmKill -eq 'y' -or $confirmKill -eq 'Y') {
-                            & pm2 kill
-                            Write-Host "PM2 Daemon berhasil dimatikan." -ForegroundColor Green
+                            & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 kill"
+                            Write-Host "PM2 Daemon remote berhasil dimatikan." -ForegroundColor Green
                             Start-Sleep -Seconds 2
-                            break
                         }
                     }
-                    "7" {
-                        Show-Header "Pilih Log Aplikasi"
+                    elseif ($remoteChoice -eq "7") {
+                        Show-Header "Pilih Log Aplikasi Remote"
                         Write-Host " 1) Lihat SEMUA Log (Gabungan)"
-                        Write-Host " 2) Pilih Aplikasi Spesifik"
+                        Write-Host " 2) Lihat Log Aplikasi Spesifik"
                         Write-Host " 0) Batal"
                         $logChoice = Read-Host "Pilih [0-2]"
                         
                         if ($logChoice -eq "1") {
-                            Write-Host "Menampilkan semua log (Tekan Ctrl+C untuk berhenti)..." -ForegroundColor Cyan
-                            & pm2 logs
+                            Write-Host "Membuka log remote (Tekan Ctrl+C untuk berhenti)..." -ForegroundColor Cyan
+                            & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 logs"
                         } elseif ($logChoice -eq "2") {
-                            & pm2 status
-                            $appName = Read-Host "Masukkan NAMA atau ID aplikasi (misal: absenta-backend:3003)"
+                            $appName = Read-Host "Masukkan nama/ID aplikasi remote (contoh: absenta-backend:3003)"
                             if (-not [string]::IsNullOrWhiteSpace($appName)) {
-                                Write-Host "Menampilkan log untuk '$appName' (Tekan Ctrl+C untuk berhenti)..." -ForegroundColor Cyan
-                                & pm2 logs $appName --lines 50
+                                Write-Host "Membuka log aplikasi '$appName' (Tekan Ctrl+C untuk berhenti)..." -ForegroundColor Cyan
+                                & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 logs $appName"
                             }
                         }
                     }
-                    "0" { return }
                 }
             }
         }
