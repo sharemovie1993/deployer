@@ -94,8 +94,9 @@ while ($true) {
     Write-Host " 7) Factory Reset VPS Baru (Kertas Kosong / Purge)"
     Write-Host " 8) Deploy Cabang Baru (Tenant Server & Domain Baru)"
     Write-Host " 9) Server Hardening (Firewall, Fail2Ban, Keamanan SSH)"
+    Write-Host " 10) Setup SWAP Space 4GB Linux (Remote)"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [1-9]"
+    $choice = Read-Host "Pilih opsi [1-10]"
 
     switch ($choice) {
         "1" {
@@ -446,6 +447,15 @@ while ($true) {
                 & $hardeningScript
             } else {
                 Write-Host "Script easy-hardening.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
+                Wait-Key
+            }
+        }
+        "10" {
+            $swapScript = Join-Path $PSScriptRoot "easy-swap.ps1"
+            if (Test-Path $swapScript) {
+                & $swapScript
+            } else {
+                Write-Host "Script easy-swap.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }
