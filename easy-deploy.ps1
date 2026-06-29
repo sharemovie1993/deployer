@@ -276,7 +276,7 @@ echo "=== MEMULAI REMOTE DEPLOYMENT - $(date) ==="
 if [ ! -d "/var/www/$TARGET_SUBDIR/.git" ]; then
     echo '$SUDO_PASS' | sudo -S rm -rf /var/www/$TARGET_SUBDIR || true
     echo '$SUDO_PASS' | sudo -S mkdir -p /var/www/$TARGET_SUBDIR
-    echo '$SUDO_PASS' | sudo -S chown -R $NEW_USER:$NEW_USER /var/www/$TARGET_SUBDIR
+    echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
     git clone $REPO_URL /var/www/$TARGET_SUBDIR
 else
     cd /var/www/$TARGET_SUBDIR
