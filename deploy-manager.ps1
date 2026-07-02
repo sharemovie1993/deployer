@@ -14,6 +14,191 @@ try {
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue
 } catch {}
 
+function Publish-AbsentaRelease {
+    Show-Header "Rilis & Publikasikan Pembaruan (CI/CD Update)"
+    
+    $ABSENTA_PATH = Resolve-Path (Join-Path $PSScriptRoot "..\Project Absenta")
+    if (-not (Test-Path $ABSENTA_PATH)) {
+        Write-Host "Error: Folder Project Absenta tidak ditemukan di '$ABSENTA_PATH'" -ForegroundColor Red
+        return
+    }
+
+    $pkgJsonPath = Join-Path $ABSENTA_PATH "absenta_backend\package.json"
+    if (-not (Test-Path $pkgJsonPath)) {
+        Write-Host "Error: file package.json backend tidak ditemukan di '$pkgJsonPath'" -ForegroundColor Red
+        return
+    }
+
+    # Persiapan Koneksi VPS Server Lisensi (karena dipanggil mandiri dari deploy-manager.ps1)
+    Write-Host "--- Persiapan Koneksi VPS Server Lisensi ---" -ForegroundColor Yellow
+    $NEW_IP = (Read-Host "Masukkan IP VPS Target [103.196.155.87]").Trim()
+    if ([string]::IsNullOrWhiteSpace($NEW_IP)) { $NEW_IP = "103.196.155.87" }
+    $NEW_USER = "asepsuryadi"
+
+    Write-Host "Pilih SSH Key:"
+    Write-Host " 1) nginxonly.pem"
+    Write-Host " 2) ls-key.pem"
+    Write-Host " 3) Input path file manual..."
+    $keyChoice = Read-Host "Pilih [1-3] (Default: 2)"
+    if ([string]::IsNullOrWhiteSpace($keyChoice) -or $keyChoice -eq "2") {
+        $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "ls-key.pem"
+    } elseif ($keyChoice -eq "1") {
+        $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "nginxonly.pem"
+    } else {
+        $NEW_KEY_SOURCE = Read-Host "Masukkan path absolut file .pem"
+    }
+
+    if (-not (Test-Path $NEW_KEY_SOURCE)) {
+        Write-Host "Error: File SSH Key tidak ditemukan di '$NEW_KEY_SOURCE'" -ForegroundColor Red
+        return
+    }
+
+    # Perbaiki izin akses SSH Key secara otomatis pada Windows
+    Write-Host "Mengamankan izin berkas SSH Key..." -ForegroundColor Gray
+    try {
+        $null = icacls.exe $NEW_KEY_SOURCE /inheritance:r 2>&1
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $null = icacls.exe $NEW_KEY_SOURCE /grant "${currentUser}:(R,W)" 2>&1
+    } catch {
+        Write-Host "Peringatan: Gagal membatasi akses SSH Key secara otomatis." -ForegroundColor Yellow
+    }
+
+    # 1. Baca Versi Saat Ini
+    $pkgJson = Get-Content $pkgJsonPath | ConvertFrom-Json
+    $currentVer = $pkgJson.version
+    Write-Host "`nVersi lokal saat ini: v$currentVer" -ForegroundColor Green
+    
+    # Auto-hitung versi patch berikutnya sebagai default
+    $verParts = $currentVer -split '\.'
+    $suggestedVer = "$($verParts[0]).$($verParts[1]).$([int]$verParts[2] + 1)"
+    
+    Write-Host "Saran versi berikutnya : v$suggestedVer" -ForegroundColor Yellow
+    $newVer = (Read-Host "Masukkan Versi Rilis Baru [Default: $suggestedVer]").Trim()
+    if ([string]::IsNullOrWhiteSpace($newVer)) { $newVer = $suggestedVer }
+    
+    # Validasi: cegah rilis ulang dengan versi yang sama
+    if ($newVer -eq $currentVer) {
+        Write-Host "⚠️  Peringatan: Versi '$newVer' sama dengan versi lokal saat ini!" -ForegroundColor Yellow
+        $confirm = (Read-Host "Lanjutkan rilis dengan versi yang sama? [y/N]").Trim().ToLower()
+        if ($confirm -ne "y") {
+            Write-Host "Rilis dibatalkan. Silakan masukkan nomor versi yang lebih tinggi." -ForegroundColor Red
+            return
+        }
+    }
+    
+    $changelog = (Read-Host "Masukkan Catatan Rilis / Changelog (Contoh: Fitur presensi PKL, perbaikan minor)").Trim()
+    if ([string]::IsNullOrWhiteSpace($changelog)) { $changelog = "Pembaruan rutin platform Absenta." }
+
+    # 2. Build Frontend & Backend secara lokal
+    Write-Host "`n=== [1/4] Memulai Kompilasi (Build) Lokal ===" -ForegroundColor Cyan
+    
+    Write-Host "Membangun Frontend (Vite)..." -ForegroundColor Yellow
+    $frontendDir = Join-Path $ABSENTA_PATH "absenta_frontend"
+    Push-Location $frontendDir
+    npm run build
+    Pop-Location
+
+    Write-Host "Membangun Backend (TSC)..." -ForegroundColor Yellow
+    $backendDir = Join-Path $ABSENTA_PATH "absenta_backend"
+    Push-Location $backendDir
+    npm run build
+    Pop-Location
+
+    # 3. Zip file build jadi
+    Write-Host "`n=== [2/4] Memaketkan Hasil Kompilasi ke Zip ===" -ForegroundColor Cyan
+    $tempReleaseDir = Join-Path $env:TEMP "absenta_release_package"
+    if (Test-Path $tempReleaseDir) { Remove-Item -Recurse -Force $tempReleaseDir }
+    
+    New-Item -ItemType Directory -Path (Join-Path $tempReleaseDir "absenta_backend") | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $tempReleaseDir "absenta_frontend") | Out-Null
+
+    # Salin frontend static dist
+    Copy-Item -Recurse -Force (Join-Path $ABSENTA_PATH "absenta_frontend\dist") (Join-Path $tempReleaseDir "absenta_frontend\dist")
+
+    # Salin backend tsc dist & prisma schema/migrations & package configs
+    Copy-Item -Recurse -Force (Join-Path $ABSENTA_PATH "absenta_backend\dist") (Join-Path $tempReleaseDir "absenta_backend\dist")
+    Copy-Item -Force (Join-Path $ABSENTA_PATH "absenta_backend\package.json") (Join-Path $tempReleaseDir "absenta_backend\package.json")
+    Copy-Item -Force (Join-Path $ABSENTA_PATH "absenta_backend\package-lock.json") (Join-Path $tempReleaseDir "absenta_backend\package-lock.json")
+    Copy-Item -Recurse -Force (Join-Path $ABSENTA_PATH "absenta_backend\prisma") (Join-Path $tempReleaseDir "absenta_backend\prisma")
+
+    # Buat file zip
+    $zipPath = Join-Path $env:TEMP "absenta-v$newVer.zip"
+    if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
+    Compress-Archive -Path "$tempReleaseDir\*" -DestinationPath $zipPath -Force
+    Write-Host "Paket rilis berhasil dikompres ke: $zipPath" -ForegroundColor Green
+
+    # 4. Unggah ke VPS
+    Write-Host "`n=== [3/4] Mengunggah Paket ke Server Lisensi VPS ===" -ForegroundColor Cyan
+    Write-Host "Mengirim file zip via SCP..." -ForegroundColor Yellow
+    scp -i $NEW_KEY_SOURCE -o StrictHostKeyChecking=no $zipPath "${NEW_USER}@${NEW_IP}:/var/www/licensing-server/public/releases/absenta-v$newVer.zip"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: Gagal mengunggah file zip ke VPS! Periksa koneksi SSH atau izin SSH Key Anda." -ForegroundColor Red
+        Remove-Item -Recurse -Force $tempReleaseDir -ErrorAction SilentlyContinue
+        Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
+        return
+    }
+
+    # 5. Update manifest.json di VPS
+    Write-Host "`n=== [4/4] Memperbarui Manifest Rilis di VPS ===" -ForegroundColor Cyan
+    $manifest = [ordered]@{
+      success = $true
+      latest_version = $newVer
+      download_url = "https://api.absenta.id/releases/absenta-v$newVer.zip"
+      changelog = $changelog
+      released_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+    }
+    
+    $manifestJsonPath = Join-Path $env:TEMP "manifest.json"
+    $escapedChangelog = $changelog.Replace("'", "\'")
+    $nodeManifestCmd = "const fs = require('fs'); const file = '$manifestJsonPath'.replace(/\\\\/g, '/'); const manifest = { success: true, latest_version: '$newVer', download_url: 'https://api.absenta.id/releases/absenta-v$newVer.zip', changelog: '$escapedChangelog', released_at: '$( (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ") )' }; fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n', 'utf8');"
+    node -e $nodeManifestCmd
+    
+    Write-Host "Mengirim file manifest.json via SCP..." -ForegroundColor Yellow
+    scp -i $NEW_KEY_SOURCE -o StrictHostKeyChecking=no $manifestJsonPath "${NEW_USER}@${NEW_IP}:/var/www/licensing-server/public/releases/manifest.json"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: Gagal mengunggah file manifest.json ke VPS!" -ForegroundColor Red
+        Remove-Item -Recurse -Force $tempReleaseDir -ErrorAction SilentlyContinue
+        Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
+        Remove-Item -Force $manifestJsonPath -ErrorAction SilentlyContinue
+        return
+    }
+
+    # Update package.json lokal via Node.js untuk menjaga format JSON dan quote escaping
+    $nodePkgCmd = "const fs = require('fs'); const file = '$pkgJsonPath'.replace(/\\\\/g, '/'); let content = fs.readFileSync(file, 'utf8'); if (content.charCodeAt(0) === 0xFEFF) { content = content.slice(1); }; const pkg = JSON.parse(content); pkg.version = '$newVer'; fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n', 'utf8');"
+    node -e $nodePkgCmd
+    Write-Host "Versi lokal di package.json berhasil di-update ke v$newVer" -ForegroundColor Green
+
+    # Clean up
+    Remove-Item -Recurse -Force $tempReleaseDir
+    Remove-Item -Force $zipPath
+    Remove-Item -Force $manifestJsonPath
+
+    # Commit & Push package.json ke GitHub agar deploy ulang otomatis dapat versi benar
+    Write-Host "`n=== [5/5] Menyimpan Versi ke Git Repository ===" -ForegroundColor Cyan
+    try {
+        $backendDir = Join-Path $ABSENTA_PATH "absenta_backend"
+        Push-Location $backendDir
+        $gitStatus = git status --porcelain package.json 2>&1
+        if ($gitStatus) {
+            git add package.json | Out-Null
+            git commit -m "chore(release): bump version to v$newVer" | Out-Null
+            git push origin main 2>&1 | Out-Null
+            Write-Host "✅ package.json v$newVer berhasil di-commit dan di-push ke GitHub." -ForegroundColor Green
+            Write-Host "   → Deploy ulang via Menu 8 akan otomatis mendapatkan versi $newVer." -ForegroundColor Gray
+        } else {
+            Write-Host "ℹ️  Tidak ada perubahan package.json untuk di-commit." -ForegroundColor Yellow
+        }
+        Pop-Location
+    } catch {
+        Pop-Location -ErrorAction SilentlyContinue
+        Write-Host "⚠️  Gagal push ke GitHub: $_" -ForegroundColor Yellow
+        Write-Host "   Lakukan 'git push' manual dari folder absenta_backend jika diperlukan." -ForegroundColor Gray
+    }
+
+    Write-Host "`n🎉 Rilis v$newVer Berhasil Dipublikasikan ke Server Lisensi!" -ForegroundColor Green -Bold
+    Write-Host "Sekarang seluruh server sekolah dapat mendeteksi dan mengunduh update ini secara otomatis." -ForegroundColor Gray
+}
+
 
 # Registrasi Seluruh Repositori Proyek dari GitHub Anda
 $PROJECTS = @(
@@ -32,6 +217,14 @@ $PROJECTS = @(
         DefaultDir = "C:\apps\project-absenta"
         HasDeployScript = $true
         HasQuickUpdate = $true
+    },
+    @{
+        ID = 3
+        Name = "Gform Scheduller (Orkestrasi Jadwal)"
+        RepoUrl = "https://github.com/sharemovie1993/Project-Gform-Scheduller.git"
+        DefaultDir = "C:\apps\gform-scheduller"
+        HasDeployScript = $true
+        HasQuickUpdate = $false
     },
     @{
         ID = 4
@@ -252,7 +445,11 @@ while ($true) {
                     $localCaddyExe = Join-Path $PSScriptRoot "caddy-bin\caddy.exe"
                     if (Test-Path $localCaddyExe) {
                         Write-Host "Menyalin Caddy.exe offline lokal ke folder target..." -ForegroundColor Cyan
-                        Copy-Item -Path $localCaddyExe -Destination $installDir -Force -ErrorAction SilentlyContinue
+                        try {
+                            Copy-Item -Path $localCaddyExe -Destination $installDir -Force -ErrorAction SilentlyContinue
+                        } catch {
+                            Write-Host "Catatan: caddy.exe sedang aktif dan tidak dapat ditimpa (diabaikan)." -ForegroundColor Gray
+                        }
                     }
 
                     # Jalankan dengan RunAs Administrator agar Caddy bisa install service & trust certificate
@@ -274,14 +471,19 @@ while ($true) {
 
         "2" {
             Show-Header "Pilih Target / Jenis Quick Update"
-            Write-Host " 1) Windows Lokal (Pull & Build)" -ForegroundColor White
-            Write-Host " 2) VPS Linux Remote (Pull & Build)" -ForegroundColor White
-            Write-Host " 3) Update Base Domain Easy-Tunnel dan Lisensi Server (Remote)" -ForegroundColor White
+            Write-Host " 1) CI/CD Update (Rilis & Publikasikan Pembaruan ke Server Lisensi)" -ForegroundColor White
+            Write-Host " 2) Windows Lokal (Pull & Build)" -ForegroundColor White
+            Write-Host " 3) VPS Linux Remote (Pull & Build)" -ForegroundColor White
+            Write-Host " 4) Update Base Domain Easy-Tunnel dan Lisensi Server (Remote)" -ForegroundColor White
             Write-Host " 0) Batal" -ForegroundColor White
             Write-Host ""
-            $target = Read-Host "Pilih opsi [0-3]"
+            $target = Read-Host "Pilih opsi [0-4]"
 
             if ($target -eq "1") {
+                Publish-AbsentaRelease
+                Wait-Key
+            }
+            elseif ($target -eq "2") {
                 Show-Header "Pilih Proyek Untuk Quick Update Lokal"
                 $quickProjects = $PROJECTS | Where-Object { $_.HasQuickUpdate -eq $true }
                 
@@ -339,11 +541,11 @@ while ($true) {
                 Pop-Location
                 Wait-Key
             }
-            elseif ($target -eq "2") {
+            elseif ($target -eq "3") {
                 # Panggil skrip quick update remote
                 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "easy-update-remote.ps1")
             }
-            elseif ($target -eq "3") {
+            elseif ($target -eq "4") {
                 # Panggil skrip quick update config remote
                 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "easy-update-config.ps1")
             }
@@ -539,8 +741,16 @@ while ($true) {
                 # Juga tawarkan untuk mematikan PM2 jika masih ada
                 $killPM2Too = Read-Host "Matikan PM2 Daemon juga? [y/N]"
                 if ($killPM2Too -eq 'y' -or $killPM2Too -eq 'Y') {
-                    & pm2 kill 2>&1 | Out-Null
-                    Write-Host "PM2 Daemon dimatikan." -ForegroundColor Green
+                    try {
+                        $oldPref = $ErrorActionPreference
+                        $ErrorActionPreference = 'SilentlyContinue'
+                        & pm2 kill 2>&1 | Out-Null
+                        Write-Host "PM2 Daemon dimatikan." -ForegroundColor Green
+                    } catch {
+                        Write-Host "Informasi: PM2 Daemon sudah tidak aktif." -ForegroundColor Gray
+                    } finally {
+                        $ErrorActionPreference = $oldPref
+                    }
                 }
             } else {
                 Write-Host "Aksi dibatalkan." -ForegroundColor Gray

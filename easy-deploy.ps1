@@ -30,10 +30,8 @@ Show-Header "Persiapan Koneksi VPS Target"
 $NEW_IP = (Read-Host "Masukkan IP VPS Target (Contoh: 103.196.155.87)").Trim()
 $NEW_USER = "asepsuryadi"
 
-$TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama (Contoh: absenta.id)").Trim()
-
-if ([string]::IsNullOrWhiteSpace($NEW_IP) -or [string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) {
-    Write-Host "IP dan Domain Utama tidak boleh kosong!" -ForegroundColor Red
+if ([string]::IsNullOrWhiteSpace($NEW_IP)) {
+    Write-Host "IP VPS Target tidak boleh kosong!" -ForegroundColor Red
     exit
 }
 
@@ -135,6 +133,8 @@ $LICENSE_SERVER_URL = "https://api.absenta.id"
 
 if ($IS_SERVER_LISENSI -eq "True") {
     Write-Host "Menggunakan port default untuk Server Lisensi." -ForegroundColor Gray
+    $TARGET_DOMAIN = (Read-Host "Masukkan Domain Server Lisensi (Contoh: absenta.id)").Trim()
+    if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
 } elseif ($IS_ABSENTA -eq "True") {
     Write-Host "Pilih Skenario Deployment:" -ForegroundColor White
     Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, e.g. https://app.absenta.id)"
@@ -147,6 +147,16 @@ if ($IS_SERVER_LISENSI -eq "True") {
         $DEPLOY_SCENARIO = "local"
     } elseif ($scenarioChoice -eq "3") {
         $DEPLOY_SCENARIO = "hybrid"
+    }
+
+    if ($DEPLOY_SCENARIO -eq "local") {
+        $TARGET_DOMAIN = $NEW_IP
+    } elseif ($DEPLOY_SCENARIO -eq "saas") {
+        $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS (Contoh: absenta.id)").Trim()
+        if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
+    } else {
+        $TARGET_DOMAIN = (Read-Host "Masukkan Domain Publik Akses Sekolah (Contoh: absen.smkn1.sch.id)").Trim()
+        if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
     }
 
     $B_PORT = (Read-Host "Masukkan Port Backend [3003]").Trim()
@@ -178,12 +188,14 @@ if ($IS_SERVER_LISENSI -eq "True") {
     if ([string]::IsNullOrWhiteSpace($INSTALL_REDIS)) { $INSTALL_REDIS = "N" }
     
     $CF_TOKEN = ""
-    if ($DEPLOY_SCENARIO -eq "saas") {
-        $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (Opsional, untuk DNS Challenge Wildcard SSL)").Trim()
+    if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
+        $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk DNS Challenge SSL, kosongkan jika tidak pakai)").Trim()
     }
 } else {
     $B_PORT = (Read-Host "Masukkan Port Aplikasi [3000]").Trim()
     if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = "3000" }
+    $TARGET_DOMAIN = (Read-Host "Masukkan Domain untuk Proyek ini (Contoh: pos.absenta.id atau kosongkan untuk gunakan IP)").Trim()
+    if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $NEW_IP }
 }
 
 $SCHEME = "https"
@@ -436,9 +448,11 @@ if [ "$IS_ABSENTA" = "True" ]; then
     if [ "$DEPLOY_SCENARIO" != "local" ]; then
         # Deteksi apakah domain target merupakan IP address atau Domain
         if [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            CADDY_HOSTS="$TARGET_DOMAIN"
+            CADDY_HOSTS="$TARGET_DOMAIN, http://:80"
         else
-            if [ ! -z "$CF_TOKEN" ]; then
+            if [ "$DEPLOY_SCENARIO" = "hybrid" ]; then
+                CADDY_HOSTS="$TARGET_DOMAIN, http://:80"
+            elif [ ! -z "$CF_TOKEN" ]; then
                 CADDY_HOSTS="$TARGET_DOMAIN, *.$TARGET_DOMAIN"
             else
                 CADDY_HOSTS="$TARGET_DOMAIN"
