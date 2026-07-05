@@ -16,7 +16,7 @@ try {
 
 function Publish-AbsentaRelease {
     Show-Header "Rilis & Publikasikan Pembaruan (CI/CD Update)"
-    
+
     $ABSENTA_PATH = Resolve-Path (Join-Path $PSScriptRoot "..\Project Absenta")
     if (-not (Test-Path $ABSENTA_PATH)) {
         Write-Host "Error: Folder Project Absenta tidak ditemukan di '$ABSENTA_PATH'" -ForegroundColor Red
@@ -67,31 +67,31 @@ function Publish-AbsentaRelease {
     $pkgJson = Get-Content $pkgJsonPath | ConvertFrom-Json
     $currentVer = $pkgJson.version
     Write-Host "`nVersi lokal saat ini: v$currentVer" -ForegroundColor Green
-    
+
     # Auto-hitung versi patch berikutnya sebagai default
     $verParts = $currentVer -split '\.'
     $suggestedVer = "$($verParts[0]).$($verParts[1]).$([int]$verParts[2] + 1)"
-    
+
     Write-Host "Saran versi berikutnya : v$suggestedVer" -ForegroundColor Yellow
     $newVer = (Read-Host "Masukkan Versi Rilis Baru [Default: $suggestedVer]").Trim()
     if ([string]::IsNullOrWhiteSpace($newVer)) { $newVer = $suggestedVer }
-    
+
     # Validasi: cegah rilis ulang dengan versi yang sama
     if ($newVer -eq $currentVer) {
-        Write-Host "⚠️  Peringatan: Versi '$newVer' sama dengan versi lokal saat ini!" -ForegroundColor Yellow
+        Write-Host "Peringatan: Versi '$newVer' sama dengan versi lokal saat ini!" -ForegroundColor Yellow
         $confirm = (Read-Host "Lanjutkan rilis dengan versi yang sama? [y/N]").Trim().ToLower()
         if ($confirm -ne "y") {
             Write-Host "Rilis dibatalkan. Silakan masukkan nomor versi yang lebih tinggi." -ForegroundColor Red
             return
         }
     }
-    
+
     $changelog = (Read-Host "Masukkan Catatan Rilis / Changelog (Contoh: Fitur presensi PKL, perbaikan minor)").Trim()
     if ([string]::IsNullOrWhiteSpace($changelog)) { $changelog = "Pembaruan rutin platform Absenta." }
 
     # 2. Build Frontend & Backend secara lokal
     Write-Host "`n=== [1/4] Memulai Kompilasi (Build) Lokal ===" -ForegroundColor Cyan
-    
+
     Write-Host "Membangun Frontend (Vite)..." -ForegroundColor Yellow
     $frontendDir = Join-Path $ABSENTA_PATH "absenta_frontend"
     Push-Location $frontendDir
@@ -108,7 +108,7 @@ function Publish-AbsentaRelease {
     Write-Host "`n=== [2/4] Memaketkan Hasil Kompilasi ke Zip ===" -ForegroundColor Cyan
     $tempReleaseDir = Join-Path $env:TEMP "absenta_release_package"
     if (Test-Path $tempReleaseDir) { Remove-Item -Recurse -Force $tempReleaseDir }
-    
+
     New-Item -ItemType Directory -Path (Join-Path $tempReleaseDir "absenta_backend") | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $tempReleaseDir "absenta_frontend") | Out-Null
 
@@ -147,12 +147,12 @@ function Publish-AbsentaRelease {
       changelog = $changelog
       released_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
     }
-    
+
     $manifestJsonPath = Join-Path $env:TEMP "manifest.json"
     $escapedChangelog = $changelog.Replace("'", "\'")
-    $nodeManifestCmd = "const fs = require('fs'); const file = '$manifestJsonPath'.replace(/\\\\/g, '/'); const manifest = { success: true, latest_version: '$newVer', download_url: 'https://api.absenta.id/releases/absenta-v$newVer.zip', changelog: '$escapedChangelog', released_at: '$( (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ") )' }; fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n', 'utf8');"
+    $nodeManifestCmd = "const fs = require('fs'); const file = '$manifestJsonPath'.replace(/\\/g, '/'); const manifest = { success: true, latest_version: '$newVer', download_url: 'https://api.absenta.id/releases/absenta-v$newVer.zip', changelog: '$escapedChangelog', released_at: '$( (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ') )' }; fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n', 'utf8');"
     node -e $nodeManifestCmd
-    
+
     Write-Host "Mengirim file manifest.json via SCP..." -ForegroundColor Yellow
     scp -i $NEW_KEY_SOURCE -o StrictHostKeyChecking=no $manifestJsonPath "${NEW_USER}@${NEW_IP}:/var/www/licensing-server/public/releases/manifest.json"
     if ($LASTEXITCODE -ne 0) {
@@ -164,7 +164,7 @@ function Publish-AbsentaRelease {
     }
 
     # Update package.json lokal via Node.js untuk menjaga format JSON dan quote escaping
-    $nodePkgCmd = "const fs = require('fs'); const file = '$pkgJsonPath'.replace(/\\\\/g, '/'); let content = fs.readFileSync(file, 'utf8'); if (content.charCodeAt(0) === 0xFEFF) { content = content.slice(1); }; const pkg = JSON.parse(content); pkg.version = '$newVer'; fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n', 'utf8');"
+    $nodePkgCmd = "const fs = require('fs'); const file = '$pkgJsonPath'.replace(/\\/g, '/'); let content = fs.readFileSync(file, 'utf8'); if (content.charCodeAt(0) === 0xFEFF) { content = content.slice(1); }; const pkg = JSON.parse(content); pkg.version = '$newVer'; fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n', 'utf8');"
     node -e $nodePkgCmd
     Write-Host "Versi lokal di package.json berhasil di-update ke v$newVer" -ForegroundColor Green
 
@@ -183,19 +183,19 @@ function Publish-AbsentaRelease {
             git add package.json | Out-Null
             git commit -m "chore(release): bump version to v$newVer" | Out-Null
             git push origin main 2>&1 | Out-Null
-            Write-Host "✅ package.json v$newVer berhasil di-commit dan di-push ke GitHub." -ForegroundColor Green
-            Write-Host "   → Deploy ulang via Menu 8 akan otomatis mendapatkan versi $newVer." -ForegroundColor Gray
+            Write-Host "package.json v$newVer berhasil di-commit dan di-push ke GitHub." -ForegroundColor Green
+            Write-Host "   Deploy ulang via Menu 8 akan otomatis mendapatkan versi $newVer." -ForegroundColor Gray
         } else {
-            Write-Host "ℹ️  Tidak ada perubahan package.json untuk di-commit." -ForegroundColor Yellow
+            Write-Host "Tidak ada perubahan package.json untuk di-commit." -ForegroundColor Yellow
         }
         Pop-Location
     } catch {
         Pop-Location -ErrorAction SilentlyContinue
-        Write-Host "⚠️  Gagal push ke GitHub: $_" -ForegroundColor Yellow
+        Write-Host "Gagal push ke GitHub: $_" -ForegroundColor Yellow
         Write-Host "   Lakukan 'git push' manual dari folder absenta_backend jika diperlukan." -ForegroundColor Gray
     }
 
-    Write-Host "`n🎉 Rilis v$newVer Berhasil Dipublikasikan ke Server Lisensi!" -ForegroundColor Green -Bold
+    Write-Host "`nRilis v$newVer Berhasil Dipublikasikan ke Server Lisensi!" -ForegroundColor Green
     Write-Host "Sekarang seluruh server sekolah dapat mendeteksi dan mengunduh update ini secara otomatis." -ForegroundColor Gray
 }
 
@@ -244,7 +244,7 @@ $PROJECTS = @(
     },
     @{
         ID = 6
-        Name = "Caddy Gateway (Automated SSL & Reverse Proxy)"
+        Name = "Caddy Gateway (Automatic HTTPS and Reverse Proxy)"
         RepoUrl = ""
         DefaultDir = "C:\Users\SERVER-DELL\Documents\deployer\caddy-setup"
         HasDeployScript = $true
@@ -265,7 +265,7 @@ function Show-Header {
     param ($Title)
     Clear-Host
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    Write-Host "                  GLOBAL DEPLOYMENT MANAGER (DEPLOYER)                    " -ForegroundColor Yellow -Bold
+    Write-Host "                  GLOBAL DEPLOYMENT MANAGER (DEPLOYER)                    " -ForegroundColor Yellow
     Write-Host "==========================================================================" -ForegroundColor Cyan
     if ($Title) {
         Write-Host " [Menu] $Title" -ForegroundColor Green
@@ -280,20 +280,27 @@ function Wait-Key {
 
 while ($true) {
     Show-Header "Menu Utama"
-    Write-Host " 1) Deploy / Update Proyek (Full Wizard)"
-    Write-Host " 2) Quick Update (Hanya Pull & Build - Tanpa Wizard)"
-    Write-Host " 3) Manajemen Layanan PM2 (Global)"
-    Write-Host " 4) Kill Semua Proses Node.js (Emergency)"
-    Write-Host " 5) Keluar"
-    Write-Host " 6) Easy-Migrate Server Lisensi (VPS Lama ke VPS Baru)"
-    Write-Host " 7) Factory Reset VPS Baru (Kertas Kosong / Purge)"
-    Write-Host " 8) Deploy Cabang Baru (Tenant Server & Domain Baru)"
-    Write-Host " 9) Server Hardening (Firewall, Fail2Ban, Keamanan SSH)"
-    Write-Host " 10) Setup SWAP Space 4GB Linux (Remote)"
-    Write-Host " 11) Perluas Partisi Disk Linux VM/VPS (Remote)"
-    Write-Host " 12) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
+    Write-Host " 🚀 [DEPLOYMENT & UPDATES]" -ForegroundColor Cyan
+    Write-Host "   1) Deploy Proyek Lokal (Windows On-Premise / LAN)"
+    Write-Host "   2) CI/CD Quick Update (Rilis, Pull dan Build)"
+    Write-Host "   3) Deploy Proyek Remote (Linux VPS / Cloud)"
+    Write-Host "   4) Migrasi Server Lisensi (VPS Lama ke VPS Baru)"
+    Write-Host ""
+    Write-Host " 🛠️ [SERVER MAINTENANCE & UTILITIES]" -ForegroundColor Cyan
+    Write-Host "   5) Manajemen Layanan PM2 (Global)"
+    Write-Host "   6) Server Hardening (Firewall, Fail2Ban, Keamanan SSH)"
+    Write-Host "   7) Setup SWAP Space 4GB Linux (Remote)"
+    Write-Host "   8) Perluas Partisi Disk Linux VM/VPS (Remote)"
+    Write-Host "   9) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
+    Write-Host ""
+    Write-Host " 🚨 [EMERGENCY & CLEANUP]" -ForegroundColor Cyan
+    Write-Host "   10) Kill Semua Proses Node.js (Emergency)"
+    Write-Host "   11) Factory Reset VPS Baru (Purge Kertas Kosong)"
+    Write-Host ""
+    Write-Host " 🚪 [EXIT]" -ForegroundColor Cyan
+    Write-Host "   0) Keluar"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [1-12]"
+    $choice = Read-Host "Pilih opsi [0-11]"
 
     switch ($choice) {
         "1" {
@@ -326,12 +333,13 @@ while ($true) {
             Show-Header "Konfigurasi Target - $($selectedProj.Name)"
             $installDir = Read-Host "Masukkan folder target deployment [$($selectedProj.DefaultDir)]"
             if ([string]::IsNullOrWhiteSpace($installDir)) { $installDir = $selectedProj.DefaultDir }
+            $installDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($installDir)
 
             Write-Host ""
             Write-Host "--- RINGKASAN DEPLOYMENT ---" -ForegroundColor Yellow
             Write-Host " - Proyek       : $($selectedProj.Name)"
             Write-Host " - Folder Target: $installDir"
-            Write-Host " - Aksi         : Clone & Panggil Skrip Deploy Internal"
+            Write-Host " - Aksi         : Clone dan Panggil Skrip Deploy Internal"
             Write-Host "----------------------------" -ForegroundColor Yellow
             Write-Host ""
             $confirm = Read-Host "Mulai proses deployment? [Y/n]"
@@ -342,7 +350,7 @@ while ($true) {
             }
 
             Show-Header "Sedang Memproses - $($selectedProj.Name)"
-            
+
             # Cek Git
             Write-Host "Memeriksa Git... " -NoNewline
             $hasGit = $false
@@ -371,7 +379,7 @@ while ($true) {
                         }
                     }
                 }
-                
+
                 if (-not $hasGit) {
                     Write-Host "Git harus terpasang di sistem untuk mengunduh kode!" -ForegroundColor Red
                     Wait-Key
@@ -383,7 +391,7 @@ while ($true) {
             if ($selectedProj.RepoUrl) {
                 $shouldClone = $true
                 $isTargetDirExists = Test-Path $installDir
-                
+
                 if ($isTargetDirExists) {
                     $isGitRepo = Test-Path "$installDir\.git"
                     if ($isGitRepo) {
@@ -435,11 +443,20 @@ while ($true) {
                 }
             }
 
-            # Panggil skrip deploy internal proyek
+            # Panggil skrip deploy internal proyek (mendukung deploy-onprem-windows.ps1 dan fallback deploy.ps1)
+            $scriptName = "deploy-onprem-windows.ps1"
+            if (-not (Test-Path -Path "$installDir\$scriptName")) {
+                if (Test-Path -Path "$installDir\deploy.ps1") {
+                    $scriptName = "deploy.ps1"
+                } else {
+                    $scriptName = ""
+                }
+            }
+
             Write-Host ""
-            Write-Host "Menjalankan skrip deploy internal (deploy.ps1) pada proyek target..." -ForegroundColor Cyan
-            Push-Location $installDir
-            if (Test-Path -Path "$installDir\deploy.ps1") {
+            if ($scriptName) {
+                Write-Host "Menjalankan skrip deploy internal ($scriptName) pada proyek target..." -ForegroundColor Cyan
+                Push-Location $installDir
                 try {
                     # Salin Caddy.exe offline jika tersedia ke folder target
                     $localCaddyExe = Join-Path $PSScriptRoot "caddy-bin\caddy.exe"
@@ -452,28 +469,59 @@ while ($true) {
                         }
                     }
 
-                    # Jalankan dengan RunAs Administrator agar Caddy bisa install service & trust certificate
-                    $deployCmd = "Push-Location '$installDir'; & powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1; Pop-Location; Read-Host 'Selesai. Tekan ENTER...'"
+                    # Jalankan dengan RunAs Administrator agar Caddy bisa install service dan trust certificate
+                    $deployCmd = "Push-Location '$installDir'; & powershell -NoProfile -ExecutionPolicy Bypass -File .\$scriptName; Pop-Location; Read-Host 'Selesai. Tekan ENTER...'"
                     Start-Process powershell -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $deployCmd -Verb RunAs -Wait
                     Write-Host ""
                     Write-Host "Deployment internal proyek selesai dengan sukses!" -ForegroundColor Green
+
+                    # ============================================================
+                    # SETUP PM2 WINDOWS SERVICE (Auto-Start setelah Reboot)
+                    # ============================================================
+                    Write-Host ""
+                    Write-Host "--- Setup PM2 Windows Service (Auto-Start setelah Reboot) ---" -ForegroundColor Cyan
+                    $hasPm2 = $null -ne (Get-Command pm2 -ErrorAction SilentlyContinue)
+                    if ($hasPm2) {
+                        try {
+                            # Cek apakah pm2-startup sudah terpasang
+                            $pm2StartupInstalled = $null -ne (Get-Command pm2-startup -ErrorAction SilentlyContinue)
+                            if (-not $pm2StartupInstalled) {
+                                Write-Host "Memasang pm2-startup untuk Windows Service..." -ForegroundColor Yellow
+                                & npm install -g pm2-startup
+                            }
+
+                            # Install PM2 sebagai Windows Service
+                            Write-Host "Mendaftarkan PM2 sebagai Windows Service..." -ForegroundColor Yellow
+                            $pm2StartupCmd = "pm2-startup install; pm2 save"
+                            Start-Process powershell -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $pm2StartupCmd -Verb RunAs -Wait
+                            Write-Host "PM2 Windows Service berhasil didaftarkan!" -ForegroundColor Green
+                            Write-Host "Layanan PM2 akan otomatis berjalan kembali setelah Windows server di-reboot." -ForegroundColor Gray
+                        } catch {
+                            Write-Host "Peringatan: Gagal mendaftarkan PM2 sebagai Windows Service: $_" -ForegroundColor Yellow
+                            Write-Host "Anda dapat mendaftarkannya secara manual dengan perintah:" -ForegroundColor Gray
+                            Write-Host "  npm install -g pm2-startup && pm2-startup install && pm2 save" -ForegroundColor Gray
+                        }
+                    } else {
+                        Write-Host "Peringatan: PM2 tidak ditemukan. Lewati setup Windows Service." -ForegroundColor Yellow
+                    }
+
                 } catch {
                     Write-Host ""
                     Write-Host "Terjadi kesalahan saat menjalankan skrip deploy internal proyek." -ForegroundColor Red
                 }
             } else {
-                Write-Host "Error: File deploy.ps1 tidak ditemukan di dalam proyek target!" -ForegroundColor Red
+                Write-Host "Error: File deploy-onprem-windows.ps1 tidak ditemukan di dalam proyek target!" -ForegroundColor Red
             }
             Pop-Location
-            
+
             Wait-Key
         }
 
         "2" {
-            Show-Header "Pilih Target / Jenis Quick Update"
-            Write-Host " 1) CI/CD Update (Rilis & Publikasikan Pembaruan ke Server Lisensi)" -ForegroundColor White
-            Write-Host " 2) Windows Lokal (Pull & Build)" -ForegroundColor White
-            Write-Host " 3) VPS Linux Remote (Pull & Build)" -ForegroundColor White
+            Show-Header "Pilih Target atau Jenis Quick Update"
+            Write-Host " 1) CI/CD Update (Rilis dan Publikasikan Pembaruan ke Server Lisensi)" -ForegroundColor White
+            Write-Host " 2) Windows Lokal (Pull dan Build)" -ForegroundColor White
+            Write-Host " 3) VPS Linux Remote (Pull dan Build)" -ForegroundColor White
             Write-Host " 4) Update Base Domain Easy-Tunnel dan Lisensi Server (Remote)" -ForegroundColor White
             Write-Host " 0) Batal" -ForegroundColor White
             Write-Host ""
@@ -486,7 +534,7 @@ while ($true) {
             elseif ($target -eq "2") {
                 Show-Header "Pilih Proyek Untuk Quick Update Lokal"
                 $quickProjects = $PROJECTS | Where-Object { $_.HasQuickUpdate -eq $true }
-                
+
                 if ($quickProjects.Count -eq 0) {
                     Write-Host "Belum ada proyek yang mendukung Quick Update." -ForegroundColor Yellow
                     Wait-Key
@@ -515,7 +563,7 @@ while ($true) {
 
                 Write-Host "Memulai Quick Update untuk $($selectedProj.Name)..." -ForegroundColor Cyan
                 Push-Location $installDir
-                
+
                 # Pull kode terbaru terlebih dahulu agar script quick-update.ps1 versi terbaru dimuat ke memori
                 Write-Host "Menarik kode terbaru dari GitHub..." -ForegroundColor Yellow
                 try {
@@ -551,14 +599,14 @@ while ($true) {
             }
         }
 
-        "3" {
+        "5" {
             Show-Header "Pilih Target Manajemen PM2"
             Write-Host " 1) Windows Lokal" -ForegroundColor White
             Write-Host " 2) VPS Linux Remote" -ForegroundColor White
             Write-Host " 0) Batal" -ForegroundColor White
             Write-Host ""
             $pm2Target = Read-Host "Pilih target [0-2]"
-            
+
             if ($pm2Target -eq "1") {
                 while ($true) {
                     Show-Header "Manajemen Layanan PM2 (Lokal)"
@@ -573,7 +621,7 @@ while ($true) {
                     & pm2 status
                     Write-Host ""
                     Write-Host "Opsi Manajemen:"
-                    Write-Host " 1) Refresh / Lihat Status Terbaru"
+                    Write-Host " 1) Refresh atau Lihat Status Terbaru"
                     Write-Host " 2) Restart Semua Layanan (Restart All)"
                     Write-Host " 3) Stop Semua Layanan (Stop All)"
                     Write-Host " 4) Simpan Konfigurasi Saat Ini (PM2 Save)"
@@ -590,7 +638,7 @@ while ($true) {
                         "3" { & pm2 stop all; Write-Host "Semua layanan berhasil dihentikan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
                         "4" { & pm2 save; Write-Host "Konfigurasi PM2 berhasil disimpan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
                         "5" { & pm2 flush; Write-Host "Semua log berhasil dibersihkan." -ForegroundColor Green; Start-Sleep -Seconds 2 }
-                        "6" { 
+                        "6" {
                             $confirmKill = Read-Host "Anda yakin ingin mematikan daemon PM2? (Layanan akan mati total) [y/N]"
                             if ($confirmKill -eq 'y' -or $confirmKill -eq 'Y') {
                                 & pm2 kill
@@ -605,7 +653,7 @@ while ($true) {
                             Write-Host " 2) Pilih Aplikasi Spesifik"
                             Write-Host " 0) Batal"
                             $logChoice = Read-Host "Pilih [0-2]"
-                            
+
                             if ($logChoice -eq "1") {
                                 Write-Host "Menampilkan semua log (Tekan Ctrl+C untuk berhenti)..." -ForegroundColor Cyan
                                 & pm2 logs
@@ -659,10 +707,10 @@ while ($true) {
                         Wait-Key
                         break
                     }
-                    
+
                     Write-Host ""
                     Write-Host "Opsi Manajemen Remote:"
-                    Write-Host " 1) Refresh / Lihat Status Terbaru"
+                    Write-Host " 1) Refresh atau Lihat Status Terbaru"
                     Write-Host " 2) Restart Semua Layanan (Restart All)"
                     Write-Host " 3) Stop Semua Layanan (Stop All)"
                     Write-Host " 4) Simpan Konfigurasi PM2 (PM2 Save)"
@@ -672,7 +720,7 @@ while ($true) {
                     Write-Host " 0) Kembali ke Target Selection"
                     Write-Host ""
                     $remoteChoice = Read-Host "Pilih aksi [0-7]"
-                    
+
                     if ($remoteChoice -eq "0") { break }
                     elseif ($remoteChoice -eq "1") { continue }
                     elseif ($remoteChoice -eq "2") {
@@ -709,7 +757,7 @@ while ($true) {
                         Write-Host " 2) Lihat Log Aplikasi Spesifik"
                         Write-Host " 0) Batal"
                         $logChoice = Read-Host "Pilih [0-2]"
-                        
+
                         if ($logChoice -eq "1") {
                             Write-Host "Membuka log remote (Tekan Ctrl+C untuk berhenti)..." -ForegroundColor Cyan
                             & ssh -i "$keyPath" -o StrictHostKeyChecking=no "${user}@${ip}" "pm2 logs"
@@ -725,9 +773,9 @@ while ($true) {
             }
         }
 
-        "4" {
+        "10" {
             Show-Header "Emergency Kill Node.js"
-            Write-Host "PERINGATAN: Ini akan mematikan paksa SEMUA proses Node.js yang berjalan di Windows." -ForegroundColor Red -Bold
+            Write-Host "PERINGATAN: Ini akan mematikan paksa SEMUA proses Node.js yang berjalan di Windows." -ForegroundColor Red
             $confirmNodeKill = Read-Host "Apakah Anda yakin? [y/N]"
             if ($confirmNodeKill -eq 'y' -or $confirmNodeKill -eq 'Y') {
                 Write-Host "Menghentikan semua proses node.exe..." -ForegroundColor Cyan
@@ -737,7 +785,7 @@ while ($true) {
                 } catch {
                     Write-Host "Informasi: Tidak ada proses Node.js yang ditemukan atau gagal dihentikan." -ForegroundColor Gray
                 }
-                
+
                 # Juga tawarkan untuk mematikan PM2 jika masih ada
                 $killPM2Too = Read-Host "Matikan PM2 Daemon juga? [y/N]"
                 if ($killPM2Too -eq 'y' -or $killPM2Too -eq 'Y') {
@@ -758,12 +806,12 @@ while ($true) {
             Wait-Key
         }
 
-        "5" {
+        "0" {
             Write-Host "Keluar dari program. Terima kasih." -ForegroundColor Cyan
             Stop-Transcript
             Exit
         }
-        "6" {
+        "4" {
             $migrateScript = Join-Path $PSScriptRoot "easy-migrate.ps1"
             if (Test-Path $migrateScript) {
                 try {
@@ -777,7 +825,7 @@ while ($true) {
                 Wait-Key
             }
         }
-        "7" {
+        "11" {
             $purgeScript = Join-Path $PSScriptRoot "easy-purge.ps1"
             if (Test-Path $purgeScript) {
                 try {
@@ -791,21 +839,21 @@ while ($true) {
                 Wait-Key
             }
         }
-        "8" {
-            $deployScript = Join-Path $PSScriptRoot "easy-deploy.ps1"
+        "3" {
+            $deployScript = Join-Path $PSScriptRoot "deploy-remote-linux.ps1"
             if (Test-Path $deployScript) {
                 try {
                     & $deployScript
                 } catch {
-                    Write-Host "[ERROR] Gagal menjalankan easy-deploy: $_" -ForegroundColor Red
+                    Write-Host "[ERROR] Gagal menjalankan deploy-remote-linux: $_" -ForegroundColor Red
                     Wait-Key
                 }
             } else {
-                Write-Host "Script easy-deploy.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
+                Write-Host "Script deploy-remote-linux.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }
-        "9" {
+        "6" {
             $hardeningScript = Join-Path $PSScriptRoot "easy-hardening.ps1"
             if (Test-Path $hardeningScript) {
                 try {
@@ -819,7 +867,7 @@ while ($true) {
                 Wait-Key
             }
         }
-        "10" {
+        "7" {
             $swapScript = Join-Path $PSScriptRoot "easy-swap.ps1"
             if (Test-Path $swapScript) {
                 try {
@@ -833,7 +881,7 @@ while ($true) {
                 Wait-Key
             }
         }
-        "11" {
+        "8" {
             $resizeScript = Join-Path $PSScriptRoot "easy-resize.ps1"
             if (Test-Path $resizeScript) {
                 try {
@@ -847,7 +895,7 @@ while ($true) {
                 Wait-Key
             }
         }
-        "12" {
+        "9" {
             $sshSetupScript = Join-Path $PSScriptRoot "easy-setup-ssh.ps1"
             if (Test-Path $sshSetupScript) {
                 try {

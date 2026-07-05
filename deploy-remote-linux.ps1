@@ -1,5 +1,6 @@
 # easy-deploy.ps1 - Skrip Deploy Universal Remote (VPS Linux)
 # Dapat men-deploy berbagai proyek web secara remote via SSH
+# Fitur: Auto dpkg lock clearance, WireGuard, PM2, Caddy, dll
 
 $ErrorActionPreference = "Stop"
 
@@ -17,12 +18,188 @@ function Show-Header {
     param([string]$Title)
     Clear-Host
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    Write-Host "                EASY DEPLOY - UNIVERSAL REMOTE DEPLOYER                 " -ForegroundColor Yellow -Bold
+    Write-Host "                EASY DEPLOY - UNIVERSAL REMOTE DEPLOYER                 " -ForegroundColor Yellow
     Write-Host "==========================================================================" -ForegroundColor Cyan
     if ($Title) {
         Write-Host " -> $Title" -ForegroundColor Green
         Write-Host "--------------------------------------------------------------------------" -ForegroundColor Gray
     }
+}
+
+# ============================================================
+# FUNGSI DPKG LOCK CLEARANCE (BARU)
+# ============================================================
+function Clear-DpkgLock {
+    param(
+        [string]$KeyPath,
+        [string]$TargetUser,
+        [string]$TargetIP,
+        [string]$SudoPass
+    )
+
+    Show-Log "Memeriksa status dpkg lock..." "Yellow"
+
+    $checkScript = @"
+set +e  # Jangan berhenti jika ada error
+echo "=== DPKG LOCK CHECK ==="
+
+# Cek lock files
+if [ -f /var/lib/dpkg/lock-frontend ]; then
+    echo "Lock file found: /var/lib/dpkg/lock-frontend"
+fi
+if [ -f /var/lib/dpkg/lock ]; then
+    echo "Lock file found: /var/lib/dpkg/lock"
+fi
+if [ -f /var/lib/apt/lists/lock ]; then
+    echo "Lock file found: /var/lib/apt/lists/lock"
+fi
+if [ -f /var/cache/apt/archives/lock ]; then
+    echo "Lock file found: /var/cache/apt/archives/lock"
+fi
+
+# Cek jika lock masih aktif (proses masih berjalan)
+LOCK_PIDS=$(ps aux | awk '/apt-get|dpkg|aptitude/ && !/awk/ {print $2}' | tr '\n' ' ')
+if [ -n "$LOCK_PIDS" ]; then
+    echo "Proses apt/dpkg yang aktif: $LOCK_PIDS"
+    echo "AKTIF"
+else
+    echo "Tidak ada proses apt/dpkg yang aktif."
+    echo "TIDAK_AKTIF"
+fi
+"@
+
+    $tempScript = "$env:TEMP\dpkg_check.sh"
+    $checkScript | Out-File -FilePath $tempScript -Encoding utf8 -Force
+
+    & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$tempScript" "${TargetUser}@${TargetIP}:/tmp/dpkg_check.sh" 2>$null
+    $checkResult = & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${TargetIP}" "bash /tmp/dpkg_check.sh"
+    Remove-Item $tempScript -Force -ErrorAction SilentlyContinue
+
+    # Parse hasil - cek apakah ada kata AKTIF
+    if ($checkResult -contains "AKTIF") {
+        Show-Log "PERINGATAN: Dpkg lock terdeteksi aktif!" "Yellow"
+        Show-Log "Mencoba membersihkan dpkg lock..." "Yellow"
+
+        $clearScript = @"
+set -e
+echo '$SudoPass' | sudo -S rm -f /var/lib/dpkg/lock-frontend 2>/dev/null || true
+echo '$SudoPass' | sudo -S rm -f /var/lib/dpkg/lock 2>/dev/null || true
+echo '$SudoPass' | sudo -S rm -f /var/lib/apt/lists/lock 2>/dev/null || true
+echo '$SudoPass' | sudo -S rm -f /var/cache/apt/archives/lock 2>/dev/null || true
+echo '$SudoPass' | sudo -S rm -rf /var/lib/dpkg/*.old 2>/dev/null || true
+echo '$SudoPass' | sudo -S dpkg --configure -a 2>/dev/null || true
+echo "DPKG lock berhasil dibersihkan."
+"@
+
+        $tempClearScript = "$env:TEMP\dpkg_clear.sh"
+        $clearScript | Out-File -FilePath $tempClearScript -Encoding utf8 -Force
+
+        & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$tempClearScript" "${TargetUser}@${TargetIP}:/tmp/dpkg_clear.sh" 2>$null
+        $clearResult = & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${TargetIP}" "bash /tmp/dpkg_clear.sh"
+        Remove-Item $tempClearScript -Force -ErrorAction SilentlyContinue
+
+        Show-Log "Hasil: $clearResult" "Gray"
+
+        if ($LASTEXITCODE -eq 0) {
+            Show-Log "Dpkg lock clearance BERHASIL!" "Green"
+            return $true
+        } else {
+            Show-Log "Dpkg lock clearance GAGAL!" "Red"
+            return $false
+        }
+    } else {
+        Show-Log "Dpkg lock tidak aktif, melanjutkan..." "Green"
+        return $true
+    }
+}
+
+# ============================================================
+# FUNGSI CEK & KILL PROSES APT STUCK
+# ============================================================
+function Kill-AptProcesses {
+    param(
+        [string]$KeyPath,
+        [string]$TargetUser,
+        [string]$TargetIP,
+        [string]$SudoPass
+    )
+
+    Show-Log "Memeriksa proses apt/dpkg yang stuck..." "Yellow"
+
+    $killScript = @"
+set -e
+echo "=== KILL APT STUCK PROCESSES ==="
+
+# Kill semua proses apt-get, dpkg, aptitude yang stuck
+STUCK_PIDS=$(ps aux | grep -E 'apt-get|dpkg|aptitude' | grep -v grep | awk '{print $2}')
+if [ -n "$STUCK_PIDS" ]; then
+    echo "Membunuh proses yang stuck: $STUCK_PIDS"
+    echo '$SudoPass' | sudo -S kill -9 $STUCK_PIDS 2>/dev/null || true
+    sleep 2
+    echo "Proses berhasil dibunuh."
+else
+    echo "Tidak ada proses apt/dpkg yang stuck."
+fi
+
+# Verifikasi tidak ada proses yang masih stuck
+REMAINING=$(ps aux | grep -E 'apt-get|dpkg' | grep -v grep | wc -l)
+if [ "$REMAINING" -eq 0 ]; then
+    echo "VERIFIED_CLEAN"
+else
+    echo "MASIH_TERSISA: $REMAINING"
+fi
+"@
+
+    $tempScript = "$env:TEMP\kill_apt.sh"
+    $killScript | Out-File -FilePath $tempScript -Encoding utf8 -Force
+
+    & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$tempScript" "${TargetUser}@${TargetIP}:/tmp/kill_apt.sh" 2>$null
+    $killResult = & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${TargetIP}" "bash /tmp/kill_apt.sh"
+    Remove-Item $tempScript -Force -ErrorAction SilentlyContinue
+
+    if ($killResult -match "VERIFIED_CLEAN") {
+        Show-Log "Semua proses apt yang stuck sudah dibunuh!" "Green"
+        return $true
+    } else {
+        Show-Log "Masih ada proses apt yang aktif" "Yellow"
+        return $false
+    }
+}
+
+# ============================================================
+# FUNGSI UTILITY: AUTO-CLEAR DPKG + APT LOCKS SEBELUM OPSI
+# ============================================================
+function Invoke-AutoFixAptLocks {
+    param(
+        [string]$KeyPath,
+        [string]$TargetUser,
+        [string]$TargetIP,
+        [string]$SudoPass,
+        [int]$MaxRetries = 3
+    )
+
+    for ($i = 1; $i -le $MaxRetries; $i++) {
+        Show-Log "Upaya ke-$i dari $MaxRetries - Membersihkan apt locks..." "Yellow"
+
+        # Step 1: Kill stuck processes
+        $killed = Kill-AptProcesses -KeyPath $KeyPath -TargetUser $TargetUser -TargetIP $TargetIP -SudoPass $SudoPass
+
+        # Step 2: Clear lock files
+        $cleared = Clear-DpkgLock -KeyPath $KeyPath -TargetUser $TargetUser -TargetIP $TargetIP -SudoPass $SudoPass
+
+        if ($killed -and $cleared) {
+            Show-Log "Apt locks berhasil dibersihkan!" "Green"
+            return $true
+        }
+
+        if ($i -lt $MaxRetries) {
+            Show-Log "Mencoba lagi dalam 5 detik..." "Yellow"
+            Start-Sleep -Seconds 5
+        }
+    }
+
+    Show-Log "Gagal membersihkan apt locks setelah $MaxRetries percobaan." "Red"
+    return $false
 }
 
 Show-Header "Persiapan Koneksi VPS Target"
@@ -51,6 +228,54 @@ if (-not (Test-Path $NEW_KEY_SOURCE)) {
 
 $SUDO_PASS = (Read-Host "Masukkan password sudo VPS Anda [g1g1G1NGSUL*!2]").Trim()
 if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "g1g1G1NGSUL*!2" }
+
+# ============================================================
+# OPSI: CLEAR DPKG LOCK SEBELUM DEPLOY (JIKA DIPILIH)
+# ============================================================
+Write-Host ""
+Write-Host "------------------------------------------------------------------------------"
+Write-Host " PERHATIAN: Jika VPS pernah crash atau ada proses apt yang stuck," -ForegroundColor Yellow
+Write-Host " Anda bisa membersihkan dpkg lock SEBELUM deploy dimulai." -ForegroundColor Yellow
+Write-Host "------------------------------------------------------------------------------"
+Write-Host " 1) Lanjutkan ke Deploy (Default)"
+Write-Host " 2) Bersihkan Dpkg/Apt Locks terlebih dahulu"
+Write-Host " 3) Bersihkan + Lanjutkan Deploy"
+$preDeployChoice = Read-Host "Pilih [1-3] (Default: 1)"
+
+if ($preDeployChoice -eq "2" -or $preDeployChoice -eq "3") {
+    Show-Header "Membersihkan Dpkg/Apt Locks"
+
+    # Perbaiki permission SSH Key
+    $SAFE_NEW_KEY = "$env:TEMP\new-deploy-key.pem"
+    Remove-Item $SAFE_NEW_KEY -Force -ErrorAction SilentlyContinue
+    Get-Content -Path $NEW_KEY_SOURCE | Set-Content -Path $SAFE_NEW_KEY
+    $acl = New-Object System.Security.AccessControl.FileSecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule([System.Security.Principal.WindowsIdentity]::GetCurrent().Name, 'FullControl', 'Allow')
+    $acl.AddAccessRule($rule)
+    Set-Acl -Path $SAFE_NEW_KEY -AclObject $acl
+
+    $fixed = Invoke-AutoFixAptLocks -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP -SudoPass $SUDO_PASS -MaxRetries 3
+
+    if ($fixed) {
+        Show-Log "VPS siap untuk deployment!" "Green"
+    } else {
+        Write-Host ""
+        Write-Host "PERINGATAN: Gagal membersihkan apt locks sepenuhnya." -ForegroundColor Yellow
+        Write-Host "Deployment masih bisa dicoba, tetapi mungkin gagal." -ForegroundColor Yellow
+        $continue = Read-Host "Lanjutkan deployment? [y/N]"
+        if ($continue -ne "y" -and $continue -ne "Y") {
+            Write-Host "Deployment dibatalkan." -ForegroundColor Red
+            exit
+        }
+    }
+
+    if ($preDeployChoice -eq "2") {
+        Show-Log "Selesai. Dpkg locks sudah dibersihkan." "Green"
+        Read-Host "Tekan ENTER untuk keluar..."
+        exit
+    }
+}
 
 # ---------------------------------------------------------
 # PEMILIHAN PROYEK
@@ -130,28 +355,27 @@ $INSTALL_REDIS = "N"
 $DEPLOY_SCENARIO = "hybrid"
 $TUNNEL_BASE_DOMAIN = "absenta.id"
 $LICENSE_SERVER_URL = "https://api.absenta.id"
+$REDIS_URL = "redis://localhost:6379"
+$NODE_NAME = "absenta-node-1"
 
 if ($IS_SERVER_LISENSI -eq "True") {
     Write-Host "Menggunakan port default untuk Server Lisensi." -ForegroundColor Gray
     $TARGET_DOMAIN = (Read-Host "Masukkan Domain Server Lisensi (Contoh: absenta.id)").Trim()
     if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
 } elseif ($IS_ABSENTA -eq "True") {
+    # ─── BAGIAN A: Jaringan, Port & SSL (Network & SSL) ──────────────────────────
+    Write-Host "`n[BAGIAN A: Jaringan, Port & SSL]" -ForegroundColor Cyan
     Write-Host "Pilih Skenario Deployment:" -ForegroundColor White
-    Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, e.g. https://app.absenta.id)"
-    Write-Host " 2) Lokal Sekolah (Akses via IP LAN langsung tanpa Caddy, e.g. http://10.10.10.163:5175)"
-    Write-Host " 3) Hybrid (Lokal Sekolah + Caddy Proxy, e.g. http://10.10.10.163)"
-    $scenarioChoice = Read-Host "Pilih [1-3] (Default: 1)"
-    
+    Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, contoh: https://app.absenta.id)"
+    Write-Host " 2) Hybrid (Lokal Sekolah + Caddy Proxy, contoh: http://10.10.10.163)"
+    $scenarioChoice = Read-Host "Pilih [1-2] (Default: 1)"
+
     $DEPLOY_SCENARIO = "saas"
     if ($scenarioChoice -eq "2") {
-        $DEPLOY_SCENARIO = "local"
-    } elseif ($scenarioChoice -eq "3") {
         $DEPLOY_SCENARIO = "hybrid"
     }
 
-    if ($DEPLOY_SCENARIO -eq "local") {
-        $TARGET_DOMAIN = $NEW_IP
-    } elseif ($DEPLOY_SCENARIO -eq "saas") {
+    if ($DEPLOY_SCENARIO -eq "saas") {
         $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS (Contoh: absenta.id)").Trim()
         if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
     } else {
@@ -161,18 +385,17 @@ if ($IS_SERVER_LISENSI -eq "True") {
 
     $B_PORT = (Read-Host "Masukkan Port Backend [3003]").Trim()
     if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = "3003" }
-    
+
     $F_PORT = (Read-Host "Masukkan Port Frontend [5175]").Trim()
     if ([string]::IsNullOrWhiteSpace($F_PORT)) { $F_PORT = "5175" }
-    
-    $LICENSE_KEY = (Read-Host "Masukkan Kunci Lisensi Absenta (Kosongkan jika belum ada)").Trim()
-    
-    $TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [absenta.id]").Trim()
-    if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = "absenta.id" }
-    
-    $LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [https://api.absenta.id]").Trim()
-    if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = "https://api.absenta.id" }
-    
+
+    $CF_TOKEN = ""
+    if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
+        $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk DNS Challenge SSL, kosongkan jika tidak pakai)").Trim()
+    }
+
+    # ─── BAGIAN B: Database & Cache (Data Storage) ──────────────────────────────────
+    Write-Host "`n[BAGIAN B: Database & Cache]" -ForegroundColor Cyan
     $DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [postgresql://postgres:123123123@localhost:5432/absensi]").Trim()
     if ([string]::IsNullOrWhiteSpace($DB_URL)) {
         $DB_URL = "postgresql://postgres:123123123@localhost:5432/absensi"
@@ -180,17 +403,33 @@ if ($IS_SERVER_LISENSI -eq "True") {
         if ($DB_URL.StartsWith("[")) { $DB_URL = $DB_URL.Substring(1) }
         if ($DB_URL.EndsWith("]")) { $DB_URL = $DB_URL.Substring(0, $DB_URL.Length - 1) }
     }
-    
+
     $INSTALL_POSTGRES = (Read-Host "Apakah Anda ingin memasang PostgreSQL Server di VPS Linux secara otomatis? [y/N]").Trim()
     if ([string]::IsNullOrWhiteSpace($INSTALL_POSTGRES)) { $INSTALL_POSTGRES = "N" }
-    
+
     $INSTALL_REDIS = (Read-Host "Apakah Anda ingin memasang Redis Server di VPS Linux secara otomatis? [y/N]").Trim()
     if ([string]::IsNullOrWhiteSpace($INSTALL_REDIS)) { $INSTALL_REDIS = "N" }
-    
-    $CF_TOKEN = ""
-    if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
-        $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk DNS Challenge SSL, kosongkan jika tidak pakai)").Trim()
+
+    $REDIS_URL = "redis://localhost:6379"
+    if ($INSTALL_REDIS -eq "n" -or $INSTALL_REDIS -eq "N") {
+        $REDIS_URL = (Read-Host "Masukkan REDIS_URL [redis://localhost:6379]").Trim()
+        if ([string]::IsNullOrWhiteSpace($REDIS_URL)) { $REDIS_URL = "redis://localhost:6379" }
     }
+
+    # ─── BAGIAN C: Lisensi & Tunnel (License & Integration) ─────────────────────────
+    Write-Host "`n[BAGIAN C: Lisensi & Tunnel]" -ForegroundColor Cyan
+    $LICENSE_KEY = (Read-Host "Masukkan Kunci Lisensi Absenta (Kosongkan jika belum ada)").Trim()
+
+    $TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [absenta.id]").Trim()
+    if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = "absenta.id" }
+
+    $LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [https://api.absenta.id]").Trim()
+    if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = "https://api.absenta.id" }
+
+    # ─── BAGIAN D: Identitas Node (Node Identity) ───────────────────────────────
+    Write-Host "`n[BAGIAN D: Identitas Node]" -ForegroundColor Cyan
+    $NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [node-$($NEW_IP.Replace('.', '-'))]").Trim()
+    if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = "node-$($NEW_IP.Replace('.', '-'))" }
 } else {
     $B_PORT = (Read-Host "Masukkan Port Aplikasi [3000]").Trim()
     if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = "3000" }
@@ -202,22 +441,11 @@ $SCHEME = "https"
 if ($TARGET_DOMAIN -match "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$") {
     $SCHEME = "http"
 }
-if ($DEPLOY_SCENARIO -eq "local") {
-    $SCHEME = "http"
-}
-
 # Tentukan nilai URL sesuai skenario
-if ($DEPLOY_SCENARIO -eq "local") {
-    $BACKEND_API_URL = "http://${TARGET_DOMAIN}:${B_PORT}/api"
-    $BACKEND_APP_URL = "http://${TARGET_DOMAIN}:${B_PORT}"
-    $BACKEND_FRONTEND_URL = "http://${TARGET_DOMAIN}:${F_PORT}"
-    $FRONTEND_API_BASE_URL = "http://${TARGET_DOMAIN}:${B_PORT}/api"
-} else {
-    $BACKEND_API_URL = "${SCHEME}://${TARGET_DOMAIN}/api"
-    $BACKEND_APP_URL = "${SCHEME}://${TARGET_DOMAIN}"
-    $BACKEND_FRONTEND_URL = "${SCHEME}://${TARGET_DOMAIN}"
-    $FRONTEND_API_BASE_URL = "/api"
-}
+$BACKEND_API_URL = "${SCHEME}://${TARGET_DOMAIN}/api"
+$BACKEND_APP_URL = "${SCHEME}://${TARGET_DOMAIN}"
+$BACKEND_FRONTEND_URL = "${SCHEME}://${TARGET_DOMAIN}"
+$FRONTEND_API_BASE_URL = "/api"
 
 # Perbaiki permission SSH Key agar Windows OpenSSH tidak memblokirnya
 $SAFE_NEW_KEY = "$env:TEMP\new-deploy-key.pem"
@@ -234,18 +462,31 @@ function Run-RemoteScript {
     $tempScript = "$env:TEMP\remote_script.sh"
     $ScriptContent = $ScriptContent -replace "`r`n", "`n"
     [System.IO.File]::WriteAllText($tempScript, $ScriptContent)
-    
+
     # Run SCP directly
     & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$tempScript" "${TargetUser}@${TargetIP}:/tmp/remote_script.sh"
     if ($LASTEXITCODE -ne 0) {
         throw "Gagal menyalin script ke VPS menggunakan SCP."
     }
-    
+
     # Run SSH directly
     & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${TargetIP}" "bash /tmp/remote_script.sh"
     if ($LASTEXITCODE -ne 0) {
         throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE"
     }
+}
+
+# ============================================================
+# FASE 0: AUTO FIX DPKG LOCK SEBELUM PROVISIONING
+# ============================================================
+Show-Header "FASE 0: CEK & FIX APT LOCKS"
+Show-Log "Memeriksa kondisi apt/dpkg di VPS..." "Yellow"
+
+$preCheckSuccess = $true
+try {
+    $preCheckSuccess = -not (Invoke-AutoFixAptLocks -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP -SudoPass $SUDO_PASS -MaxRetries 2)
+} catch {
+    Show-Log "Gagal melakukan pre-check apt locks: $_" "Yellow"
 }
 
 # ---------------------------------------------------------
@@ -256,7 +497,21 @@ Show-Log "Menghubungkan ke VPS ($NEW_IP) untuk instalasi dependensi..." "Yellow"
 
 $provisionScript = @"
 set -e
-echo '$SUDO_PASS' | sudo -S apt-get update -y
+# Auto-fix dpkg lock sebelum apt-get
+echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock-frontend 2>/dev/null || true
+echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock 2>/dev/null || true
+echo '$SUDO_PASS' | sudo -S rm -f /var/lib/apt/lists/lock 2>/dev/null || true
+echo '$SUDO_PASS' | sudo -S rm -f /var/cache/apt/archives/lock 2>/dev/null || true
+echo '$SUDO_PASS' | sudo -S dpkg --configure -a 2>/dev/null || true
+
+echo '$SUDO_PASS' | sudo -S apt-get update -y || {
+    echo "APT UPDATE GAGAL - Mencoba fix dan retry..."
+    echo '$SUDO_PASS' | sudo -S kill -9 $(ps aux | grep -E 'apt|dpkg' | grep -v grep | awk '{print $2}') 2>/dev/null || true
+    sleep 2
+    echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock-* /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S dpkg --configure -a
+    echo '$SUDO_PASS' | sudo -S apt-get update -y
+}
 echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw build-essential
 
 # Install Node 20
@@ -288,6 +543,9 @@ if [ -f /tmp/caddy_offline ]; then
             echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+            # FIX: Clear lock sebelum apt-get install
+            echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
+            echo '$SUDO_PASS' | sudo -S dpkg --configure -a 2>/dev/null || true
             echo '$SUDO_PASS' | sudo -S apt-get update -y
             echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
         fi
@@ -300,6 +558,9 @@ else
         echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+        # FIX: Clear lock sebelum apt-get install
+        echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
+        echo '$SUDO_PASS' | sudo -S dpkg --configure -a 2>/dev/null || true
         echo '$SUDO_PASS' | sudo -S apt-get update -y
         echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
     fi
@@ -315,19 +576,21 @@ echo '$SUDO_PASS' | sudo -S chmod 666 /etc/caddy/Caddyfile
 if [ "$IS_ABSENTA" = "True" ]; then
     if [[ "$INSTALL_POSTGRES" =~ ^[yY]$ ]]; then
         echo "Menginstal PostgreSQL secara lokal..."
+        echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
         echo '$SUDO_PASS' | sudo -S apt-get install -y postgresql postgresql-contrib
         echo "Mengaktifkan dan menjalankan PostgreSQL..."
         echo '$SUDO_PASS' | sudo -S systemctl enable postgresql
         echo '$SUDO_PASS' | sudo -S systemctl start postgresql
-        
+
         # Buat database & user postgres default jika belum ada
         echo "Mengonfigurasi database absensi dan user postgres..."
         echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER postgres PASSWORD '123123123';" || true
         echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE absensi;" || true
     fi
-    
+
     if [[ "$INSTALL_REDIS" =~ ^[yY]$ ]]; then
         echo "Menginstal Redis Server secara lokal..."
+        echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
         echo '$SUDO_PASS' | sudo -S apt-get install -y redis-server
         echo '$SUDO_PASS' | sudo -S systemctl enable redis-server
         echo '$SUDO_PASS' | sudo -S systemctl start redis-server
@@ -339,7 +602,7 @@ if [ "$IS_SERVER_LISENSI" = "True" ] || [ "$IS_ABSENTA" = "True" ]; then
     echo '$SUDO_PASS' | sudo -S apt-get install -y wireguard openresolv
     echo '$SUDO_PASS' | sudo -S sysctl -w net.ipv4.ip_forward=1
     echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
-    
+
     # Configure passwordless sudo for WireGuard
     echo "Mengonfigurasi passwordless sudo untuk WireGuard..."
     echo "$NEW_USER ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg" > /tmp/90-wireguard
@@ -395,15 +658,16 @@ fi
 if [ "$IS_ABSENTA" = "True" ]; then
     # deployment Absenta
     cd /var/www/project-absenta
-    
+
     # Backend Setup
     cp absenta_backend/.env.example absenta_backend/.env || true
-    
+
     # Mengganti baris kritis di backend .env
     sed -i "s|^PORT=.*|PORT=$B_PORT|g" absenta_backend/.env
     sed -i "s|^DATABASE_URL=.*|DATABASE_URL=$DB_URL|g" absenta_backend/.env
+    sed -i "s|^NODE_NAME=.*|NODE_NAME=$NODE_NAME|g" absenta_backend/.env
     sed -i "s|^REDIS_MODE=.*|REDIS_MODE=single|g" absenta_backend/.env
-    sed -i "s|^REDIS_URL=.*|REDIS_URL=redis://localhost:6379|g" absenta_backend/.env
+    sed -i "s|^REDIS_URL=.*|REDIS_URL=$REDIS_URL|g" absenta_backend/.env
     sed -i "s|^LICENSE_SERVER_URL=.*|LICENSE_SERVER_URL=$LICENSE_SERVER_URL|g" absenta_backend/.env
     sed -i "s|^LICENSE_KEY=.*|LICENSE_KEY=$LICENSE_KEY|g" absenta_backend/.env
     sed -i "s|^EASY_TUNNEL_BASE_DOMAIN=.*|EASY_TUNNEL_BASE_DOMAIN=$TUNNEL_BASE_DOMAIN|g" absenta_backend/.env
@@ -416,7 +680,12 @@ if [ "$IS_ABSENTA" = "True" ]; then
     sed -i "s|^MAIN_DOMAIN=.*|MAIN_DOMAIN=$TARGET_DOMAIN|g" absenta_backend/.env
     sed -i "s|^TENANT_BASE_DOMAIN=.*|TENANT_BASE_DOMAIN=$TARGET_DOMAIN|g" absenta_backend/.env
     sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=$BACKEND_FRONTEND_URL|g" absenta_backend/.env
-    
+    if grep -q "^DEPLOY_SCENARIO=" absenta_backend/.env; then
+        sed -i "s|^DEPLOY_SCENARIO=.*|DEPLOY_SCENARIO=$DEPLOY_SCENARIO|g" absenta_backend/.env
+    else
+        echo "DEPLOY_SCENARIO=$DEPLOY_SCENARIO" >> absenta_backend/.env
+    fi
+
     # Frontend Setup
     cp absenta_frontend/.env.example absenta_frontend/.env || true
     sed -i "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=$FRONTEND_API_BASE_URL|g" absenta_frontend/.env
@@ -427,7 +696,7 @@ if [ "$IS_ABSENTA" = "True" ]; then
     cd absenta_backend
     npm install
     npx prisma generate
-    
+
     # Jalankan prisma db push (jika database postgresql sudah siap)
     npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal. Pastikan PostgreSQL siap."
 
@@ -437,12 +706,19 @@ if [ "$IS_ABSENTA" = "True" ]; then
     cd ../absenta_frontend
     npm install
     npm run build
-    
+
     # PM2 Start
     cd ..
     pm2 delete ecosystem.config.js || true
     pm2 start ecosystem.config.js --update-env
     pm2 save
+
+    # Daftarkan PM2 sebagai systemd service agar otomatis jalan setelah reboot
+    echo "Mendaftarkan PM2 ke systemd startup..."
+    echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || \
+    echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/local/bin pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || true
+    pm2 save
+    echo "PM2 startup systemd berhasil didaftarkan untuk Project Absenta."
 
     # Configure Caddyfile
     if [ "$DEPLOY_SCENARIO" != "local" ]; then
@@ -474,7 +750,7 @@ if [ "$IS_ABSENTA" = "True" ]; then
     else
         echo "Skenario Lokal terdeteksi. Melewati konfigurasi Caddy Reverse Proxy."
     fi
-    
+
 elif [ "$IS_SERVER_LISENSI" = "True" ]; then
     # deployment Server Lisensi
     cd /var/www/licensing-server
@@ -499,7 +775,7 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
         echo "PrivateKey = \`$PRV_KEY" >> wg0.conf
         echo "PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
         echo "PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
-        
+
         echo '$SUDO_PASS' | sudo -S cp privatekey publickey wg0.conf /etc/wireguard/
         echo '$SUDO_PASS' | sudo -S chmod 600 /etc/wireguard/privatekey /etc/wireguard/wg0.conf
     fi
@@ -509,7 +785,7 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
     pm2 delete licensing-server || true
     pm2 start ecosystem.config.js --update-env
     pm2 save
-    
+
     echo '$SUDO_PASS' | sudo -S env PATH=\`$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
     echo '$SUDO_PASS' | sudo -S node scripts/sync-caddy.js
     echo '$SUDO_PASS' | sudo -S systemctl enable wg-quick@wg0
@@ -518,16 +794,16 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
 else
     # deployment Standard (POS, Yatim, gform, Custom Repo)
     cd /var/www/$TARGET_SUBDIR
-    
+
     # Setup .env
     cp .env.example .env || true
     sed -i "s|^PORT=.*|PORT=$B_PORT|g" .env || true
-    
+
     npm install
     if grep -q "build" package.json; then
         npm run build || echo "Build script failed atau tidak ditemukan."
     fi
-    
+
     # PM2 Start
     pm2 delete $TARGET_SUBDIR || true
     if [ -f "ecosystem.config.js" ]; then
@@ -538,7 +814,14 @@ else
         pm2 start server.js --name $TARGET_SUBDIR || pm2 start index.js --name $TARGET_SUBDIR
     fi
     pm2 save
-    
+
+    # Daftarkan PM2 sebagai systemd service agar otomatis jalan setelah reboot
+    echo "Mendaftarkan PM2 ke systemd startup..."
+    echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || \
+    echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/local/bin pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || true
+    pm2 save
+    echo "PM2 startup systemd berhasil didaftarkan."
+
     # Configure Caddyfile
     echo "$TARGET_DOMAIN {" > /tmp/Caddyfile
     echo "    reverse_proxy /* localhost:$B_PORT" >> /tmp/Caddyfile
@@ -562,17 +845,17 @@ pm2 status
 
 echo -n "Status Caddy Server: "
 if echo '$SUDO_PASS' | sudo -S systemctl is-active --quiet caddy; then
-    echo -e "\e[1;32m✅ ACTIVE\e[0m"
+    echo -e "\e[1;32m ACTIVE\e[0m"
 else
-    echo -e "\e[1;31m❌ INACTIVE\e[0m"
+    echo -e "\e[1;31m INACTIVE\e[0m"
 fi
 
 if [ "$IS_SERVER_LISENSI" = "True" ]; then
     echo -n "Status WireGuard (wg0): "
     if echo '$SUDO_PASS' | sudo -S systemctl is-active --quiet wg-quick@wg0; then
-        echo -e "\e[1;32m✅ ACTIVE\e[0m"
+        echo -e "\e[1;32m ACTIVE\e[0m"
     else
-        echo -e "\e[1;31m❌ INACTIVE\e[0m"
+        echo -e "\e[1;31m INACTIVE\e[0m"
     fi
 fi
 echo -e "\e[1;36m==========================================================\e[0m"
