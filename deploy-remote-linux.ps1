@@ -697,8 +697,9 @@ if [ "$IS_ABSENTA" = "True" ]; then
     npm install
     npx prisma generate
 
-    # Jalankan prisma db push (jika database postgresql sudah siap)
+    # Jalankan prisma db push & seed (jika database postgresql sudah siap)
     npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal. Pastikan PostgreSQL siap."
+    npx prisma db seed || echo "Prisma DB seed dilewati atau gagal."
 
     npm run build
 
