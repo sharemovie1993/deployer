@@ -396,9 +396,11 @@ if ($IS_SERVER_LISENSI -eq "True") {
 
     # ─── BAGIAN B: Database & Cache (Data Storage) ──────────────────────────────────
     Write-Host "`n[BAGIAN B: Database & Cache]" -ForegroundColor Cyan
-    $DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [postgresql://postgres:123123123@localhost:5432/absensi]").Trim()
+    $defaultDb = "absensi"
+    if ($IS_SERVER_LISENSI -eq "True") { $defaultDb = "orkestrator_licensing" }
+    $DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [postgresql://postgres:123123123@localhost:5432/$defaultDb]").Trim()
     if ([string]::IsNullOrWhiteSpace($DB_URL)) {
-        $DB_URL = "postgresql://postgres:123123123@localhost:5432/absensi"
+        $DB_URL = "postgresql://postgres:123123123@localhost:5432/$defaultDb"
     } else {
         if ($DB_URL.StartsWith("[")) { $DB_URL = $DB_URL.Substring(1) }
         if ($DB_URL.EndsWith("]")) { $DB_URL = $DB_URL.Substring(0, $DB_URL.Length - 1) }
@@ -768,6 +770,12 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
             echo "CLOUDFLARE_API_TOKEN=$CF_TOKEN" >> .env
         fi
     fi
+    # Setup DATABASE_URL
+    if grep -q "DATABASE_URL=" .env; then
+        sed -i "s|^DATABASE_URL=.*|DATABASE_URL=$DB_URL|g" .env
+    else
+        echo "DATABASE_URL=$DB_URL" >> .env
+    fi
 
     # Setup WireGuard
     echo '$SUDO_PASS' | sudo -S mkdir -p /etc/wireguard
@@ -790,11 +798,15 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
 
     cd /var/www/licensing-server
     npm install --production
+    npx prisma generate
+    npx prisma db push --accept-data-loss || echo "Prisma db push dilewati atau gagal."
+    npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
+
     pm2 delete licensing-server || true
     pm2 start ecosystem.config.js --update-env
     pm2 save
 
-    echo '$SUDO_PASS' | sudo -S env PATH=\`$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
+    echo '$SUDO_PASS' | sudo -S env PATH=`$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
     echo '$SUDO_PASS' | sudo -S node scripts/sync-caddy.js
     echo '$SUDO_PASS' | sudo -S systemctl enable wg-quick@wg0
     echo '$SUDO_PASS' | sudo -S systemctl restart wg-quick@wg0 || true
