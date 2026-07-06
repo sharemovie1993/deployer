@@ -249,12 +249,13 @@ echo '$SUDO_PASS_NEW' | sudo -S env PATH=`$PATH:/usr/bin /usr/lib/node_modules/p
 echo '$SUDO_PASS_NEW' | sudo -S systemctl enable wg-quick@wg0
 echo '$SUDO_PASS_NEW' | sudo -S systemctl restart wg-quick@wg0
 echo "Menunggu koneksi database PostgreSQL terhubung (ping 10.0.0.2)..."
-for i in {1..15}; do
+echo "TIPS: Jika koneksi tertunda, silakan jalankan 'ping -t 10.0.0.1' di CMD Windows Anda atau toggle (Deactivate/Activate) WireGuard Anda untuk memicu handshake."
+for i in {1..30}; do
     if ping -c 1 -W 1 10.0.0.2 &>/dev/null; then
         echo "WireGuard VPN terhubung sukses ke database!"
         break
     fi
-    echo "Menunggu koneksi VPN... (`$i/15)"
+    echo "Menunggu koneksi VPN... (`$i/30)"
     sleep 1
 done
 echo '$SUDO_PASS_NEW' | sudo -S node scripts/sync-caddy.js
