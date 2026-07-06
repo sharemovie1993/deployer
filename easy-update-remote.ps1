@@ -118,6 +118,10 @@ if ! command -v wg-quick &> /dev/null; then
     rm -f /tmp/90-wireguard
 fi
 
+# Stop Caddy terlebih dahulu agar tidak serve versi lama saat proses build
+echo "Menghentikan Caddy sementara..."
+echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
+
 echo "Menarik kode terbaru dari branch main..."
 git fetch origin main
 git reset --hard origin/main
@@ -142,6 +146,17 @@ cd ..
 pm2 reload ecosystem.config.js || pm2 restart ecosystem.config.js
 pm2 save
 
+# Pastikan PM2 terdaftar di systemd startup (agar tetap jalan setelah reboot)
+echo "Memastikan PM2 startup systemd terdaftar..."
+echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || \
+echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/local/bin pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || true
+pm2 save
+
+# Jalankan kembali Caddy setelah build selesai
+echo "Menjalankan kembali Caddy..."
+echo '$SUDO_PASS' | sudo -S systemctl start caddy
+echo '$SUDO_PASS' | sudo -S systemctl enable caddy
+
 echo "============================================="
 echo "   QUICK UPDATE ABSENTA VPS SELESAI SAKSES!  "
 echo "============================================="
@@ -151,6 +166,10 @@ echo "============================================="
 set -e
 echo "==== Memulai Update Cepat Server Lisensi ===="
 cd /var/www/$TARGET_SUBDIR
+
+# Stop Caddy terlebih dahulu agar tidak serve versi lama saat proses update
+echo "Menghentikan Caddy sementara..."
+echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
 
 echo "Menarik kode terbaru dari branch main..."
 git fetch origin main
@@ -162,6 +181,17 @@ npm install
 echo "Memuat ulang layanan PM2..."
 pm2 reload ecosystem.config.js || pm2 restart ecosystem.config.js
 pm2 save
+
+# Pastikan PM2 terdaftar di systemd startup (agar tetap jalan setelah reboot)
+echo "Memastikan PM2 startup systemd terdaftar..."
+echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || \
+echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/local/bin pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || true
+pm2 save
+
+# Jalankan kembali Caddy setelah update selesai
+echo "Menjalankan kembali Caddy..."
+echo '$SUDO_PASS' | sudo -S systemctl start caddy
+echo '$SUDO_PASS' | sudo -S systemctl enable caddy
 
 echo "============================================="
 echo "   QUICK UPDATE LISENSI VPS SELESAI SAKSES!  "
