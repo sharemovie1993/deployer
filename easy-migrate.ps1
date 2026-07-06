@@ -228,10 +228,10 @@ fi
 pm2 save
 echo '$SUDO_PASS_NEW' | sudo -S env PATH=`$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
 
-# 4. Sync Caddy & Restart WireGuard
-echo '$SUDO_PASS_NEW' | sudo -S node scripts/sync-caddy.js
+# 4. Restart WireGuard & Sync Caddy
 echo '$SUDO_PASS_NEW' | sudo -S systemctl enable wg-quick@wg0
 echo '$SUDO_PASS_NEW' | sudo -S systemctl restart wg-quick@wg0
+echo '$SUDO_PASS_NEW' | sudo -S node scripts/sync-caddy.js
 
 # 5. TAHAP VERIFIKASI
 echo ""
