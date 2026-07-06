@@ -240,8 +240,7 @@ if ($DEPLOY_SCENARIO -eq "saas") {
     $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS [$defaultDomain]").Trim()
     if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $defaultDomain }
 } else {
-    $TARGET_DOMAIN = (Read-Host "Masukkan Domain Publik Akses Sekolah [absen.smkn1.sch.id]").Trim()
-    if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
+    $TARGET_DOMAIN = ""
 }
 
 $B_PORT = (Read-Host "Masukkan Port Backend [$defaultBPort]").Trim()
@@ -395,8 +394,6 @@ if ($DEPLOY_SCENARIO -eq "hybrid") {
     $shouldExit = $false
     $errMessage = ""
     try {
-        $slug = $TARGET_DOMAIN.Replace(".$TUNNEL_BASE_DOMAIN", "").Trim().ToLower()
-        
         if ([string]::IsNullOrWhiteSpace($LICENSE_KEY)) {
             $errMessage = "Lisensi wajib diisi untuk skenario Hybrid!"
             $shouldExit = $true
@@ -405,21 +402,28 @@ if ($DEPLOY_SCENARIO -eq "hybrid") {
             try {
                 $valRes = Invoke-RestMethod -Uri $validateUrl -Method Get -TimeoutSec 10
                 
-                $isActive = $valRes.license.isActive
-                if ($isActive -eq $null) { $isActive = $valRes.license.is_active }
-                $status = $valRes.license.status
+                $isActive = $valRes.data.is_active
+                if ($isActive -eq $null) { $isActive = $valRes.data.isActive }
+                $status = $valRes.data.status
 
                 if ($valRes.success -ne $true -or $isActive -ne 1 -or $status -ne 'active') {
                     $errMessage = "Kunci lisensi tidak valid atau tidak aktif!"
                     $shouldExit = $true
                 } else {
-                    $expectedSlug = $valRes.license.requestedSlug
-                    if ($expectedSlug -eq $null) { $expectedSlug = $valRes.license.requested_slug }
-                    if ($expectedSlug -and $expectedSlug.ToLower().Trim() -ne $slug) {
-                        $errMessage = "Domain publik '$TARGET_DOMAIN' tidak sesuai dengan alokasi lisensi Anda (Seharusnya: $expectedSlug.$TUNNEL_BASE_DOMAIN)!"
-                        $shouldExit = $true
-                    } else {
-                        Write-Host "Validasi berhasil! Lisensi aktif untuk domain '$TARGET_DOMAIN'." -ForegroundColor Green
+                    $expectedSlug = $valRes.data.requested_slug
+                    if ($expectedSlug -eq $null) { $expectedSlug = $valRes.data.requestedSlug }
+                    
+                    $TARGET_DOMAIN = "$expectedSlug.$TUNNEL_BASE_DOMAIN"
+                    Write-Host "Validasi berhasil! Lisensi aktif untuk domain '$TARGET_DOMAIN'." -ForegroundColor Green
+
+                    # Option for custom domain
+                    $useCustom = (Read-Host "Apakah Anda ingin menggunakan custom domain sekolah sendiri (seperti absen.smkn1.sch.id)? [y/N]").Trim()
+                    if ($useCustom -eq 'y' -or $useCustom -eq 'Y') {
+                        $customDom = (Read-Host "Masukkan Custom Domain Anda").Trim().ToLower()
+                        if (-not [string]::IsNullOrWhiteSpace($customDom)) {
+                            $TARGET_DOMAIN = $customDom
+                            Write-Host "Domain utama diatur ke custom domain: $TARGET_DOMAIN" -ForegroundColor Green
+                        }
                     }
                 }
             } catch {
@@ -436,12 +440,22 @@ if ($DEPLOY_SCENARIO -eq "hybrid") {
                 }
                 if (-not $shouldExit) {
                     Write-Host "[WARNING] Gagal memvalidasi secara online (Koneksi bermasalah): $($_.Exception.Message)" -ForegroundColor Yellow
+                    if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) {
+                        while ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) {
+                            $TARGET_DOMAIN = (Read-Host "Masukkan Domain Publik Akses Sekolah (karena offline, contoh 'demo.absenta.id')").Trim().ToLower()
+                        }
+                    }
                     Write-Host "Melanjutkan instalasi dengan asumsi konfigurasi benar..." -ForegroundColor Yellow
                 }
             }
         }
     } catch {
         Write-Host "[WARNING] Terjadi kesalahan saat mencoba memvalidasi: $($_.Exception.Message)" -ForegroundColor Yellow
+        if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) {
+            while ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) {
+                $TARGET_DOMAIN = (Read-Host "Masukkan Domain Publik Akses Sekolah (karena offline, contoh 'demo.absenta.id')").Trim().ToLower()
+            }
+        }
         Write-Host "Melanjutkan instalasi dengan asumsi konfigurasi benar..." -ForegroundColor Yellow
     }
 
