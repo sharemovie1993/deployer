@@ -290,14 +290,90 @@ if ($INSTALL_REDIS -eq "n" -or $INSTALL_REDIS -eq "N") {
     if ([string]::IsNullOrWhiteSpace($REDIS_URL)) { $REDIS_URL = $defaultRedisUrl }
 }
 
-$LICENSE_KEY = (Read-Host "Masukkan Kunci Lisensi Absenta [$defaultLicenseKey]").Trim()
-if ([string]::IsNullOrWhiteSpace($LICENSE_KEY)) { $LICENSE_KEY = $defaultLicenseKey }
-
 $TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [$defaultTunnelBaseDomain]").Trim()
 if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = $defaultTunnelBaseDomain }
 
 $LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [$defaultLicenseServerUrl]").Trim()
 if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = $defaultLicenseServerUrl }
+
+$LICENSE_KEY = ""
+$inputLic = (Read-Host "Masukkan Kunci Lisensi Absenta (Kosongkan jika ingin registrasi baru) [$defaultLicenseKey]").Trim()
+if (-not [string]::IsNullOrWhiteSpace($inputLic)) {
+    $LICENSE_KEY = $inputLic
+} else {
+    if ($defaultLicenseKey) {
+        $LICENSE_KEY = $defaultLicenseKey
+    } else {
+        $requestNew = Read-Host "Belum punya lisensi? Ingin registrasi sekarang? [y/N]"
+        if ($requestNew -eq 'y' -or $requestNew -eq 'Y') {
+            $schoolName = ""
+            while ([string]::IsNullOrWhiteSpace($schoolName)) {
+                $schoolName = (Read-Host "Masukkan Nama Sekolah / Instansi").Trim()
+                if ([string]::IsNullOrWhiteSpace($schoolName)) {
+                    Write-Host "Nama sekolah wajib diisi!" -ForegroundColor Red
+                }
+            }
+
+            $whatsappNo = ""
+            while ([string]::IsNullOrWhiteSpace($whatsappNo)) {
+                $whatsappNo = (Read-Host "Masukkan Nomor WhatsApp Anda (untuk menerima Kunci Lisensi via WA)").Trim()
+                if ([string]::IsNullOrWhiteSpace($whatsappNo)) {
+                    Write-Host "Nomor WhatsApp wajib diisi!" -ForegroundColor Red
+                }
+            }
+
+            $regSuccess = $false
+            while (-not $regSuccess) {
+                $slugInput = (Read-Host "Masukkan Subdomain/Slug yang diinginkan (contoh 'smp4' untuk smp4.absenta.id, atau ketik 'exit' untuk batal)").Trim().ToLower()
+                if ([string]::IsNullOrWhiteSpace($slugInput)) {
+                    Write-Host "Subdomain wajib diisi!" -ForegroundColor Red
+                    continue
+                }
+                if ($slugInput -eq 'exit') {
+                    Write-Host "Registrasi dibatalkan." -ForegroundColor Yellow
+                    break
+                }
+
+                $licenseServerCheck = if ($LICENSE_SERVER_URL) { $LICENSE_SERVER_URL } else { $defaultLicenseServerUrl }
+                Write-Host "Menghubungi server lisensi untuk mendaftarkan subdomain '$slugInput.absenta.id'..." -ForegroundColor Cyan
+                try {
+                    $regBody = @{
+                        school_name = $schoolName
+                        wa_number = $whatsappNo
+                        requested_slug = $slugInput
+                    }
+                    $response = Invoke-RestMethod -Uri "$licenseServerCheck/api/license/request-local-free" -Method Post -Body ($regBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 15
+                    
+                    if ($response.success) {
+                        $LICENSE_KEY = $response.license_key
+                        Write-Host "Registrasi Berhasil!" -ForegroundColor Green
+                        Write-Host "Lisensi Anda: $LICENSE_KEY" -ForegroundColor Green
+                        Write-Host "[INFO] Kunci Lisensi dan rincian domain telah dikirimkan ke WhatsApp Anda ($whatsappNo). Silakan cek pesan masuk Anda." -ForegroundColor Green
+                        $regSuccess = $true
+                        
+                        # Set default domain and scenario for next steps
+                        $DEPLOY_SCENARIO = "hybrid"
+                        $TARGET_DOMAIN = "$slugInput.$TUNNEL_BASE_DOMAIN"
+                    } else {
+                        Write-Host "[ERROR] $($response.message)" -ForegroundColor Red
+                    }
+                } catch {
+                    $errMsg = $_.Exception.Message
+                    if ($_.Exception.Response) {
+                        try {
+                            $stream = $_.Exception.Response.GetResponseStream()
+                            $reader = New-Object System.IO.StreamReader($stream)
+                            $errBody = $reader.ReadToEnd() | ConvertFrom-Json
+                            if ($errBody.message) { $errMsg = $errBody.message }
+                        } catch {}
+                    }
+                    Write-Host "[ERROR] Gagal melakukan registrasi: $errMsg" -ForegroundColor Red
+                    Write-Host "Silakan masukkan subdomain alternatif." -ForegroundColor Yellow
+                }
+            }
+        }
+    }
+}
 
 $NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [$defaultNodeName]").Trim()
 if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = $defaultNodeName }
@@ -314,14 +390,20 @@ if ($DEPLOY_SCENARIO -eq "hybrid") {
             $errMessage = "Lisensi wajib diisi untuk skenario Hybrid!"
             $shouldExit = $true
         } else {
-            $validateUrl = "$LICENSE_SERVER_URL/api/license/easy-tunnel/validate/$LICENSE_KEY"
+            $validateUrl = "$LICENSE_SERVER_URL/api/license/check/$LICENSE_KEY"
             try {
                 $valRes = Invoke-RestMethod -Uri $validateUrl -Method Get -TimeoutSec 10
-                if ($valRes.success -ne $true) {
+                
+                $isActive = $valRes.license.isActive
+                if ($isActive -eq $null) { $isActive = $valRes.license.is_active }
+                $status = $valRes.license.status
+
+                if ($valRes.success -ne $true -or $isActive -ne 1 -or $status -ne 'active') {
                     $errMessage = "Kunci lisensi tidak valid atau tidak aktif!"
                     $shouldExit = $true
                 } else {
-                    $expectedSlug = $valRes.data.requested_slug
+                    $expectedSlug = $valRes.license.requestedSlug
+                    if ($expectedSlug -eq $null) { $expectedSlug = $valRes.license.requested_slug }
                     if ($expectedSlug -and $expectedSlug.ToLower().Trim() -ne $slug) {
                         $errMessage = "Domain publik '$TARGET_DOMAIN' tidak sesuai dengan alokasi lisensi Anda (Seharusnya: $expectedSlug.$TUNNEL_BASE_DOMAIN)!"
                         $shouldExit = $true
@@ -590,7 +672,7 @@ if [ "$DEPLOY_SCENARIO" != "local" ]; then
 #!/bin/bash
 echo "=== SINKRONISASI SSL DARI SERVER LISENSI ==="
 mkdir -p /etc/caddy/ssl
-if curl -s -f "http://10.0.0.1:5001/api/public/download-ssl?domain=TARGET_DOMAIN_PLACEHOLDER" -o /tmp/ssl_response.json && grep -q '"success":true' /tmp/ssl_response.json; then
+if curl -s -f "LICENSE_SERVER_URL_PLACEHOLDER/api/public/download-ssl?domain=TARGET_DOMAIN_PLACEHOLDER&license_key=LICENSE_KEY_PLACEHOLDER" -o /tmp/ssl_response.json && grep -q '"success":true' /tmp/ssl_response.json; then
     node -e "const data = require('/tmp/ssl_response.json'); const fs = require('fs'); fs.writeFileSync('/etc/caddy/ssl/cert.pem', data.cert); fs.writeFileSync('/etc/caddy/ssl/key.pem', data.key);"
     echo "Sertifikat SSL berhasil disinkronkan!"
     sudo systemctl reload caddy || sudo systemctl restart caddy || true
@@ -602,6 +684,8 @@ rm -f /tmp/ssl_response.json
 EOF
 
         sed -i "s|TARGET_DOMAIN_PLACEHOLDER|$TARGET_DOMAIN|g" /tmp/sync-ssl.sh
+        sed -i "s|LICENSE_KEY_PLACEHOLDER|$LICENSE_KEY|g" /tmp/sync-ssl.sh
+        sed -i "s|LICENSE_SERVER_URL_PLACEHOLDER|$LICENSE_SERVER_URL|g" /tmp/sync-ssl.sh
         echo '$SUDO_PASS' | sudo -S cp /tmp/sync-ssl.sh /usr/local/bin/sync-ssl.sh
         echo '$SUDO_PASS' | sudo -S chmod +x /usr/local/bin/sync-ssl.sh
         
