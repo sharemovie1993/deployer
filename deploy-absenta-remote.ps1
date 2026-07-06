@@ -297,7 +297,11 @@ $LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [$defaultLicenseSe
 if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = $defaultLicenseServerUrl }
 
 $LICENSE_KEY = ""
-$inputLic = (Read-Host "Masukkan Kunci Lisensi Absenta (Kosongkan jika ingin registrasi baru) [$defaultLicenseKey]").Trim()
+$inputLic = (Read-Host "Masukkan Kunci Lisensi Absenta (Ketik 'new' jika ingin registrasi baru) [$defaultLicenseKey]").Trim()
+if ($inputLic -eq 'new' -or $inputLic -eq 'NEW') {
+    $inputLic = ""
+    $defaultLicenseKey = ""
+}
 if (-not [string]::IsNullOrWhiteSpace($inputLic)) {
     $LICENSE_KEY = $inputLic
 } else {
