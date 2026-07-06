@@ -40,9 +40,9 @@ if [ -f /var/lib/dpkg/lock ]; then echo "Lock file: /var/lib/dpkg/lock"; fi
 if [ -f /var/lib/apt/lists/lock ]; then echo "Lock file: /var/lib/apt/lists/lock"; fi
 if [ -f /var/cache/apt/archives/lock ]; then echo "Lock file: /var/cache/apt/archives/lock"; fi
 
-LOCK_PIDS=\$(ps aux | awk '/apt-get|dpkg|aptitude/ && !/awk/ {print \$2}' | tr '\n' ' ')
-if [ -n "\$LOCK_PIDS" ]; then
-    echo "Proses apt/dpkg yang aktif: \$LOCK_PIDS"
+LOCK_PIDS=`$(ps aux | awk '/apt-get|dpkg|aptitude/ && !/awk/ {print `$2}' | tr '\n' ' ')
+if [ -n "`$LOCK_PIDS" ]; then
+    echo "Proses apt/dpkg yang aktif: `$LOCK_PIDS"
     echo "AKTIF"
 else
     echo "TIDAK_AKTIF"
@@ -83,20 +83,20 @@ function Kill-AptProcesses {
     $killScript = @"
 set -e
 echo "=== KILL APT STUCK PROCESSES ==="
-STUCK_PIDS=\$(ps aux | grep -E 'apt-get|dpkg|aptitude' | grep -v grep | awk '{print \$2}')
-if [ -n "\$STUCK_PIDS" ]; then
-    echo "Membunuh proses stuck: \$STUCK_PIDS"
-    echo '$SudoPass' | sudo -S kill -9 \$STUCK_PIDS 2>/dev/null || true
+STUCK_PIDS=`$(ps aux | grep -E 'apt-get|dpkg|aptitude' | grep -v grep | awk '{print `$2}')
+if [ -n "`$STUCK_PIDS" ]; then
+    echo "Membunuh proses stuck: `$STUCK_PIDS"
+    echo '$SudoPass' | sudo -S kill -9 `$STUCK_PIDS 2>/dev/null || true
     sleep 2
 else
     echo "Tidak ada proses apt/dpkg yang stuck."
 fi
 
-REMAINING=\$(ps aux | grep -E 'apt-get|dpkg' | grep -v grep | wc -l)
-if [ "\$REMAINING" -eq 0 ]; then
+REMAINING=`$(ps aux | grep -E 'apt-get|dpkg' | grep -v grep | wc -l)
+if [ "`$REMAINING" -eq 0 ]; then
     echo "VERIFIED_CLEAN"
 else
-    echo "MASIH_TERSISA: \$REMAINING"
+    echo "MASIH_TERSISA: `$REMAINING"
 fi
 "@
 
@@ -233,7 +233,7 @@ echo '$SUDO_PASS' | sudo -S dpkg --configure -a 2>/dev/null || true
 
 echo '$SUDO_PASS' | sudo -S apt-get update -y || {
     echo "APT UPDATE GAGAL - Melakukan force clear..."
-    echo '$SUDO_PASS' | sudo -S kill -9 \$(ps aux | grep -E 'apt|dpkg' | grep -v grep | awk '{print \$2}') 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S kill -9 `$(ps aux | grep -E 'apt|dpkg' | grep -v grep | awk '{print `$2}') 2>/dev/null || true
     sleep 1
     echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock-* /var/lib/apt/lists/lock 2>/dev/null || true
     echo '$SUDO_PASS' | sudo -S dpkg --configure -a
@@ -325,7 +325,7 @@ $setupScript = @"
 set -e
 mkdir -p /var/www/$TARGET_SUBDIR
 exec > >(tee -a /tmp/deploy_licensing.log) 2>&1
-echo "=== MEMULAI REMOTE DEPLOYMENT SERVER LISENSI - \$(date) ==="
+echo "=== MEMULAI REMOTE DEPLOYMENT SERVER LISENSI - `$(date) ==="
 
 # Kloning/Update Repo
 if [ ! -d "/var/www/$TARGET_SUBDIR/.git" ]; then
@@ -369,12 +369,12 @@ mkdir -p /tmp/wireguard_setup
 cd /tmp/wireguard_setup
 if ! echo '$SUDO_PASS' | sudo -S test -f /etc/wireguard/privatekey; then
     wg genkey | tee privatekey | wg pubkey | tee publickey > /dev/null
-    PRV_KEY=\$(cat privatekey)
+    PRV_KEY=`$(cat privatekey)
     echo "[Interface]" > wg0.conf
     echo "Address = 10.0.0.1/24" >> wg0.conf
     echo "SaveConfig = true" >> wg0.conf
     echo "ListenPort = 51820" >> wg0.conf
-    echo "PrivateKey = \$PRV_KEY" >> wg0.conf
+    echo "PrivateKey = `$PRV_KEY" >> wg0.conf
     echo "PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
     echo "PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
 
@@ -395,7 +395,7 @@ pm2 delete licensing-server || true
 pm2 start ecosystem.config.js --update-env
 pm2 save
 
-echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
+echo '$SUDO_PASS' | sudo -S env PATH=`${PATH}:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
 echo '$SUDO_PASS' | sudo -S node scripts/sync-caddy.js
 echo '$SUDO_PASS' | sudo -S systemctl enable wg-quick@wg0
 echo '$SUDO_PASS' | sudo -S systemctl restart wg-quick@wg0 || true
