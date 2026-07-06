@@ -249,11 +249,24 @@ if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = $defaultBPort }
 
 $F_PORT = (Read-Host "Masukkan Port Frontend [5175]").Trim()
 if ([string]::IsNullOrWhiteSpace($F_PORT)) { $F_PORT = "5175" }
-
+$SSL_SCENARIO = "1"
 $CF_TOKEN = ""
 if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
-    $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL DNS Challenge, kosongkan jika tidak pakai)").Trim()
+    Write-Host "`nPilih Skenario SSL Caddy lokal:" -ForegroundColor White
+    Write-Host " 1) SSL Internal / Self-Signed (Caddy local CA, default)" -ForegroundColor White
+    Write-Host " 2) Sinkronisasi Sertifikat dari Server Lisensi (Otomatis via VPN)" -ForegroundColor White
+    Write-Host " 3) Cloudflare DNS-01 Challenge (Manual)" -ForegroundColor White
+    $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
+    if ($sslChoice -eq "2") {
+        $SSL_SCENARIO = "sync"
+    } elseif ($sslChoice -eq "3") {
+        $SSL_SCENARIO = "cloudflare"
+        $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL DNS Challenge)").Trim()
+    } else {
+        $SSL_SCENARIO = "internal"
+    }
 }
+
 Write-Host "`nPilih Skenario Database PostgreSQL:" -ForegroundColor White
 Write-Host " 1) Database Eksternal (Gunakan database terpisah / cloud / VM lain)" -ForegroundColor White
 Write-Host " 2) Database Internal (Instal secara lokal di VPS ini)" -ForegroundColor White
@@ -266,7 +279,6 @@ if ($dbChoice -eq "2") {
 } else {
     $suggestedDbUrl = $defaultDbUrl
 }
-
 $DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [$suggestedDbUrl]").Trim()
 if ([string]::IsNullOrWhiteSpace($DB_URL)) { $DB_URL = $suggestedDbUrl }
 $INSTALL_REDIS = (Read-Host "Apakah Anda ingin memasang Redis Server secara otomatis? [y/N]").Trim()
@@ -289,6 +301,63 @@ if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = $
 
 $NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [$defaultNodeName]").Trim()
 if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = $defaultNodeName }
+
+# ─── VALIDASI DOMAIN & LISENSI ONLINE (Hybrid Only) ───
+if ($DEPLOY_SCENARIO -eq "hybrid") {
+    Write-Host "Menghubungi server lisensi untuk memvalidasi domain dan lisensi..." -ForegroundColor Cyan
+    $shouldExit = $false
+    $errMessage = ""
+    try {
+        $slug = $TARGET_DOMAIN.Replace(".$TUNNEL_BASE_DOMAIN", "").Trim().ToLower()
+        
+        if ([string]::IsNullOrWhiteSpace($LICENSE_KEY)) {
+            $errMessage = "Lisensi wajib diisi untuk skenario Hybrid!"
+            $shouldExit = $true
+        } else {
+            $validateUrl = "$LICENSE_SERVER_URL/api/license/easy-tunnel/validate/$LICENSE_KEY"
+            try {
+                $valRes = Invoke-RestMethod -Uri $validateUrl -Method Get -TimeoutSec 10
+                if ($valRes.success -ne $true) {
+                    $errMessage = "Kunci lisensi tidak valid atau tidak aktif!"
+                    $shouldExit = $true
+                } else {
+                    $expectedSlug = $valRes.data.requested_slug
+                    if ($expectedSlug -and $expectedSlug.ToLower().Trim() -ne $slug) {
+                        $errMessage = "Domain publik '$TARGET_DOMAIN' tidak sesuai dengan alokasi lisensi Anda (Seharusnya: $expectedSlug.$TUNNEL_BASE_DOMAIN)!"
+                        $shouldExit = $true
+                    } else {
+                        Write-Host "Validasi berhasil! Lisensi aktif untuk domain '$TARGET_DOMAIN'." -ForegroundColor Green
+                    }
+                }
+            } catch {
+                if ($_.Exception.Response) {
+                    $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                    $respText = $reader.ReadToEnd()
+                    try {
+                        $errJson = ConvertFrom-Json $respText
+                        if ($errJson.message) {
+                            $errMessage = "Validasi Gagal: $($errJson.message)"
+                            $shouldExit = $true
+                        }
+                    } catch {}
+                }
+                if (-not $shouldExit) {
+                    Write-Host "[WARNING] Gagal memvalidasi secara online (Koneksi bermasalah): $($_.Exception.Message)" -ForegroundColor Yellow
+                    Write-Host "Melanjutkan instalasi dengan asumsi konfigurasi benar..." -ForegroundColor Yellow
+                }
+            }
+        }
+    } catch {
+        Write-Host "[WARNING] Terjadi kesalahan saat mencoba memvalidasi: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "Melanjutkan instalasi dengan asumsi konfigurasi benar..." -ForegroundColor Yellow
+    }
+
+    if ($shouldExit) {
+        Write-Host "[ERROR] $errMessage" -ForegroundColor Red
+        Read-Host "Tekan [ENTER] untuk keluar..."
+        Exit 1
+    }
+}
 
 $SCHEME = "https"
 if ($TARGET_DOMAIN -match "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$") {
@@ -490,8 +559,6 @@ npm run build
 cd ..
 pm2 delete ecosystem.config.js || true
 pm2 start ecosystem.config.js --update-env
-pm2 save
-
 echo '$SUDO_PASS' | sudo -S env PATH=`${PATH}:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || \
 echo '$SUDO_PASS' | sudo -S env PATH=`${PATH}:/usr/local/bin pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || true
 pm2 save
@@ -500,14 +567,10 @@ pm2 save
 if [ "$DEPLOY_SCENARIO" != "local" ]; then
     if [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         CADDY_HOSTS="$TARGET_DOMAIN, http://:80"
+    elif [ ! -z "$CF_TOKEN" ]; then
+        CADDY_HOSTS="$TARGET_DOMAIN, *.$TARGET_DOMAIN"
     else
-        if [ "$DEPLOY_SCENARIO" = "hybrid" ]; then
-            CADDY_HOSTS="$TARGET_DOMAIN, http://:80"
-        elif [ ! -z "$CF_TOKEN" ]; then
-            CADDY_HOSTS="$TARGET_DOMAIN, *.$TARGET_DOMAIN"
-        else
-            CADDY_HOSTS="$TARGET_DOMAIN"
-        fi
+        CADDY_HOSTS="$TARGET_DOMAIN"
     fi
 
     echo "`$CADDY_HOSTS {" > /tmp/Caddyfile
@@ -515,12 +578,48 @@ if [ "$DEPLOY_SCENARIO" != "local" ]; then
     echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
     echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
     echo "    encode gzip zstd" >> /tmp/Caddyfile
-    if [ ! -z "$CF_TOKEN" ]; then
+    
+    if [ "$SSL_SCENARIO" = "sync" ]; then
+        echo "    tls /etc/caddy/ssl/cert.pem /etc/caddy/ssl/key.pem" >> /tmp/Caddyfile
+        
+        # Create SSL Sync Script on client
+        echo '$SUDO_PASS' | sudo -S mkdir -p /etc/caddy/ssl
+        echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /etc/caddy/ssl || true
+        
+        cat << 'EOF' > /tmp/sync-ssl.sh
+#!/bin/bash
+echo "=== SINKRONISASI SSL DARI SERVER LISENSI ==="
+mkdir -p /etc/caddy/ssl
+if curl -s -f "http://10.0.0.1:5001/api/public/download-ssl?domain=TARGET_DOMAIN_PLACEHOLDER" -o /tmp/ssl_response.json && grep -q '"success":true' /tmp/ssl_response.json; then
+    node -e "const data = require('/tmp/ssl_response.json'); const fs = require('fs'); fs.writeFileSync('/etc/caddy/ssl/cert.pem', data.cert); fs.writeFileSync('/etc/caddy/ssl/key.pem', data.key);"
+    echo "Sertifikat SSL berhasil disinkronkan!"
+    sudo systemctl reload caddy || sudo systemctl restart caddy || true
+else
+    echo "Gagal mengunduh sertifikat SSL dari Server Lisensi."
+    cat /tmp/ssl_response.json 2>/dev/null || true
+fi
+rm -f /tmp/ssl_response.json
+EOF
+
+        sed -i "s|TARGET_DOMAIN_PLACEHOLDER|$TARGET_DOMAIN|g" /tmp/sync-ssl.sh
+        echo '$SUDO_PASS' | sudo -S cp /tmp/sync-ssl.sh /usr/local/bin/sync-ssl.sh
+        echo '$SUDO_PASS' | sudo -S chmod +x /usr/local/bin/sync-ssl.sh
+        
+        # Run sync-ssl.sh immediately once to get the first certificate
+        /usr/local/bin/sync-ssl.sh || true
+        
+        # Set daily cron job
+        echo -e '#!/bin/bash\n/usr/local/bin/sync-ssl.sh >/dev/null 2>&1' | sudo tee /etc/cron.daily/sync-ssl >/dev/null
+        echo '$SUDO_PASS' | sudo -S chmod +x /etc/cron.daily/sync-ssl
+    elif [ "$SSL_SCENARIO" = "cloudflare" ] && [ ! -z "$CF_TOKEN" ]; then
         echo "    tls {" >> /tmp/Caddyfile
         echo "        dns cloudflare $CF_TOKEN" >> /tmp/Caddyfile
         echo "    }" >> /tmp/Caddyfile
+    else
+        echo "    tls internal" >> /tmp/Caddyfile
     fi
     echo "}" >> /tmp/Caddyfile
+
     echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
 fi
 
@@ -536,13 +635,24 @@ Run-RemoteScript -ScriptContent $setupScript -KeyPath $SAFE_NEW_KEY -TargetUser 
 Show-Header "VERIFIKASI STATUS LAYANAN"
 Show-Log "Memeriksa status layanan Absenta..." "Yellow"
 
-$verifyScript = @"
-echo "--- STATUS PROSES PM2 ---"
+$verifyScript = @'
+echo -e "\n=========================================================================="
+echo -e "                 STATUS LAYANAN ABSENTA PADA VPS TARGET"
+echo -e "=========================================================================="
+
+echo -e "\n---> STATUS PROSES PM2:"
 pm2 status
 
-echo -n "Status Caddy Server: "
-if systemctl is-active --quiet caddy; then echo -e "\e[1;32mACTIVE\e[0m"; else echo -e "\e[1;31mINACTIVE\e[0m"; fi
-"@
+echo -e "\n---> STATUS WEB SERVER (CADDY):"
+if systemctl is-active --quiet caddy; then
+    echo -e "Status Caddy: \033[1;32mRUNNING (ACTIVE)\033[0m"
+else
+    echo -e "Status Caddy: \033[1;31mFAILED (INACTIVE)\033[0m"
+    echo -e "\n[LOG DETAIL KESALAHAN CADDY TERBARU]:"
+    sudo systemctl status caddy --no-pager -n 10
+fi
+echo -e "==========================================================================\n"
+'@
 
 & ssh -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "${NEW_USER}@${NEW_IP}" "$verifyScript"
 
