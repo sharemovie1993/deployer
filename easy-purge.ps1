@@ -92,11 +92,13 @@ icacls $SAFE_KEY /inheritance:r /grant:r "$($env:USERDOMAIN)\$($env:USERNAME):F"
 
 $SSH_NEW = "ssh -i `"$SAFE_KEY`" -o StrictHostKeyChecking=no ${NEW_USER}@${NEW_IP}"
 
-$SUDO_PASS = "g1g1G1NGSUL*!2"
+$SUDO_PASS = (Read-Host "Masukkan password sudo VPS Anda [g1g1G1NGSUL*!2]").Trim()
+if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "g1g1G1NGSUL*!2" }
 
 Show-Log "Memulai proses pembersihan total ke VPS ($NEW_IP)..." "Yellow"
 
 $purgeScript = @"
+#!/bin/bash
 set -e
 echo 'Membatalkan seluruh layanan PM2 dan proses Node.js...'
 pm2 kill || true
