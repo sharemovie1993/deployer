@@ -254,15 +254,21 @@ $CF_TOKEN = ""
 if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
     $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL DNS Challenge, kosongkan jika tidak pakai)").Trim()
 }
+Write-Host "`nPilih Skenario Database PostgreSQL:" -ForegroundColor White
+Write-Host " 1) Database Eksternal (Gunakan database terpisah / cloud / VM lain)" -ForegroundColor White
+Write-Host " 2) Database Internal (Instal secara lokal di VPS ini)" -ForegroundColor White
+$dbChoice = Read-Host "Pilih [1-2] (Default: 1)"
 
-$DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [$defaultDbUrl]").Trim()
-if ([string]::IsNullOrWhiteSpace($DB_URL)) {
-    $DB_URL = $defaultDbUrl
+$INSTALL_POSTGRES = "N"
+if ($dbChoice -eq "2") {
+    $INSTALL_POSTGRES = "Y"
+    $suggestedDbUrl = "postgresql://postgres:123123123@localhost:5432/absensi"
+} else {
+    $suggestedDbUrl = $defaultDbUrl
 }
 
-$INSTALL_POSTGRES = (Read-Host "Apakah Anda ingin memasang PostgreSQL Server secara otomatis? [y/N]").Trim()
-if ([string]::IsNullOrWhiteSpace($INSTALL_POSTGRES)) { $INSTALL_POSTGRES = "N" }
-
+$DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [$suggestedDbUrl]").Trim()
+if ([string]::IsNullOrWhiteSpace($DB_URL)) { $DB_URL = $suggestedDbUrl }
 $INSTALL_REDIS = (Read-Host "Apakah Anda ingin memasang Redis Server secara otomatis? [y/N]").Trim()
 if ([string]::IsNullOrWhiteSpace($INSTALL_REDIS)) { $INSTALL_REDIS = "N" }
 
