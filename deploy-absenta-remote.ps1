@@ -338,6 +338,13 @@ if (-not [string]::IsNullOrWhiteSpace($inputLic)) {
                     break
                 }
 
+                # Clean human error: strip base domain suffix if input (e.g. demo.absenta.id -> demo)
+                $tunnelBaseDomainToCheck = if ($TUNNEL_BASE_DOMAIN) { $TUNNEL_BASE_DOMAIN } else { $defaultTunnelBaseDomain }
+                $baseDomainCheck = "." + $tunnelBaseDomainToCheck.ToLower().Trim()
+                if ($slugInput.EndsWith($baseDomainCheck)) {
+                    $slugInput = $slugInput.Substring(0, $slugInput.Length - $baseDomainCheck.Length)
+                }
+
                 $licenseServerCheck = if ($LICENSE_SERVER_URL) { $LICENSE_SERVER_URL } else { $defaultLicenseServerUrl }
                 Write-Host "Menghubungi server lisensi untuk mendaftarkan subdomain '$slugInput.absenta.id'..." -ForegroundColor Cyan
                 try {
