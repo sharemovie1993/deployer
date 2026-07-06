@@ -53,7 +53,11 @@ $newKeyChoice = Read-Host "Pilih [1-3]"
 if ($newKeyChoice -eq "1") { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "nginxonly.pem" }
 elseif ($newKeyChoice -eq "2") { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "ls-key.pem" }
 else { $NEW_KEY_SOURCE = Read-Host "Masukkan path absolut file .pem untuk VPS Tujuan" }
-$SUDO_PASS = "g1g1G1NGSUL*!2"
+$SUDO_PASS_OLD = (Read-Host "Masukkan password sudo VPS Lama [g1g1G1NGSUL*!2]").Trim()
+if ([string]::IsNullOrWhiteSpace($SUDO_PASS_OLD)) { $SUDO_PASS_OLD = "g1g1G1NGSUL*!2" }
+
+$SUDO_PASS_NEW = (Read-Host "Masukkan password sudo VPS Baru [g1g1G1NGSUL*!2]").Trim()
+if ([string]::IsNullOrWhiteSpace($SUDO_PASS_NEW)) { $SUDO_PASS_NEW = "g1g1G1NGSUL*!2" }
 
 Show-Log "VPS Lama: $OLD_IP (User: $OLD_USER)"
 Show-Log "VPS Baru: $NEW_IP (User: $NEW_USER)"
@@ -96,11 +100,12 @@ Show-Header "FASE 1: BACKUP DARI VPS LAMA"
 Show-Log "Memulai proses backup data dari VPS Lama ($OLD_IP)..." "Yellow"
 
 $backupScript = @"
+#!/bin/bash
 set -e
-echo '$SUDO_PASS' | sudo -S rm -rf /tmp/vps_backup.tar.gz
-echo '$SUDO_PASS' | sudo -S touch /var/www/licensing-server/licenses.db
-echo '$SUDO_PASS' | sudo -S tar -czf /tmp/vps_backup.tar.gz -C /var/www/licensing-server licenses.db .env -C /var/www absenta.id -C /etc wireguard
-echo '$SUDO_PASS' | sudo -S chown ${OLD_USER}:${OLD_USER} /tmp/vps_backup.tar.gz
+echo '$SUDO_PASS_OLD' | sudo -S rm -rf /tmp/vps_backup.tar.gz
+echo '$SUDO_PASS_OLD' | sudo -S touch /var/www/licensing-server/licenses.db
+echo '$SUDO_PASS_OLD' | sudo -S tar -czf /tmp/vps_backup.tar.gz -C /var/www/licensing-server licenses.db .env -C /var/www absenta.id -C /etc wireguard
+echo '$SUDO_PASS_OLD' | sudo -S chown ${OLD_USER}:${OLD_USER} /tmp/vps_backup.tar.gz
 echo 'Backup selesai dikompresi di VPS lama.'
 "@
 
@@ -117,29 +122,30 @@ Show-Header "FASE 2: PROVISIONING VPS BARU"
 Show-Log "Menghubungkan ke VPS Baru ($NEW_IP) untuk instalasi dependensi..." "Yellow"
 
 $provisionScript = @"
+#!/bin/bash
 set -e
-echo '$SUDO_PASS' | sudo -S apt-get update -y
-echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar wireguard
+echo '$SUDO_PASS_NEW' | sudo -S apt-get update -y
+echo '$SUDO_PASS_NEW' | sudo -S apt-get install -y curl git tar wireguard
 # Enable IP Forwarding (Krusial untuk WireGuard VPN)
-echo '$SUDO_PASS' | sudo -S sysctl -w net.ipv4.ip_forward=1
+echo '$SUDO_PASS_NEW' | sudo -S sysctl -w net.ipv4.ip_forward=1
 echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
 # Install Node 20 (Sesuai dengan versi lama)
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-echo '$SUDO_PASS' | sudo -S apt-get install -y nodejs
+echo '$SUDO_PASS_NEW' | sudo -S apt-get install -y nodejs
 # Install PM2
-echo '$SUDO_PASS' | sudo -S npm install -g pm2
+echo '$SUDO_PASS_NEW' | sudo -S npm install -g pm2
 # Install Caddy
-echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+echo '$SUDO_PASS_NEW' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-echo '$SUDO_PASS' | sudo -S apt-get update -y
-echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
+echo '$SUDO_PASS_NEW' | sudo -S apt-get update -y
+echo '$SUDO_PASS_NEW' | sudo -S apt-get install -y caddy
 # Buat Caddyfile placeholder dengan hak akses read/write
-echo '$SUDO_PASS' | sudo -S touch /etc/caddy/Caddyfile
-echo '$SUDO_PASS' | sudo -S chmod 666 /etc/caddy/Caddyfile
+echo '$SUDO_PASS_NEW' | sudo -S touch /etc/caddy/Caddyfile
+echo '$SUDO_PASS_NEW' | sudo -S chmod 666 /etc/caddy/Caddyfile
 # Siapkan folder
-echo '$SUDO_PASS' | sudo -S mkdir -p /var/www
-echo '$SUDO_PASS' | sudo -S chown ${NEW_USER}:${NEW_USER} /var/www
+echo '$SUDO_PASS_NEW' | sudo -S mkdir -p /var/www
+echo '$SUDO_PASS_NEW' | sudo -S chown ${NEW_USER}:${NEW_USER} /var/www
 echo 'Provisioning dasar selesai.'
 "@
 
@@ -154,6 +160,7 @@ Show-Log "Mengunggah file backup ke VPS Baru..." "Yellow"
 Invoke-Expression "$SCP_NEW $LOCAL_BACKUP_DIR\vps_backup.tar.gz ${NEW_USER}@${NEW_IP}:/tmp/vps_backup.tar.gz"
 
 $restoreScript = @"
+#!/bin/bash
 set -e
 # 1. Kloning Repo
 cd /var/www
@@ -175,7 +182,7 @@ if [ -f "vps_backup.tar.gz" ]; then
     cp licenses.db /var/www/licensing-server/ 2>/dev/null || true
     cp .env /var/www/licensing-server/
     # Pindahkan wireguard (butuh sudo)
-    echo '$SUDO_PASS' | sudo -S cp -r wireguard /etc/
+    echo '$SUDO_PASS_NEW' | sudo -S cp -r wireguard /etc/
 fi
 
 # 2b. Sanitize & Update .env with New Domain
@@ -185,9 +192,9 @@ if [ -f ".env" ]; then
     tr -d '\0' < .env > .env.tmp && mv .env.tmp .env
     
     # Ekstrak MAIN_DOMAIN lama sebelum dihapus
-    OLD_DOM=`$(grep -oP '(?<=MAIN_DOMAIN=).*' .env | tr -d ' ' || echo "absenta.id")
-    if [ -z "`$OLD_DOM" ]; then
-        OLD_DOM=`$(tr -d ' \0' < .env | grep -oP '(?<=MAIN_DOMAIN=).*' || echo "absenta.id")
+    OLD_DOM=$(grep -oP '(?<=MAIN_DOMAIN=).*' .env | tr -d ' ' || echo "absenta.id")
+    if [ -z "$OLD_DOM" ]; then
+        OLD_DOM=$(tr -d ' \0' < .env | grep -oP '(?<=MAIN_DOMAIN=).*' || echo "absenta.id")
     fi
     
     # Hapus baris MAIN_DOMAIN lama (baik format normal maupun berjarak/spaced)
@@ -197,14 +204,14 @@ if [ -f ".env" ]; then
     # Tentukan domain akhir: jika input NEW_IP berupa IP Address, gunakan domain lama (OLD_DOM).
     # Jika input berupa domain name, gunakan domain baru (NEW_IP).
     if [[ "$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        FINAL_DOM="`$OLD_DOM"
+        FINAL_DOM="$OLD_DOM"
     else
         FINAL_DOM="$NEW_IP"
     fi
     
     # Tambahkan MAIN_DOMAIN baru
-    echo "MAIN_DOMAIN=`$FINAL_DOM" >> .env
-    echo "[Easy-Migrate] .env berhasil diperbarui dengan MAIN_DOMAIN=`$FINAL_DOM"
+    echo "MAIN_DOMAIN=$FINAL_DOM" >> .env
+    echo "[Easy-Migrate] .env berhasil diperbarui dengan MAIN_DOMAIN=$FINAL_DOM"
 fi
 
 
@@ -219,12 +226,12 @@ else
     pm2 start ecosystem.config.js
 fi
 pm2 save
-echo '$SUDO_PASS' | sudo -S env PATH=`$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
+echo '$SUDO_PASS_NEW' | sudo -S env PATH=\$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
 
 # 4. Sync Caddy & Restart WireGuard
-echo '$SUDO_PASS' | sudo -S node scripts/sync-caddy.js
-echo '$SUDO_PASS' | sudo -S systemctl enable wg-quick@wg0
-echo '$SUDO_PASS' | sudo -S systemctl restart wg-quick@wg0
+echo '$SUDO_PASS_NEW' | sudo -S node scripts/sync-caddy.js
+echo '$SUDO_PASS_NEW' | sudo -S systemctl enable wg-quick@wg0
+echo '$SUDO_PASS_NEW' | sudo -S systemctl restart wg-quick@wg0
 
 # 5. TAHAP VERIFIKASI
 echo ""
@@ -240,14 +247,14 @@ else
 fi
 
 echo -n "[2] Status WireGuard (wg0): "
-if echo '$SUDO_PASS' | sudo -S systemctl is-active --quiet wg-quick@wg0; then
+if echo '$SUDO_PASS_NEW' | sudo -S systemctl is-active --quiet wg-quick@wg0; then
     echo -e "\e[1;32m✅ ACTIVE\e[0m"
 else
     echo -e "\e[1;31m❌ INACTIVE\e[0m"
 fi
 
 echo -n "[3] Status Caddy Server: "
-if echo '$SUDO_PASS' | sudo -S systemctl is-active --quiet caddy; then
+if echo '$SUDO_PASS_NEW' | sudo -S systemctl is-active --quiet caddy; then
     echo -e "\e[1;32m✅ ACTIVE\e[0m"
 else
     echo -e "\e[1;31m❌ INACTIVE\e[0m"
