@@ -215,6 +215,7 @@ $PROJECTS = @(
         Name = "Project Absenta (Full Stack)"
         RepoUrl = "https://github.com/sharemovie1993/Project-Absenta.git"
         DefaultDir = "C:\apps\project-absenta"
+        Branch = "restorepoint/pre-separation-state"
         HasDeployScript = $true
         HasQuickUpdate = $true
     },
@@ -399,9 +400,13 @@ while ($true) {
                         Write-Host "Folder target sudah ada dan merupakan repositori Git. Memperbarui kode via git pull..." -ForegroundColor Yellow
                         Push-Location $installDir
                         try {
+                            $targetBranch = "main"
+                            if ($selectedProj.Branch) { $targetBranch = $selectedProj.Branch }
                             git fetch origin
                             if ($LASTEXITCODE -ne 0) { throw "Gagal melakukan git fetch" }
-                            git reset --hard origin/main
+                            git checkout $targetBranch
+                            if ($LASTEXITCODE -ne 0) { throw "Gagal melakukan git checkout" }
+                            git reset --hard origin/$targetBranch
                             if ($LASTEXITCODE -ne 0) { throw "Gagal melakukan git reset" }
                             Write-Host "Kode berhasil diperbarui ke versi terbaru!" -ForegroundColor Green
                         } catch {
@@ -432,7 +437,9 @@ while ($true) {
                         New-Item -ItemType Directory -Force -Path $installDir | Out-Null
                     }
                     try {
-                        git clone --depth 1 $selectedProj.RepoUrl $installDir
+                        $targetBranch = "main"
+                        if ($selectedProj.Branch) { $targetBranch = $selectedProj.Branch }
+                        git clone -b $targetBranch --depth 1 $selectedProj.RepoUrl $installDir
                         if ($LASTEXITCODE -ne 0) { throw "Gagal melakukan git clone" }
                         Write-Host "Clone sukses!" -ForegroundColor Green
                     } catch {
@@ -567,8 +574,11 @@ while ($true) {
                 # Pull kode terbaru terlebih dahulu agar script quick-update.ps1 versi terbaru dimuat ke memori
                 Write-Host "Menarik kode terbaru dari GitHub..." -ForegroundColor Yellow
                 try {
-                    git fetch origin main
-                    git reset --hard origin/main
+                    $targetBranch = "main"
+                    if ($selectedProj.Branch) { $targetBranch = $selectedProj.Branch }
+                    git fetch origin $targetBranch
+                    git checkout $targetBranch
+                    git reset --hard origin/$targetBranch
                     Write-Host "Kode berhasil diperbarui!" -ForegroundColor Green
                 } catch {
                     Write-Host "Gagal memperbarui kode repositori sebelum menjalankan update cepat." -ForegroundColor Red
