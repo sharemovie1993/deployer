@@ -849,17 +849,45 @@ while ($true) {
             }
         }
         "3" {
-            $deployScript = Join-Path $PSScriptRoot "deploy-remote-linux.ps1"
-            if (Test-Path $deployScript) {
-                try {
-                    & $deployScript
-                } catch {
-                    Write-Host "[ERROR] Gagal menjalankan deploy-remote-linux: $_" -ForegroundColor Red
-                    Wait-Key
+            while ($true) {
+                Show-Header "Deploy Proyek Remote (Linux VPS)"
+                Write-Host " 1) Server Lisensi (Licensing Server)" -ForegroundColor White
+                Write-Host " 2) Project Absenta (Full Stack)" -ForegroundColor White
+                Write-Host " 3) Proyek Umum Lainnya (POS, Yatim, gform, dll.)" -ForegroundColor White
+                Write-Host " 0) Kembali ke Menu Utama" -ForegroundColor White
+                Write-Host ""
+                $subChoice = Read-Host "Pilih opsi [0-3]"
+
+                if ($subChoice -eq "0") {
+                    break
                 }
-            } else {
-                Write-Host "Script deploy-remote-linux.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
-                Wait-Key
+                elseif ($subChoice -eq "1") {
+                    $script = Join-Path $PSScriptRoot "deploy-licensing-remote.ps1"
+                    if (Test-Path $script) {
+                        try { & $script } catch { Write-Host "[ERROR] $_" -ForegroundColor Red; Wait-Key }
+                    } else {
+                        Write-Host "Script deploy-licensing-remote.ps1 tidak ditemukan!" -ForegroundColor Red; Wait-Key
+                    }
+                    break
+                }
+                elseif ($subChoice -eq "2") {
+                    $script = Join-Path $PSScriptRoot "deploy-absenta-remote.ps1"
+                    if (Test-Path $script) {
+                        try { & $script } catch { Write-Host "[ERROR] $_" -ForegroundColor Red; Wait-Key }
+                    } else {
+                        Write-Host "Script deploy-absenta-remote.ps1 tidak ditemukan!" -ForegroundColor Red; Wait-Key
+                    }
+                    break
+                }
+                elseif ($subChoice -eq "3") {
+                    $script = Join-Path $PSScriptRoot "deploy-general-remote.ps1"
+                    if (Test-Path $script) {
+                        try { & $script } catch { Write-Host "[ERROR] $_" -ForegroundColor Red; Wait-Key }
+                    } else {
+                        Write-Host "Script deploy-general-remote.ps1 tidak ditemukan!" -ForegroundColor Red; Wait-Key
+                    }
+                    break
+                }
             }
         }
         "6" {
