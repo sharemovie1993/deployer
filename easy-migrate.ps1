@@ -152,6 +152,7 @@ echo '$SUDO_PASS_NEW' | sudo -S apt-get install -y caddy
 # Pasang Caddy Offline (dengan plugin Cloudflare) jika ada
 if [ -f /tmp/caddy_offline ]; then
     echo "Mengganti Caddy bawaan dengan Caddy Offline (Cloudflare DNS)..."
+    echo '$SUDO_PASS_NEW' | sudo -S systemctl stop caddy || true
     echo '$SUDO_PASS_NEW' | sudo -S cp /tmp/caddy_offline /usr/bin/caddy
     echo '$SUDO_PASS_NEW' | sudo -S chmod +x /usr/bin/caddy
 fi
