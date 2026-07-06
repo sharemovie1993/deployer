@@ -119,6 +119,14 @@ Show-Log "Backup berhasil diunduh ke $LOCAL_BACKUP_DIR\vps_backup.tar.gz" "Green
 # FASE 2: PROVISIONING VPS BARU
 # ---------------------------------------------------------
 Show-Header "FASE 2: PROVISIONING VPS BARU"
+
+# Salin Caddy Offline (dengan plugin Cloudflare) ke VPS baru jika ada di komputer lokal
+$LOCAL_CADDY = Join-Path $PSScriptRoot "caddy-bin\caddy"
+if (Test-Path $LOCAL_CADDY) {
+    Show-Log "Menemukan Caddy Offline lokal (Cloudflare DNS). Menyalin ke VPS Baru..." "Yellow"
+    Invoke-Expression "$SCP_NEW `"$LOCAL_CADDY`" ${NEW_USER}@${NEW_IP}:/tmp/caddy_offline"
+}
+
 Show-Log "Menghubungkan ke VPS Baru ($NEW_IP) untuk instalasi dependensi..." "Yellow"
 
 $provisionScript = @"
@@ -140,6 +148,14 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --d
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 echo '$SUDO_PASS_NEW' | sudo -S apt-get update -y
 echo '$SUDO_PASS_NEW' | sudo -S apt-get install -y caddy
+
+# Pasang Caddy Offline (dengan plugin Cloudflare) jika ada
+if [ -f /tmp/caddy_offline ]; then
+    echo "Mengganti Caddy bawaan dengan Caddy Offline (Cloudflare DNS)..."
+    echo '$SUDO_PASS_NEW' | sudo -S cp /tmp/caddy_offline /usr/bin/caddy
+    echo '$SUDO_PASS_NEW' | sudo -S chmod +x /usr/bin/caddy
+fi
+
 # Buat Caddyfile placeholder dengan hak akses read/write
 echo '$SUDO_PASS_NEW' | sudo -S touch /etc/caddy/Caddyfile
 echo '$SUDO_PASS_NEW' | sudo -S chmod 666 /etc/caddy/Caddyfile
