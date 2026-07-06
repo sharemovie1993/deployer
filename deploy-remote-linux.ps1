@@ -131,10 +131,10 @@ set -e
 echo "=== KILL APT STUCK PROCESSES ==="
 
 # Kill semua proses apt-get, dpkg, aptitude yang stuck
-STUCK_PIDS=$(ps aux | grep -E 'apt-get|dpkg|aptitude' | grep -v grep | awk '{print $2}')
-if [ -n "$STUCK_PIDS" ]; then
-    echo "Membunuh proses yang stuck: $STUCK_PIDS"
-    echo '$SudoPass' | sudo -S kill -9 $STUCK_PIDS 2>/dev/null || true
+STUCK_PIDS=`$(ps aux | grep -E 'apt-get|dpkg|aptitude' | grep -v grep | awk '{print `$2}')
+if [ -n "`$STUCK_PIDS" ]; then
+    echo "Membunuh proses yang stuck: `$STUCK_PIDS"
+    echo '$SudoPass' | sudo -S kill -9 `$STUCK_PIDS 2>/dev/null || true
     sleep 2
     echo "Proses berhasil dibunuh."
 else
@@ -142,11 +142,11 @@ else
 fi
 
 # Verifikasi tidak ada proses yang masih stuck
-REMAINING=$(ps aux | grep -E 'apt-get|dpkg' | grep -v grep | wc -l)
-if [ "$REMAINING" -eq 0 ]; then
+REMAINING=`$(ps aux | grep -E 'apt-get|dpkg' | grep -v grep | wc -l)
+if [ "`$REMAINING" -eq 0 ]; then
     echo "VERIFIED_CLEAN"
 else
-    echo "MASIH_TERSISA: $REMAINING"
+    echo "MASIH_TERSISA: `$REMAINING"
 fi
 "@
 
@@ -506,7 +506,7 @@ echo '$SUDO_PASS' | sudo -S dpkg --configure -a 2>/dev/null || true
 
 echo '$SUDO_PASS' | sudo -S apt-get update -y || {
     echo "APT UPDATE GAGAL - Mencoba fix dan retry..."
-    echo '$SUDO_PASS' | sudo -S kill -9 $(ps aux | grep -E 'apt|dpkg' | grep -v grep | awk '{print $2}') 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S kill -9 `$(ps aux | grep -E 'apt|dpkg' | grep -v grep | awk '{print `$2}') 2>/dev/null || true
     sleep 2
     echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock-* /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
     echo '$SUDO_PASS' | sudo -S dpkg --configure -a
