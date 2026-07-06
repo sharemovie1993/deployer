@@ -760,6 +760,13 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
     else
         echo "MAIN_DOMAIN=$TARGET_DOMAIN" >> .env
     fi
+    if [ ! -z "$CF_TOKEN" ]; then
+        if grep -q "CLOUDFLARE_API_TOKEN=" .env; then
+            sed -i "s/CLOUDFLARE_API_TOKEN=.*/CLOUDFLARE_API_TOKEN=$CF_TOKEN/g" .env
+        else
+            echo "CLOUDFLARE_API_TOKEN=$CF_TOKEN" >> .env
+        fi
+    fi
 
     # Setup WireGuard
     echo '$SUDO_PASS' | sudo -S mkdir -p /etc/wireguard
