@@ -233,9 +233,10 @@ fi
 
 
 
-# 3. NPM Install & Mulai Server
+# 3. NPM Install, Generate Prisma & Mulai Server
 cd /var/www/licensing-server
 npm install --production
+npx prisma generate
 # Gunakan restart jika sudah berjalan agar idempotent
 if pm2 status | grep -q "licensing-server"; then
     pm2 restart licensing-server --update-env
