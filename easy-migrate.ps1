@@ -231,6 +231,8 @@ echo '$SUDO_PASS_NEW' | sudo -S env PATH=`$PATH:/usr/bin /usr/lib/node_modules/p
 # 4. Restart WireGuard & Sync Caddy
 echo '$SUDO_PASS_NEW' | sudo -S systemctl enable wg-quick@wg0
 echo '$SUDO_PASS_NEW' | sudo -S systemctl restart wg-quick@wg0
+echo "Menunggu terowongan WireGuard VPN stabil..."
+sleep 5
 echo '$SUDO_PASS_NEW' | sudo -S node scripts/sync-caddy.js
 
 # 5. TAHAP VERIFIKASI
