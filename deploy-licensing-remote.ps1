@@ -13,6 +13,30 @@ function Show-Log {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Message" -ForegroundColor $Color
 }
 
+
+# Helper to read values from local .env files for 1-touch deploy suggestion
+function Get-EnvValue {
+    param(
+        [string]$Path,
+        [string]$Key,
+        [string]$DefaultValue = ""
+    )
+    if (Test-Path $Path) {
+        $lines = Get-Content $Path
+        foreach ($line in $lines) {
+            $line = $line.Trim()
+            if ($line.StartsWith("#") -or $line -notmatch "=") { continue }
+            $parts = $line -split '=', 2
+            $k = $parts[0].Trim()
+            $v = $parts[1].Trim()
+            if ($v.StartsWith('"') -and $v.EndsWith('"')) { $v = $v.Substring(1, $v.Length - 2) }
+            elseif ($v.StartsWith("'") -and $v.EndsWith("'")) { $v = $v.Substring(1, $v.Length - 2) }
+            if ($k -eq $Key) { return $v }
+        }
+    }
+    return $DefaultValue
+}
+
 function Show-Header {
     param([string]$Title)
     Clear-Host
@@ -192,15 +216,19 @@ if ($preDeployChoice -eq "2" -or $preDeployChoice -eq "3") {
 # ============================================================
 Show-Header "Parameter Server Lisensi"
 
-$TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Server Lisensi [api.absenta.id]").Trim()
-if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "api.absenta.id" }
+$localEnvPath = Join-Path $PSScriptRoot "..\Project-Server-Lisensi\.env"
+$defaultDomain = Get-EnvValue -Path $localEnvPath -Key "MAIN_DOMAIN" -DefaultValue "api.absenta.id"
+$defaultCfToken = Get-EnvValue -Path $localEnvPath -Key "CLOUDFLARE_API_TOKEN" -DefaultValue ""
+$defaultDbUrl = Get-EnvValue -Path $localEnvPath -Key "DATABASE_URL" -DefaultValue "postgresql://postgres:123123123@localhost:5432/orkestrator_licensing"
 
-$CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL Caddy, kosongkan jika tidak ada)").Trim()
+$TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Server Lisensi [$defaultDomain]").Trim()
+if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $defaultDomain }
 
-$DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [postgresql://postgres:123123123@localhost:5432/orkestrator_licensing]").Trim()
-if ([string]::IsNullOrWhiteSpace($DB_URL)) {
-    $DB_URL = "postgresql://postgres:123123123@localhost:5432/orkestrator_licensing"
-}
+$CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL Caddy, kosongkan jika tidak ada) [$defaultCfToken]").Trim()
+if ([string]::IsNullOrWhiteSpace($CF_TOKEN)) { $CF_TOKEN = $defaultCfToken }
+
+$DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [$defaultDbUrl]").Trim()
+if ([string]::IsNullOrWhiteSpace($DB_URL)) { $DB_URL = $defaultDbUrl }
 
 $INSTALL_POSTGRES = (Read-Host "Apakah Anda ingin memasang PostgreSQL Server di VPS target secara otomatis? [y/N]").Trim()
 if ([string]::IsNullOrWhiteSpace($INSTALL_POSTGRES)) { $INSTALL_POSTGRES = "N" }

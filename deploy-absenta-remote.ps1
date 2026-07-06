@@ -13,6 +13,30 @@ function Show-Log {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Message" -ForegroundColor $Color
 }
 
+
+# Helper to read values from local .env files for 1-touch deploy suggestion
+function Get-EnvValue {
+    param(
+        [string]$Path,
+        [string]$Key,
+        [string]$DefaultValue = ""
+    )
+    if (Test-Path $Path) {
+        $lines = Get-Content $Path
+        foreach ($line in $lines) {
+            $line = $line.Trim()
+            if ($line.StartsWith("#") -or $line -notmatch "=") { continue }
+            $parts = $line -split '=', 2
+            $k = $parts[0].Trim()
+            $v = $parts[1].Trim()
+            if ($v.StartsWith('"') -and $v.EndsWith('"')) { $v = $v.Substring(1, $v.Length - 2) }
+            elseif ($v.StartsWith("'") -and $v.EndsWith("'")) { $v = $v.Substring(1, $v.Length - 2) }
+            if ($k -eq $Key) { return $v }
+        }
+    }
+    return $DefaultValue
+}
+
 function Show-Header {
     param([string]$Title)
     Clear-Host
@@ -192,6 +216,16 @@ if ($preDeployChoice -eq "2" -or $preDeployChoice -eq "3") {
 # ============================================================
 Show-Header "Parameter Project Absenta (Full Stack)"
 
+$localEnvPath = Join-Path $PSScriptRoot "..\Project Absenta\absenta_backend\.env"
+$defaultBPort = Get-EnvValue -Path $localEnvPath -Key "PORT" -DefaultValue "3003"
+$defaultDbUrl = Get-EnvValue -Path $localEnvPath -Key "DATABASE_URL" -DefaultValue "postgresql://postgres:123123123@localhost:5432/absensi"
+$defaultRedisUrl = Get-EnvValue -Path $localEnvPath -Key "REDIS_URL" -DefaultValue "redis://localhost:6379"
+$defaultLicenseKey = Get-EnvValue -Path $localEnvPath -Key "LICENSE_KEY" -DefaultValue ""
+$defaultLicenseServerUrl = Get-EnvValue -Path $localEnvPath -Key "LICENSE_SERVER_URL" -DefaultValue "https://api.absenta.id"
+$defaultTunnelBaseDomain = Get-EnvValue -Path $localEnvPath -Key "EASY_TUNNEL_BASE_DOMAIN" -DefaultValue "absenta.id"
+$defaultDomain = Get-EnvValue -Path $localEnvPath -Key "MAIN_DOMAIN" -DefaultValue "absenta.id"
+$defaultNodeName = Get-EnvValue -Path $localEnvPath -Key "NODE_NAME" -DefaultValue "node-$($NEW_IP.Replace('.', '-'))"
+
 Write-Host "Pilih Skenario Deployment:"
 Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, contoh: https://app.absenta.id)"
 Write-Host " 2) Hybrid (Lokal Sekolah + Caddy Proxy, contoh: http://10.10.10.163)"
@@ -203,15 +237,15 @@ if ($scenarioChoice -eq "2") {
 }
 
 if ($DEPLOY_SCENARIO -eq "saas") {
-    $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS [absenta.id]").Trim()
-    if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
+    $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS [$defaultDomain]").Trim()
+    if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $defaultDomain }
 } else {
     $TARGET_DOMAIN = (Read-Host "Masukkan Domain Publik Akses Sekolah [absen.smkn1.sch.id]").Trim()
     if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
 }
 
-$B_PORT = (Read-Host "Masukkan Port Backend [3003]").Trim()
-if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = "3003" }
+$B_PORT = (Read-Host "Masukkan Port Backend [$defaultBPort]").Trim()
+if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = $defaultBPort }
 
 $F_PORT = (Read-Host "Masukkan Port Frontend [5175]").Trim()
 if ([string]::IsNullOrWhiteSpace($F_PORT)) { $F_PORT = "5175" }
@@ -221,9 +255,9 @@ if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
     $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL DNS Challenge, kosongkan jika tidak pakai)").Trim()
 }
 
-$DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [postgresql://postgres:123123123@localhost:5432/absensi]").Trim()
+$DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [$defaultDbUrl]").Trim()
 if ([string]::IsNullOrWhiteSpace($DB_URL)) {
-    $DB_URL = "postgresql://postgres:123123123@localhost:5432/absensi"
+    $DB_URL = $defaultDbUrl
 }
 
 $INSTALL_POSTGRES = (Read-Host "Apakah Anda ingin memasang PostgreSQL Server secara otomatis? [y/N]").Trim()
@@ -234,20 +268,21 @@ if ([string]::IsNullOrWhiteSpace($INSTALL_REDIS)) { $INSTALL_REDIS = "N" }
 
 $REDIS_URL = "redis://localhost:6379"
 if ($INSTALL_REDIS -eq "n" -or $INSTALL_REDIS -eq "N") {
-    $REDIS_URL = (Read-Host "Masukkan REDIS_URL [redis://localhost:6379]").Trim()
-    if ([string]::IsNullOrWhiteSpace($REDIS_URL)) { $REDIS_URL = "redis://localhost:6379" }
+    $REDIS_URL = (Read-Host "Masukkan REDIS_URL [$defaultRedisUrl]").Trim()
+    if ([string]::IsNullOrWhiteSpace($REDIS_URL)) { $REDIS_URL = $defaultRedisUrl }
 }
 
-$LICENSE_KEY = (Read-Host "Masukkan Kunci Lisensi Absenta (Kosongkan jika belum ada)").Trim()
+$LICENSE_KEY = (Read-Host "Masukkan Kunci Lisensi Absenta [$defaultLicenseKey]").Trim()
+if ([string]::IsNullOrWhiteSpace($LICENSE_KEY)) { $LICENSE_KEY = $defaultLicenseKey }
 
-$TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [absenta.id]").Trim()
-if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = "absenta.id" }
+$TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [$defaultTunnelBaseDomain]").Trim()
+if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = $defaultTunnelBaseDomain }
 
-$LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [https://api.absenta.id]").Trim()
-if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = "https://api.absenta.id" }
+$LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [$defaultLicenseServerUrl]").Trim()
+if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = $defaultLicenseServerUrl }
 
-$NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [node-$($NEW_IP.Replace('.', '-'))]").Trim()
-if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = "node-$($NEW_IP.Replace('.', '-'))" }
+$NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [$defaultNodeName]").Trim()
+if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = $defaultNodeName }
 
 $SCHEME = "https"
 if ($TARGET_DOMAIN -match "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$") {
