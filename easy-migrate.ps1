@@ -98,7 +98,7 @@ Show-Log "Memulai proses backup data dari VPS Lama ($OLD_IP)..." "Yellow"
 $backupScript = @"
 set -e
 echo '$SUDO_PASS' | sudo -S rm -rf /tmp/vps_backup.tar.gz
-echo 'Membungkus licenses.db, .env, absenta.id, dan wireguard...'
+echo '$SUDO_PASS' | sudo -S touch /var/www/licensing-server/licenses.db
 echo '$SUDO_PASS' | sudo -S tar -czf /tmp/vps_backup.tar.gz -C /var/www/licensing-server licenses.db .env -C /var/www absenta.id -C /etc wireguard
 echo '$SUDO_PASS' | sudo -S chown ${OLD_USER}:${OLD_USER} /tmp/vps_backup.tar.gz
 echo 'Backup selesai dikompresi di VPS lama.'
@@ -172,7 +172,7 @@ if [ -f "vps_backup.tar.gz" ]; then
     # Pindahkan absenta.id
     cp -r absenta.id /var/www/
     # Pindahkan database dan env
-    cp licenses.db /var/www/licensing-server/
+    cp licenses.db /var/www/licensing-server/ 2>/dev/null || true
     cp .env /var/www/licensing-server/
     # Pindahkan wireguard (butuh sudo)
     echo '$SUDO_PASS' | sudo -S cp -r wireguard /etc/
