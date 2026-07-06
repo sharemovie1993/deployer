@@ -215,7 +215,6 @@ $PROJECTS = @(
         Name = "Project Absenta (Full Stack)"
         RepoUrl = "https://github.com/sharemovie1993/Project-Absenta.git"
         DefaultDir = "C:\apps\project-absenta"
-        Branch = "restorepoint/pre-separation-state"
         HasDeployScript = $true
         HasQuickUpdate = $true
     },
