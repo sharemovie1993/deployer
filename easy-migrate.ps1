@@ -192,9 +192,9 @@ if [ -f ".env" ]; then
     tr -d '\0' < .env > .env.tmp && mv .env.tmp .env
     
     # Ekstrak MAIN_DOMAIN lama sebelum dihapus
-    OLD_DOM=$(grep -oP '(?<=MAIN_DOMAIN=).*' .env | tr -d ' ' || echo "absenta.id")
-    if [ -z "$OLD_DOM" ]; then
-        OLD_DOM=$(tr -d ' \0' < .env | grep -oP '(?<=MAIN_DOMAIN=).*' || echo "absenta.id")
+    OLD_DOM=`$(grep -oP '(?<=MAIN_DOMAIN=).*' .env | tr -d ' ' || echo "absenta.id")
+    if [ -z "`$OLD_DOM" ]; then
+        OLD_DOM=`$(tr -d ' \0' < .env | grep -oP '(?<=MAIN_DOMAIN=).*' || echo "absenta.id")
     fi
     
     # Hapus baris MAIN_DOMAIN lama (baik format normal maupun berjarak/spaced)
@@ -204,14 +204,14 @@ if [ -f ".env" ]; then
     # Tentukan domain akhir: jika input NEW_IP berupa IP Address, gunakan domain lama (OLD_DOM).
     # Jika input berupa domain name, gunakan domain baru (NEW_IP).
     if [[ "$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        FINAL_DOM="$OLD_DOM"
+        FINAL_DOM="`$OLD_DOM"
     else
         FINAL_DOM="$NEW_IP"
     fi
     
     # Tambahkan MAIN_DOMAIN baru
-    echo "MAIN_DOMAIN=$FINAL_DOM" >> .env
-    echo "[Easy-Migrate] .env berhasil diperbarui dengan MAIN_DOMAIN=$FINAL_DOM"
+    echo "MAIN_DOMAIN=`$FINAL_DOM" >> .env
+    echo "[Easy-Migrate] .env berhasil diperbarui dengan MAIN_DOMAIN=`$FINAL_DOM"
 fi
 
 
@@ -226,7 +226,7 @@ else
     pm2 start ecosystem.config.js
 fi
 pm2 save
-echo '$SUDO_PASS_NEW' | sudo -S env PATH=\$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
+echo '$SUDO_PASS_NEW' | sudo -S env PATH=`$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER || true
 
 # 4. Sync Caddy & Restart WireGuard
 echo '$SUDO_PASS_NEW' | sudo -S node scripts/sync-caddy.js
