@@ -1695,6 +1695,7 @@ function getHtmlContent() {
             // Connect to SSE stream
             const eventSource = new EventSource('/api/stream-install');
             let progress = 5;
+            updateProgress(progress, 'Menghubungkan ke log aliran...');
 
             eventSource.onmessage = function(event) {
                 const line = event.data;

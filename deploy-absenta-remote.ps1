@@ -478,16 +478,6 @@ if ($DEPLOY_SCENARIO -eq "hybrid") {
                     
                     $TARGET_DOMAIN = "$expectedSlug.$TUNNEL_BASE_DOMAIN"
                     Write-Host "Validasi berhasil! Lisensi aktif untuk domain '$TARGET_DOMAIN'." -ForegroundColor Green
-
-                    # Option for custom domain
-                    $useCustom = (Read-Host "Apakah Anda ingin menggunakan custom domain sekolah sendiri (seperti absen.smkn1.sch.id)? [y/N]").Trim()
-                    if ($useCustom -eq 'y' -or $useCustom -eq 'Y') {
-                        $customDom = (Read-Host "Masukkan Custom Domain Anda").Trim().ToLower()
-                        if (-not [string]::IsNullOrWhiteSpace($customDom)) {
-                            $TARGET_DOMAIN = $customDom
-                            Write-Host "Domain utama diatur ke custom domain: $TARGET_DOMAIN" -ForegroundColor Green
-                        }
-                    }
                 }
             } catch {
                 if ($_.Exception.Response) {
