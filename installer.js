@@ -186,7 +186,7 @@ function requestHandler(req, res) {
                         try {
                             const currentUser = process.env.USERNAME || 'Everyone';
                             execSync(`icacls "${filePath}" /inheritance:r`);
-                            execSync(`icacls "${filePath}" /grant:r "${currentUser}:R"`);
+                            execSync(`icacls "${filePath}" /grant:r "${currentUser}:F"`);
                         } catch (e) {
                             console.error(`[ERROR] Gagal mengatur icacls: ${e.message}`);
                         }
@@ -282,7 +282,7 @@ function requestHandler(req, res) {
                         try {
                             const currentUser = process.env.USERNAME || 'Everyone';
                             execSync(`icacls "${tempKeyPath}" /inheritance:r`);
-                            execSync(`icacls "${tempKeyPath}" /grant:r "${currentUser}:R"`);
+                            execSync(`icacls "${tempKeyPath}" /grant:r "${currentUser}:F"`);
                         } catch (e) {
                             console.error(`[ERROR] Gagal mengatur icacls tempKey: ${e.message}`);
                         }
