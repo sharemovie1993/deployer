@@ -184,7 +184,9 @@ function requestHandler(req, res) {
                     const { execSync } = require('child_process');
                     if (process.platform === 'win32') {
                         try {
-                            const currentUser = process.env.USERNAME || 'Everyone';
+                            const domain = process.env.USERDOMAIN;
+                            const user = process.env.USERNAME;
+                            const currentUser = (domain && user) ? `${domain}\\${user}` : (user || 'Everyone');
                             execSync(`icacls "${filePath}" /inheritance:r`);
                             execSync(`icacls "${filePath}" /grant:r "${currentUser}:F"`);
                         } catch (e) {
@@ -280,7 +282,9 @@ function requestHandler(req, res) {
                     const { execSync } = require('child_process');
                     if (process.platform === 'win32') {
                         try {
-                            const currentUser = process.env.USERNAME || 'Everyone';
+                            const domain = process.env.USERDOMAIN;
+                            const user = process.env.USERNAME;
+                            const currentUser = (domain && user) ? `${domain}\\${user}` : (user || 'Everyone');
                             execSync(`icacls "${tempKeyPath}" /inheritance:r`);
                             execSync(`icacls "${tempKeyPath}" /grant:r "${currentUser}:F"`);
                         } catch (e) {
