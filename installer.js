@@ -1035,7 +1035,7 @@ function getHtmlContent() {
         document.getElementById('vps-creds-fields').style.display = os === 'linux' ? 'block' : 'none';
         
         // Auto update status indicator
-        document.getElementById('vps-status-indicator').innerHTML = `Target: <span style="color: #a78bfa; font-weight:600;">\${os === 'linux' ? 'Linux VPS' : 'Lokal Windows'}</span>`;
+        document.getElementById('vps-status-indicator').innerHTML = 'Target: <span style="color: #a78bfa; font-weight:600;">' + (os === 'linux' ? 'Linux VPS' : 'Lokal Windows') + '</span>';
     }
 
     function selectScenario(sc) {
@@ -1157,7 +1157,7 @@ function getHtmlContent() {
         .then(res => {
             if (res.body.success) {
                 alertBox.className = 'alert-box success';
-                alertBox.innerHTML = `<strong>Registrasi Berhasil!</strong><br>Kunci Lisensi Anda: <strong>\${res.body.license_key}</strong><br>Subdomain dialokasikan ke <strong>\${slug}.absenta.id</strong>.<br>Arsip lisensi dikirimkan ke WhatsApp Anda.`;
+                alertBox.innerHTML = '<strong>Registrasi Berhasil!</strong><br>Kunci Lisensi Anda: <strong>' + res.body.license_key + '</strong><br>Subdomain dialokasikan ke <strong>' + slug + '.absenta.id</strong>.<br>Arsip lisensi dikirimkan ke WhatsApp Anda.';
                 
                 // Prefill license fields
                 document.getElementById('license-key').value = res.body.license_key;
@@ -1169,7 +1169,7 @@ function getHtmlContent() {
                 }, 4000);
             } else {
                 alertBox.className = 'alert-box error';
-                alertBox.innerHTML = `Gagal registrasi: \${res.body.message || 'Respons tidak valid dari server pusat.'}`;
+                alertBox.innerHTML = 'Gagal registrasi: ' + (res.body.message || 'Respons tidak valid dari server pusat.');
             }
         })
         .catch(err => {
@@ -1182,7 +1182,7 @@ function getHtmlContent() {
     function updateStepUI() {
         // Toggle step nav styling
         for (let i = 1; i <= totalSteps; i++) {
-            const nav = document.getElementById(`step-nav-\${i}`);
+            const nav = document.getElementById('step-nav-' + i);
             if (i === currentStep) {
                 nav.classList.add('active');
             } else {
@@ -1192,7 +1192,7 @@ function getHtmlContent() {
 
         // Toggle panel views
         for (let i = 1; i <= totalSteps; i++) {
-            const panel = document.getElementById(`panel-\${i}`);
+            const panel = document.getElementById('panel-' + i);
             if (i === currentStep) {
                 panel.classList.add('active');
             } else {
@@ -1285,12 +1285,12 @@ function getHtmlContent() {
         
         let displayDomain = config.targetDomain || '(Ditentukan otomatis oleh Lisensi)';
         if (config.deployScenario === 'hybrid' && config.customDomainMode === 'Y') {
-            displayDomain = `\${config.customDomainInput} (Custom Domain)`;
+            displayDomain = config.customDomainInput + ' (Custom Domain)';
         }
         document.getElementById('sum-domain').innerHTML = displayDomain;
         
         document.getElementById('sum-db-url').innerHTML = config.dbUrl.replace(/:[^:@]+@/, ':******@'); // Mask password
-        document.getElementById('sum-redis').innerHTML = config.redisMode === 'Y' ? 'Instal Otomatis (Embedded)' : `Gunakan eksisting (\${config.redisUrl})`;
+        document.getElementById('sum-redis').innerHTML = config.redisMode === 'Y' ? 'Instal Otomatis (Embedded)' : ('Gunakan eksisting (' + config.redisUrl + ')');
         document.getElementById('sum-license-key').innerHTML = config.licenseKey || 'Tidak ada (Hanya SaaS)';
     }
 
@@ -1336,7 +1336,7 @@ function getHtmlContent() {
                     updateProgress(progress, 'Deployment Selesai Sukses! 🎉');
                     
                     finalAlert.className = 'alert-box success';
-                    finalAlert.innerHTML = `<strong>Instalasi Berhasil!</strong><br>Project Absenta telah sukses terpasang pada domain target.<br>Aplikasi sudah berjalan. Halaman ini akan ditutup dalam 5 detik.`;
+                    finalAlert.innerHTML = '<strong>Instalasi Berhasil!</strong><br>Project Absenta telah sukses terpasang pada domain target.<br>Aplikasi sudah berjalan. Halaman ini akan ditutup dalam 5 detik.';
                     return;
                 }
 
@@ -1345,7 +1345,7 @@ function getHtmlContent() {
                     updateProgress(progress, 'Deployment Gagal! ❌');
                     
                     finalAlert.className = 'alert-box error';
-                    finalAlert.innerHTML = `<strong>Instalasi Gagal!</strong><br>\${line}. Silakan periksa log terminal untuk rincian kesalahan.`;
+                    finalAlert.innerHTML = '<strong>Instalasi Gagal!</strong><br>' + line + '. Silakan periksa log terminal untuk rincian kesalahan.';
                     return;
                 }
 
@@ -1384,12 +1384,12 @@ function getHtmlContent() {
         })
         .catch(err => {
             statusText.innerHTML = 'Gagal menyimpan konfigurasi!';
-            consoleContainer.innerHTML += `[ERROR] \${err.message}\n`;
+            consoleContainer.innerHTML += '[ERROR] ' + err.message + '\n';
         });
 
         function updateProgress(val, label) {
-            progressBar.style.width = `\${val}%`;
-            percentText.innerHTML = `\${val}%`;
+            progressBar.style.width = val + '%';
+            percentText.innerHTML = val + '%';
             statusText.innerHTML = label;
         }
     }
