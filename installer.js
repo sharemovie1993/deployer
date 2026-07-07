@@ -179,9 +179,30 @@ function requestHandler(req, res) {
                 const sudoPass = params.vpsSudoPass;
                 let keyPath = params.vpsKeyPath;
 
+                // Helper to restrict PEM file permissions for OpenSSH compatibility
+                const restrictPemPermissions = (filePath) => {
+                    const { execSync } = require('child_process');
+                    if (process.platform === 'win32') {
+                        try {
+                            const currentUser = process.env.USERNAME || 'Everyone';
+                            execSync(`icacls "${filePath}" /inheritance:r`);
+                            execSync(`icacls "${filePath}" /grant:r "${currentUser}:R"`);
+                        } catch (e) {
+                            console.error(`[ERROR] Gagal mengatur icacls: ${e.message}`);
+                        }
+                    } else {
+                        try {
+                            execSync(`chmod 600 "${filePath}"`);
+                        } catch (e) {
+                            console.error(`[ERROR] Gagal chmod 600: ${e.message}`);
+                        }
+                    }
+                };
+
                 if (params.vpsKeyContent) {
                     keyPath = path.join(__dirname, 'uploaded-temp-key-test.pem');
                     fs.writeFileSync(keyPath, params.vpsKeyContent, 'utf8');
+                    restrictPemPermissions(keyPath);
                 }
 
                 if (!ip || !user || !keyPath) {
@@ -253,6 +274,25 @@ function requestHandler(req, res) {
                 if (installParams.vpsKeyContent) {
                     const tempKeyPath = path.join(__dirname, 'uploaded-temp-key.pem');
                     fs.writeFileSync(tempKeyPath, installParams.vpsKeyContent, 'utf8');
+                    
+                    // Restrict permissions for OpenSSH compatibility on Windows/Linux
+                    const { execSync } = require('child_process');
+                    if (process.platform === 'win32') {
+                        try {
+                            const currentUser = process.env.USERNAME || 'Everyone';
+                            execSync(`icacls "${tempKeyPath}" /inheritance:r`);
+                            execSync(`icacls "${tempKeyPath}" /grant:r "${currentUser}:R"`);
+                        } catch (e) {
+                            console.error(`[ERROR] Gagal mengatur icacls tempKey: ${e.message}`);
+                        }
+                    } else {
+                        try {
+                            execSync(`chmod 600 "${tempKeyPath}"`);
+                        } catch (e) {
+                            console.error(`[ERROR] Gagal chmod 600: ${e.message}`);
+                        }
+                    }
+
                     installParams.vpsKeyPath = tempKeyPath;
                     console.log(`[INFO] Kunci SSH diunggah disimpan sementara ke: ${tempKeyPath}`);
                 }
