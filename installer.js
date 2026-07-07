@@ -167,6 +167,80 @@ function requestHandler(req, res) {
         return;
     }
 
+    // 3.8. API: Test SSH Connection (POST)
+    if (pathname === '/api/test-ssh' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const params = JSON.parse(body);
+                const ip = params.vpsIp;
+                const user = params.vpsUser;
+                const sudoPass = params.vpsSudoPass;
+                let keyPath = params.vpsKeyPath;
+
+                if (params.vpsKeyContent) {
+                    keyPath = path.join(__dirname, 'uploaded-temp-key-test.pem');
+                    fs.writeFileSync(keyPath, params.vpsKeyContent, 'utf8');
+                }
+
+                if (!ip || !user || !keyPath) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'Alamat IP, Username, dan File Kunci wajib diisi.' }));
+                    return;
+                }
+
+                const { exec } = require('child_process');
+
+                // Check SSH connection first
+                const sshCmd = `ssh -i "${keyPath}" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes ${user}@${ip} "echo SSH_OK"`;
+                
+                exec(sshCmd, (err, stdout, stderr) => {
+                    if (err || !stdout.includes('SSH_OK')) {
+                        const errMsg = stderr || (err ? err.message : 'Koneksi timeout');
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ 
+                            success: false, 
+                            message: `Koneksi SSH VPS Linux Gagal! Periksa kembali IP, Username, atau Kunci PEM. Rincian: ${errMsg.trim()}` 
+                        }));
+                        return;
+                    }
+
+                    // SSH works, now check Sudo password if provided
+                    if (sudoPass) {
+                        const sudoCmd = `echo ${sudoPass} | ssh -i "${keyPath}" -o ConnectTimeout=5 -o StrictHostKeyChecking=no ${user}@${ip} "sudo -S -p '' echo SUDO_OK"`;
+                        
+                        exec(sudoCmd, (sudoErr, sudoStdout, sudoStderr) => {
+                            if (sudoErr || !sudoStdout.includes('SUDO_OK')) {
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ 
+                                    success: false, 
+                                    message: 'Koneksi SSH berhasil terhubung, tetapi password SUDO SALAH!' 
+                                }));
+                            } else {
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ 
+                                    success: true, 
+                                    message: '✅ Koneksi SSH dan Password Sudo berhasil diverifikasi! VPS siap dideploy.' 
+                                }));
+                            }
+                        });
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ 
+                            success: true, 
+                            message: '✅ Koneksi SSH berhasil diverifikasi! (Password sudo tidak diuji).' 
+                        }));
+                    }
+                });
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: 'Format data tidak valid.' }));
+            }
+        });
+        return;
+    }
+
     // 4. API: Save configuration parameters
     if (pathname === '/api/save-config' && req.method === 'POST') {
         let body = '';
@@ -814,6 +888,8 @@ function getHtmlContent() {
 
             <!-- Linux Credentials fields -->
             <div id="vps-creds-fields">
+                <div id="ssh-alert" class="alert-box"></div>
+                
                 <div class="form-row">
                     <div class="form-group">
                         <label for="vps-ip">Alamat IP Target VPS Linux</label>
@@ -839,7 +915,10 @@ function getHtmlContent() {
                     </div>
                     <div class="form-group">
                         <label for="vps-sudopass">Sudo Password VPS Linux</label>
-                        <input type="password" id="vps-sudopass" value="g1g1G1NGSUL*!2" placeholder="Password untuk eksekusi sudo">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="vps-sudopass" value="g1g1G1NGSUL*!2" placeholder="Password untuk eksekusi sudo" style="flex-grow: 1;">
+                            <button id="ssh-test-btn" class="btn-action-inline" type="button" onclick="testSSHConnection()">Tes Koneksi VPS</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1201,6 +1280,55 @@ function getHtmlContent() {
             alertBox.innerHTML = res.message;
         })
         .catch(err => {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = 'Gagal menghubungi installer backend API: ' + err.message;
+        });
+    }
+
+    // Connect SSH Test API
+    function testSSHConnection() {
+        const ip = document.getElementById('vps-ip').value.trim();
+        const user = document.getElementById('vps-user').value.trim();
+        const keypath = document.getElementById('vps-keypath').value.trim();
+        const sudopass = document.getElementById('vps-sudopass').value;
+        const alertBox = document.getElementById('ssh-alert');
+
+        if (!ip || !user) {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = 'Alamat IP dan Username SSH wajib diisi untuk melakukan tes!';
+            alertBox.style.display = 'block';
+            return;
+        }
+
+        alertBox.className = 'alert-box warning';
+        alertBox.innerHTML = 'Sedang melakukan uji koneksi SSH ke VPS target...';
+        alertBox.style.display = 'block';
+        
+        document.getElementById('ssh-test-btn').disabled = true;
+
+        fetch('/api/test-ssh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                vpsIp: ip,
+                vpsUser: user,
+                vpsKeyPath: keypath,
+                vpsKeyContent: config.vpsKeyContent || '',
+                vpsSudoPass: sudopass
+            })
+        })
+        .then(res => res.json())
+        .then(res => {
+            document.getElementById('ssh-test-btn').disabled = false;
+            if (res.success) {
+                alertBox.className = 'alert-box success';
+            } else {
+                alertBox.className = 'alert-box error';
+            }
+            alertBox.innerHTML = res.message;
+        })
+        .catch(err => {
+            document.getElementById('ssh-test-btn').disabled = false;
             alertBox.className = 'alert-box error';
             alertBox.innerHTML = 'Gagal menghubungi installer backend API: ' + err.message;
         });
