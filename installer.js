@@ -1067,7 +1067,10 @@ function getHtmlContent() {
             <div id="lic-existing-form">
                 <div class="form-group">
                     <label for="license-key">Kunci Lisensi Absenta (License Key)</label>
-                    <input type="text" id="license-key" value="ABS-450A-7109-CA41" placeholder="Contoh: ABS-XXXX-XXXX-XXXX">
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="license-key" value="ABS-BDF7-2D4F-159D" placeholder="Contoh: ABS-XXXX-XXXX-XXXX" style="flex-grow: 1;">
+                        <button class="btn-action-inline" type="button" onclick="checkExistingLicense()">Cek & Validasi</button>
+                    </div>
                     <span class="helper-text">Kunci lisensi 16-karakter yang Anda terima dari tim Absenta.</span>
                 </div>
             </div>
@@ -1433,6 +1436,51 @@ function getHtmlContent() {
             } else {
                 alertBox.className = 'alert-box error';
                 alertBox.innerHTML = 'Gagal registrasi: ' + (res.body.message || 'Respons tidak valid dari server pusat.');
+            }
+        })
+        .catch(err => {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = 'Gagal menghubungi installer backend API: ' + err.message;
+        });
+    }
+
+    // Check Existing License Status API
+    function checkExistingLicense() {
+        const key = document.getElementById('license-key').value.trim();
+        const alertBox = document.getElementById('license-alert');
+
+        if (!key) {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = 'Masukkan Kunci Lisensi terlebih dahulu!';
+            alertBox.style.display = 'block';
+            return;
+        }
+
+        alertBox.className = 'alert-box warning';
+        alertBox.innerHTML = 'Memverifikasi kunci lisensi ke server pusat...';
+        alertBox.style.display = 'block';
+
+        fetch('/api/check-license?key=' + encodeURIComponent(key))
+        .then(res => res.json())
+        .then(res => {
+            if (res.success && res.data) {
+                if (res.data.is_active === false) {
+                    alertBox.className = 'alert-box error';
+                    alertBox.innerHTML = 'Lisensi terdaftar namun status TIDAK AKTIF.';
+                    return;
+                }
+                
+                config.licenseKey = key;
+                config.licenseDetails = res.data;
+                
+                const slug = res.data.requested_slug || res.data.requestedSlug;
+                config.targetDomain = slug + '.absenta.id';
+
+                alertBox.className = 'alert-box success';
+                alertBox.innerHTML = '✅ <strong>Lisensi Valid!</strong><br>Terdaftar untuk: <strong>' + res.data.school_name + '</strong><br>Domain dialokasikan: <strong>' + slug + '.absenta.id</strong>.';
+            } else {
+                alertBox.className = 'alert-box error';
+                alertBox.innerHTML = 'Validasi Gagal: ' + (res.message || 'Kunci lisensi tidak aktif atau tidak terdaftar!');
             }
         })
         .catch(err => {
