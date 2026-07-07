@@ -255,8 +255,9 @@ function requestHandler(req, res) {
                     }
                 });
             } catch (e) {
+                console.error('[ERROR] /api/test-ssh parsing error:', e.message, 'Body:', body);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, message: 'Format data tidak valid.' }));
+                res.end(JSON.stringify({ success: false, message: 'Format data tidak valid: ' + e.message + '. Body: ' + body }));
             }
         });
         return;
