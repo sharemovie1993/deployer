@@ -199,6 +199,7 @@ function requestHandler(req, res) {
                 '-sslScenario', installParams.sslScenario || 'internal',
                 '-cfToken', installParams.cfToken || '',
                 '-DbUrl', installParams.dbUrl || '',
+                '-InstallPostgres', installParams.postgresMode || 'Y',
                 '-RedisMode', installParams.redisMode || 'N',
                 '-RedisUrl', installParams.redisUrl || 'redis://localhost:6379',
                 '-LicenseKey', installParams.licenseKey || '',
@@ -858,6 +859,14 @@ function getHtmlContent() {
             <div id="db-alert" class="alert-box"></div>
 
             <div class="form-group">
+                <label>Pasang PostgreSQL Server Secara Otomatis?</label>
+                <div class="segment-control">
+                    <button type="button" class="segment-btn active" onclick="setPostgresMode('Y')" id="db-btn-Y">Pasang Otomatis (Database Internal)</button>
+                    <button type="button" class="segment-btn" onclick="setPostgresMode('N')" id="db-btn-N">Gunakan Eksisting / Eksternal</button>
+                </div>
+            </div>
+
+            <div class="form-group">
                 <label for="db-url">DATABASE_URL PostgreSQL</label>
                 <div style="display: flex; gap: 10px;">
                     <input type="text" id="db-url" value="postgresql://postgres:123123123@localhost:5432/absensi" style="flex-grow: 1;">
@@ -969,6 +978,10 @@ function getHtmlContent() {
                     <span class="summary-value" id="sum-db-url" style="font-family: monospace; font-size:12px;">-</span>
                 </div>
                 <div class="summary-row">
+                    <span class="summary-label">Instalasi PostgreSQL</span>
+                    <span class="summary-value" id="sum-postgres">-</span>
+                </div>
+                <div class="summary-row">
                     <span class="summary-label">Instalasi Redis Cache</span>
                     <span class="summary-value" id="sum-redis">-</span>
                 </div>
@@ -1029,6 +1042,7 @@ function getHtmlContent() {
         sslScenario: 'sync', // hybrid default is sync certificate from central licensing server
         cfToken: '',
         dbUrl: 'postgresql://postgres:123123123@localhost:5432/absensi',
+        postgresMode: 'Y',
         redisMode: 'Y', // Y = auto install redis, N = custom redisurl
         redisUrl: 'redis://localhost:6379',
         licenseKey: 'ABS-450A-7109-CA41',
@@ -1056,6 +1070,22 @@ function getHtmlContent() {
             statusLabel.style.color = 'var(--success)';
         };
         reader.readAsText(file);
+    }
+
+    // Postgres Mode handler
+    function setPostgresMode(mode) {
+        config.postgresMode = mode;
+        document.getElementById('db-btn-Y').classList.toggle('active', mode === 'Y');
+        document.getElementById('db-btn-N').classList.toggle('active', mode === 'N');
+
+        const dbUrlInput = document.getElementById('db-url');
+        if (mode === 'Y') {
+            dbUrlInput.value = 'postgresql://postgres:123123123@localhost:5432/absensi';
+        } else {
+            if (dbUrlInput.value === 'postgresql://postgres:123123123@localhost:5432/absensi') {
+                dbUrlInput.value = 'postgresql://';
+            }
+        }
     }
 
     // Card Selection handlers
@@ -1323,6 +1353,7 @@ function getHtmlContent() {
         document.getElementById('sum-domain').innerHTML = displayDomain;
         
         document.getElementById('sum-db-url').innerHTML = config.dbUrl.replace(/:[^:@]+@/, ':******@'); // Mask password
+        document.getElementById('sum-postgres').innerHTML = config.postgresMode === 'Y' ? 'Instal Otomatis (Internal)' : 'Gunakan Eksisting / Eksternal';
         document.getElementById('sum-redis').innerHTML = config.redisMode === 'Y' ? 'Instal Otomatis (Embedded)' : ('Gunakan eksisting (' + config.redisUrl + ')');
         document.getElementById('sum-license-key').innerHTML = config.licenseKey || 'Tidak ada (Hanya SaaS)';
     }

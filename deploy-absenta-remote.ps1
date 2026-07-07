@@ -19,6 +19,7 @@ param (
     [string]$TunnelBaseDomain = "absenta.id",
     [string]$LicenseServerUrl = "https://api.absenta.id",
     [string]$NodeName = "absenta-node-1",
+    [string]$InstallPostgres = "",
     [switch]$Silent = $false
 )
 
@@ -272,7 +273,7 @@ if ($Silent) {
     $SSL_SCENARIO = $sslScenario
     $CF_TOKEN = $cfToken
     $DB_URL = $DbUrl
-    $INSTALL_POSTGRES = if ($DbUrl.Contains("localhost") -or $DbUrl.Contains("127.0.0.1")) { "Y" } else { "N" }
+    $INSTALL_POSTGRES = if ($InstallPostgres) { $InstallPostgres } else { if ($DbUrl.Contains("localhost") -or $DbUrl.Contains("127.0.0.1")) { "Y" } else { "N" } }
     $INSTALL_REDIS = $RedisMode
     $REDIS_URL = $RedisUrl
     $TUNNEL_BASE_DOMAIN = $TunnelBaseDomain
