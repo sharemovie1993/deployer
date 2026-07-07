@@ -870,7 +870,7 @@ function getHtmlContent() {
                 <label for="db-url">DATABASE_URL PostgreSQL</label>
                 <div style="display: flex; gap: 10px;">
                     <input type="text" id="db-url" value="postgresql://postgres:123123123@localhost:5432/absensi" style="flex-grow: 1;">
-                    <button class="btn-action-inline" type="button" onclick="testDatabaseConnection()">Tes Konektivitas</button>
+                    <button id="db-test-btn" class="btn-action-inline" type="button" onclick="testDatabaseConnection()" style="display: none;">Tes Konektivitas</button>
                 </div>
                 <span class="helper-text">Skema: postgresql://[user]:[password]@[host]:[port]/[database_name]</span>
             </div>
@@ -1079,12 +1079,18 @@ function getHtmlContent() {
         document.getElementById('db-btn-N').classList.toggle('active', mode === 'N');
 
         const dbUrlInput = document.getElementById('db-url');
+        const dbTestBtn = document.getElementById('db-test-btn');
+        const dbAlert = document.getElementById('db-alert');
+
         if (mode === 'Y') {
             dbUrlInput.value = 'postgresql://postgres:123123123@localhost:5432/absensi';
+            dbTestBtn.style.display = 'none';
+            dbAlert.style.display = 'none';
         } else {
             if (dbUrlInput.value === 'postgresql://postgres:123123123@localhost:5432/absensi') {
                 dbUrlInput.value = 'postgresql://';
             }
+            dbTestBtn.style.display = 'block';
         }
     }
 
