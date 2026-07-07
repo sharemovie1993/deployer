@@ -144,6 +144,29 @@ function requestHandler(req, res) {
         return;
     }
 
+    // 3.5. API: Check License Status (GET Proxy)
+    if (pathname === '/api/check-license' && req.method === 'GET') {
+        const key = parsedUrl.searchParams.get('key');
+        if (!key) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'Kunci lisensi wajib diisi.' }));
+            return;
+        }
+
+        https.get(`https://api.absenta.id/api/license/check/${key.trim()}`, (apiRes) => {
+            let apiBody = '';
+            apiRes.on('data', chunk => { apiBody += chunk; });
+            apiRes.on('end', () => {
+                res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' });
+                res.end(apiBody);
+            });
+        }).on('error', (e) => {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: `Gagal menghubungi server lisensi: ${e.message}` }));
+        });
+        return;
+    }
+
     // 4. API: Save configuration parameters
     if (pathname === '/api/save-config' && req.method === 'POST') {
         let body = '';
@@ -974,6 +997,14 @@ function getHtmlContent() {
                     <span class="summary-label">Kunci Lisensi Absenta</span>
                     <span class="summary-value" id="sum-license-key">-</span>
                 </div>
+                <div class="summary-row" id="sum-row-school" style="display: none;">
+                    <span class="summary-label">Nama Sekolah / Instansi</span>
+                    <span class="summary-value" id="sum-school-name">-</span>
+                </div>
+                <div class="summary-row" id="sum-row-status" style="display: none;">
+                    <span class="summary-label">Status Kunci Lisensi</span>
+                    <span class="summary-value" id="sum-license-status">-</span>
+                </div>
             </div>
 
             <div class="alert-box warning" style="display: block; margin-top: 15px;">
@@ -1223,6 +1254,13 @@ function getHtmlContent() {
         });
     }
 
+    function showLicenseAlert(message, type) {
+        const alertBox = document.getElementById('license-alert');
+        alertBox.className = 'alert-box ' + type;
+        alertBox.innerHTML = message;
+        alertBox.style.display = 'block';
+    }
+
     // Step navigation controller
     function updateStepUI() {
         // Toggle step nav styling
@@ -1280,11 +1318,51 @@ function getHtmlContent() {
             config.redisUrl = document.getElementById('redis-url').value.trim();
         }
         else if (currentStep === 4) {
-            config.licenseKey = document.getElementById('license-key').value.trim();
-            
-            // Set main target domain based on scenario
+            const licenseKey = document.getElementById('license-key').value.trim();
             if (config.deployScenario === 'hybrid') {
-                config.targetDomain = ''; // Left empty to be populated by the script validation
+                if (!licenseKey) {
+                    showLicenseAlert('Kunci lisensi wajib diisi untuk Skenario Hybrid!', 'error');
+                    return;
+                }
+                
+                showLicenseAlert('Memverifikasi kunci lisensi ke server pusat...', 'warning');
+                document.getElementById('btn-next').disabled = true;
+                document.getElementById('btn-prev').disabled = true;
+
+                fetch('/api/check-license?key=' + encodeURIComponent(licenseKey))
+                .then(res => res.json())
+                .then(res => {
+                    document.getElementById('btn-next').disabled = false;
+                    document.getElementById('btn-prev').disabled = false;
+
+                    if (res.success && res.data) {
+                        if (res.data.is_active === false) {
+                            showLicenseAlert('Lisensi terdaftar namun status TIDAK AKTIF.', 'error');
+                            return;
+                        }
+                        
+                        config.licenseKey = licenseKey;
+                        config.licenseDetails = res.data;
+                        
+                        const slug = res.data.requested_slug || res.data.requestedSlug;
+                        config.targetDomain = slug + '.absenta.id';
+                        
+                        document.getElementById('license-alert').style.display = 'none';
+                        currentStep++;
+                        buildSummary();
+                        updateStepUI();
+                    } else {
+                        showLicenseAlert('Validasi Gagal: ' + (res.message || 'Kunci lisensi tidak aktif atau tidak terdaftar!'), 'error');
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('btn-next').disabled = false;
+                    document.getElementById('btn-prev').disabled = false;
+                    showLicenseAlert('Kesalahan sistem saat menghubungi server lisensi: ' + err.message, 'error');
+                });
+                return; // Pause sync navigation
+            } else {
+                config.licenseKey = licenseKey;
             }
         }
         else if (currentStep === 5) {
@@ -1328,6 +1406,26 @@ function getHtmlContent() {
         document.getElementById('sum-postgres').innerHTML = config.postgresMode === 'Y' ? 'Instal Otomatis (Internal)' : 'Gunakan Eksisting / Eksternal';
         document.getElementById('sum-redis').innerHTML = config.redisMode === 'Y' ? 'Instal Otomatis (Embedded)' : ('Gunakan eksisting (' + config.redisUrl + ')');
         document.getElementById('sum-license-key').innerHTML = config.licenseKey || 'Tidak ada (Hanya SaaS)';
+        
+        // Display fetched license details if present
+        const schoolRow = document.getElementById('sum-row-school');
+        const statusRow = document.getElementById('sum-row-status');
+        
+        if (config.deployScenario === 'hybrid' && config.licenseDetails) {
+            schoolRow.style.display = 'flex';
+            statusRow.style.display = 'flex';
+            
+            document.getElementById('sum-school-name').innerHTML = config.licenseDetails.school_name || config.licenseDetails.schoolName || '-';
+            
+            const isActive = (config.licenseDetails.is_active !== undefined) ? config.licenseDetails.is_active : config.licenseDetails.isActive;
+            const statusText = isActive ? '✅ AKTIF' : '❌ TIDAK AKTIF';
+            const statusColor = isActive ? '#10b981' : '#ef4444';
+            
+            document.getElementById('sum-license-status').innerHTML = '<span style="color: ' + statusColor + '; font-weight:600;">' + statusText + '</span>';
+        } else {
+            schoolRow.style.display = 'none';
+            statusRow.style.display = 'none';
+        }
     }
 
     // Save configurations and start stream installation
