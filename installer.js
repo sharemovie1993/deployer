@@ -231,10 +231,24 @@ function requestHandler(req, res) {
 
                     // SSH works, now check Sudo password if provided
                     if (sudoPass) {
-                        const sudoCmd = `echo ${sudoPass} | ssh -i "${keyPath}" -o ConnectTimeout=5 -o StrictHostKeyChecking=no ${user}@${ip} "sudo -S -p '' echo SUDO_OK"`;
+                        const { spawn } = require('child_process');
+                        const sshProcess = spawn('ssh', [
+                            '-i', keyPath,
+                            '-o', 'ConnectTimeout=5',
+                            '-o', 'StrictHostKeyChecking=no',
+                            `${user}@${ip}`,
+                            "sudo -S -p '' echo SUDO_OK"
+                        ]);
+
+                        let sudoStdout = '';
+                        sshProcess.stdout.on('data', data => { sudoStdout += data; });
                         
-                        exec(sudoCmd, (sudoErr, sudoStdout, sudoStderr) => {
-                            if (sudoErr || !sudoStdout.includes('SUDO_OK')) {
+                        // Write password directly to stdin
+                        sshProcess.stdin.write(sudoPass + '\n');
+                        sshProcess.stdin.end();
+
+                        sshProcess.on('close', () => {
+                            if (!sudoStdout.includes('SUDO_OK')) {
                                 res.writeHead(200, { 'Content-Type': 'application/json' });
                                 res.end(JSON.stringify({ 
                                     success: false, 
