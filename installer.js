@@ -151,6 +151,15 @@ function requestHandler(req, res) {
         req.on('end', () => {
             try {
                 installParams = JSON.parse(body);
+                
+                // If vpsKeyContent is supplied, write it to a temporary file in the deployer folder
+                if (installParams.vpsKeyContent) {
+                    const tempKeyPath = path.join(__dirname, 'uploaded-temp-key.pem');
+                    fs.writeFileSync(tempKeyPath, installParams.vpsKeyContent, 'utf8');
+                    installParams.vpsKeyPath = tempKeyPath;
+                    console.log(`[INFO] Kunci SSH diunggah disimpan sementara ke: ${tempKeyPath}`);
+                }
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true }));
             } catch (e) {
@@ -794,9 +803,15 @@ function getHtmlContent() {
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="vps-keypath">Path File SSH Private Key (.pem)</label>
-                        <input type="text" id="vps-keypath" value="D:\\BarayaProject\\deployer\\ls-key.pem" placeholder="Contoh: D:\\Key\\ls-key.pem">
-                        <span class="helper-text">Lokasi kunci pem absolut di laptop Anda.</span>
+                        <label>File SSH Private Key (.pem)</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label class="btn-action-inline" style="margin-bottom:0; cursor:pointer; text-align:center; white-space:nowrap;">
+                                Unggah Kunci (.pem)
+                                <input type="file" id="vps-key-file" accept=".pem" style="display:none;" onchange="handleKeyUpload(this)">
+                            </label>
+                            <input type="text" id="vps-keypath" value="D:\\BarayaProject\\deployer\\ls-key.pem" placeholder="Atau masukkan path absolut .pem" style="flex-grow: 1;">
+                        </div>
+                        <span class="helper-text" id="vps-key-status">Gunakan tombol unggah di atas, atau masukkan lokasi file absolut secara manual.</span>
                     </div>
                     <div class="form-group">
                         <label for="vps-sudopass">Sudo Password VPS Linux</label>
@@ -1024,6 +1039,24 @@ function getHtmlContent() {
         licenseServerUrl: 'https://api.absenta.id',
         nodeName: 'absenta-node-1'
     };
+
+    // SSH Key upload handler
+    function handleKeyUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            config.vpsKeyContent = e.target.result;
+            config.vpsKeyName = file.name;
+            document.getElementById('vps-keypath').value = '(Kunci Terunggah: ' + file.name + ')';
+            
+            const statusLabel = document.getElementById('vps-key-status');
+            statusLabel.innerHTML = '✅ Terunggah Sukses: <strong>' + file.name + '</strong>';
+            statusLabel.style.color = 'var(--success)';
+        };
+        reader.readAsText(file);
+    }
 
     // Card Selection handlers
     function selectTargetOS(os) {
@@ -1321,7 +1354,7 @@ function getHtmlContent() {
             }
 
             statusText.innerHTML = 'Memulai proses PowerShell...';
-            consoleContainer.innerHTML = '>> Menghubungkan ke log aliran instan...\n';
+            consoleContainer.innerHTML = '>> Menghubungkan ke log aliran instan...\\n';
 
             // Connect to SSE stream
             const eventSource = new EventSource('/api/stream-install');
@@ -1353,7 +1386,7 @@ function getHtmlContent() {
                 const isError = line.startsWith('[ERROR]');
                 const span = document.createElement('span');
                 if (isError) span.style.color = 'var(--error)';
-                span.appendChild(document.createTextNode(line + '\n'));
+                span.appendChild(document.createTextNode(line + '\\n'));
                 consoleContainer.appendChild(span);
                 consoleContainer.scrollTop = consoleContainer.scrollHeight;
 
@@ -1384,7 +1417,7 @@ function getHtmlContent() {
         })
         .catch(err => {
             statusText.innerHTML = 'Gagal menyimpan konfigurasi!';
-            consoleContainer.innerHTML += '[ERROR] ' + err.message + '\n';
+            consoleContainer.innerHTML += '[ERROR] ' + err.message + '\\n';
         });
 
         function updateProgress(val, label) {
