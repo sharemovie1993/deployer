@@ -1701,7 +1701,6 @@ function getHtmlContent() {
     selectScenario('hybrid');
     setRedisMode('Y');
     setLicenseMode('existing');
-    setCustomDomainMode('N');
 
 </script>
 </body>
