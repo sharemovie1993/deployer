@@ -807,7 +807,7 @@ echo -e "=======================================================================
 echo -e "\n---> STATUS PROSES PM2:"
 pm2 status
 
-echo -e "\n---> STATUS WEB SERVER (CADDY):"
+echo -e "\n---> STATUS WEB SERVER CADDY:"
 if systemctl is-active --quiet caddy; then
     echo -e "Status Caddy: \033[1;32mRUNNING (ACTIVE)\033[0m"
 else
