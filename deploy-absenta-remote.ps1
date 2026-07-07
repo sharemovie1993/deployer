@@ -1,6 +1,27 @@
 # deploy-absenta-remote.ps1 - Skrip Deploy Project Absenta Terisolasi (VPS Linux)
 # Hanya untuk men-deploy Project Absenta (Full Stack) secara remote via SSH
 
+param (
+    [string]$TargetIP = "",
+    [string]$TargetUser = "asepsuryadi",
+    [string]$KeyPath = "",
+    [string]$SudoPass = "",
+    [string]$DeployScenario = "hybrid",
+    [string]$TargetDomain = "",
+    [string]$BackendPort = "3003",
+    [string]$FrontendPort = "5175",
+    [string]$sslScenario = "internal",
+    [string]$cfToken = "",
+    [string]$DbUrl = "postgresql://postgres:123123123@localhost:5432/absensi",
+    [string]$RedisMode = "N",
+    [string]$RedisUrl = "redis://localhost:6379",
+    [string]$LicenseKey = "",
+    [string]$TunnelBaseDomain = "absenta.id",
+    [string]$LicenseServerUrl = "https://api.absenta.id",
+    [string]$NodeName = "absenta-node-1",
+    [switch]$Silent = $false
+)
+
 $ErrorActionPreference = "Stop"
 
 $LOG_DIR = Join-Path $PSScriptRoot "logs"
@@ -152,38 +173,55 @@ function Invoke-AutoFixAptLocks {
 # ============================================================
 # FASE INPUT & KONFIGURASI KONEKSI
 # ============================================================
-Show-Header "Konfigurasi Koneksi VPS Target"
-$NEW_IP = (Read-Host "Masukkan IP VPS Target (Contoh: 10.10.10.163)").Trim()
-$NEW_USER = "asepsuryadi"
+if ($Silent) {
+    $NEW_IP = $TargetIP
+    $NEW_USER = $TargetUser
+    $NEW_KEY_SOURCE = $KeyPath
+    $SUDO_PASS = $SudoPass
+    $preDeployChoice = "1"
+    
+    if ([string]::IsNullOrWhiteSpace($NEW_IP)) {
+        Write-Host "IP VPS tidak boleh kosong!" -ForegroundColor Red
+        exit
+    }
+    if (-not (Test-Path $NEW_KEY_SOURCE)) {
+        Write-Host "Error: File SSH Key tidak ditemukan di '$NEW_KEY_SOURCE'" -ForegroundColor Red
+        exit
+    }
+} else {
+    Show-Header "Konfigurasi Koneksi VPS Target"
+    $NEW_IP = (Read-Host "Masukkan IP VPS Target (Contoh: 10.10.10.163)").Trim()
+    $NEW_USER = "asepsuryadi"
 
-if ([string]::IsNullOrWhiteSpace($NEW_IP)) {
-    Write-Host "IP VPS tidak boleh kosong!" -ForegroundColor Red
-    exit
+    if ([string]::IsNullOrWhiteSpace($NEW_IP)) {
+        Write-Host "IP VPS tidak boleh kosong!" -ForegroundColor Red
+        exit
+    }
+
+    Write-Host "Pilih SSH Key:"
+    Write-Host " 1) nginxonly.pem"
+    Write-Host " 2) ls-key.pem"
+    Write-Host " 3) Input path file manual..."
+    $newKeyChoice = Read-Host "Pilih [1-3] (Default: 1)"
+    if ($newKeyChoice -eq "2") { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "ls-key.pem" }
+    elseif ($newKeyChoice -eq "3") { $NEW_KEY_SOURCE = Read-Host "Masukkan path absolut file .pem" }
+    else { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "nginxonly.pem" }
+
+    if (-not (Test-Path $NEW_KEY_SOURCE)) {
+        Write-Host "Error: File SSH Key tidak ditemukan di '$NEW_KEY_SOURCE'" -ForegroundColor Red
+        exit
+    }
+
+    $SUDO_PASS = (Read-Host "Masukkan password sudo VPS [g1g1G1NGSUL*!2]").Trim()
+    if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "g1g1G1NGSUL*!2" }
+
+    # Bersihkan Locks (Opsional)
+    Write-Host "`nOpsi Perbaikan Dpkg/Apt Locks:"
+    Write-Host " 1) Lanjutkan ke Deploy (Default)"
+    Write-Host " 2) Bersihkan locks terlebih dahulu"
+    Write-Host " 3) Bersihkan + Lanjutkan Deploy"
+    $preDeployChoice = Read-Host "Pilih [1-3]"
 }
-
-Write-Host "Pilih SSH Key:"
-Write-Host " 1) nginxonly.pem"
-Write-Host " 2) ls-key.pem"
-Write-Host " 3) Input path file manual..."
-$newKeyChoice = Read-Host "Pilih [1-3] (Default: 1)"
-if ($newKeyChoice -eq "2") { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "ls-key.pem" }
-elseif ($newKeyChoice -eq "3") { $NEW_KEY_SOURCE = Read-Host "Masukkan path absolut file .pem" }
-else { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "nginxonly.pem" }
-
-if (-not (Test-Path $NEW_KEY_SOURCE)) {
-    Write-Host "Error: File SSH Key tidak ditemukan di '$NEW_KEY_SOURCE'" -ForegroundColor Red
-    exit
-}
-
-$SUDO_PASS = (Read-Host "Masukkan password sudo VPS [g1g1G1NGSUL*!2]").Trim()
-if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "g1g1G1NGSUL*!2" }
-
-# Bersihkan Locks (Opsional)
-Write-Host "`nOpsi Perbaikan Dpkg/Apt Locks:"
-Write-Host " 1) Lanjutkan ke Deploy (Default)"
-Write-Host " 2) Bersihkan locks terlebih dahulu"
-Write-Host " 3) Bersihkan + Lanjutkan Deploy"
-$preDeployChoice = Read-Host "Pilih [1-3]"
 
 # Perbaiki permission SSH Key agar Windows OpenSSH tidak memblokirnya
 $SAFE_NEW_KEY = "$env:TEMP\absenta-deploy-key.pem"
@@ -226,87 +264,104 @@ $defaultTunnelBaseDomain = Get-EnvValue -Path $localEnvPath -Key "EASY_TUNNEL_BA
 $defaultDomain = Get-EnvValue -Path $localEnvPath -Key "MAIN_DOMAIN" -DefaultValue "absenta.id"
 $defaultNodeName = Get-EnvValue -Path $localEnvPath -Key "NODE_NAME" -DefaultValue "node-$($NEW_IP.Replace('.', '-'))"
 
-Write-Host "Pilih Skenario Deployment:"
-Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, contoh: https://app.absenta.id)"
-Write-Host " 2) Hybrid (Lokal Sekolah + Caddy Proxy, contoh: http://10.10.10.163)"
-$scenarioChoice = Read-Host "Pilih [1-2] (Default: 1)"
-
-$DEPLOY_SCENARIO = "saas"
-if ($scenarioChoice -eq "2") {
-    $DEPLOY_SCENARIO = "hybrid"
-}
-
-if ($DEPLOY_SCENARIO -eq "saas") {
-    $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS [$defaultDomain]").Trim()
-    if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $defaultDomain }
+if ($Silent) {
+    $DEPLOY_SCENARIO = $DeployScenario
+    $TARGET_DOMAIN = $TargetDomain
+    $B_PORT = $BackendPort
+    $F_PORT = $FrontendPort
+    $SSL_SCENARIO = $sslScenario
+    $CF_TOKEN = $cfToken
+    $DB_URL = $DbUrl
+    $INSTALL_POSTGRES = if ($DbUrl.Contains("localhost") -or $DbUrl.Contains("127.0.0.1")) { "Y" } else { "N" }
+    $INSTALL_REDIS = $RedisMode
+    $REDIS_URL = $RedisUrl
+    $TUNNEL_BASE_DOMAIN = $TunnelBaseDomain
+    $LICENSE_SERVER_URL = $LicenseServerUrl
+    $LICENSE_KEY = $LicenseKey
 } else {
-    $TARGET_DOMAIN = ""
-}
+    Write-Host "Pilih Skenario Deployment:"
+    Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, contoh: https://app.absenta.id)"
+    Write-Host " 2) Hybrid (Lokal Sekolah + Caddy Proxy, contoh: http://10.10.10.163)"
+    $scenarioChoice = Read-Host "Pilih [1-2] (Default: 1)"
 
-$B_PORT = (Read-Host "Masukkan Port Backend [$defaultBPort]").Trim()
-if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = $defaultBPort }
-
-$F_PORT = (Read-Host "Masukkan Port Frontend [5175]").Trim()
-if ([string]::IsNullOrWhiteSpace($F_PORT)) { $F_PORT = "5175" }
-$SSL_SCENARIO = "1"
-$CF_TOKEN = ""
-if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
-    Write-Host "`nPilih Skenario SSL Caddy lokal:" -ForegroundColor White
-    Write-Host " 1) SSL Internal / Self-Signed (Caddy local CA, default)" -ForegroundColor White
-    Write-Host " 2) Sinkronisasi Sertifikat dari Server Lisensi (Otomatis via VPN)" -ForegroundColor White
-    Write-Host " 3) Cloudflare DNS-01 Challenge (Manual)" -ForegroundColor White
-    $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
-    if ($sslChoice -eq "2") {
-        $SSL_SCENARIO = "sync"
-    } elseif ($sslChoice -eq "3") {
-        $SSL_SCENARIO = "cloudflare"
-        $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL DNS Challenge)").Trim()
-    } else {
-        $SSL_SCENARIO = "internal"
+    $DEPLOY_SCENARIO = "saas"
+    if ($scenarioChoice -eq "2") {
+        $DEPLOY_SCENARIO = "hybrid"
     }
-}
 
-Write-Host "`nPilih Skenario Database PostgreSQL:" -ForegroundColor White
-Write-Host " 1) Database Eksternal (Gunakan database terpisah / cloud / VM lain)" -ForegroundColor White
-Write-Host " 2) Database Internal (Instal secara lokal di VPS ini)" -ForegroundColor White
-$dbChoice = Read-Host "Pilih [1-2] (Default: 1)"
-
-$INSTALL_POSTGRES = "N"
-if ($dbChoice -eq "2") {
-    $INSTALL_POSTGRES = "Y"
-    $suggestedDbUrl = "postgresql://postgres:123123123@localhost:5432/absensi"
-} else {
-    $suggestedDbUrl = $defaultDbUrl
-}
-$DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [$suggestedDbUrl]").Trim()
-if ([string]::IsNullOrWhiteSpace($DB_URL)) { $DB_URL = $suggestedDbUrl }
-$INSTALL_REDIS = (Read-Host "Apakah Anda ingin memasang Redis Server secara otomatis? [y/N]").Trim()
-if ([string]::IsNullOrWhiteSpace($INSTALL_REDIS)) { $INSTALL_REDIS = "N" }
-
-$REDIS_URL = "redis://localhost:6379"
-if ($INSTALL_REDIS -eq "n" -or $INSTALL_REDIS -eq "N") {
-    $REDIS_URL = (Read-Host "Masukkan REDIS_URL [$defaultRedisUrl]").Trim()
-    if ([string]::IsNullOrWhiteSpace($REDIS_URL)) { $REDIS_URL = $defaultRedisUrl }
-}
-
-$TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [$defaultTunnelBaseDomain]").Trim()
-if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = $defaultTunnelBaseDomain }
-
-$LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [$defaultLicenseServerUrl]").Trim()
-if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = $defaultLicenseServerUrl }
-
-$LICENSE_KEY = ""
-$inputLic = (Read-Host "Masukkan Kunci Lisensi Absenta (Ketik 'new' jika ingin registrasi baru) [$defaultLicenseKey]").Trim()
-if ($inputLic -eq 'new' -or $inputLic -eq 'NEW') {
-    $inputLic = ""
-    $defaultLicenseKey = ""
-}
-if (-not [string]::IsNullOrWhiteSpace($inputLic)) {
-    $LICENSE_KEY = $inputLic
-} else {
-    if ($defaultLicenseKey) {
-        $LICENSE_KEY = $defaultLicenseKey
+    if ($DEPLOY_SCENARIO -eq "saas") {
+        $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS [$defaultDomain]").Trim()
+        if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $defaultDomain }
     } else {
+        $TARGET_DOMAIN = ""
+    }
+
+    $B_PORT = (Read-Host "Masukkan Port Backend [$defaultBPort]").Trim()
+    if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = $defaultBPort }
+
+    $F_PORT = (Read-Host "Masukkan Port Frontend [5175]").Trim()
+    if ([string]::IsNullOrWhiteSpace($F_PORT)) { $F_PORT = "5175" }
+    $SSL_SCENARIO = "1"
+    $CF_TOKEN = ""
+    if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
+        Write-Host "`nPilih Skenario SSL Caddy lokal:" -ForegroundColor White
+        Write-Host " 1) SSL Internal / Self-Signed (Caddy local CA, default)" -ForegroundColor White
+        Write-Host " 2) Sinkronisasi Sertifikat dari Server Lisensi (Otomatis via VPN)" -ForegroundColor White
+        Write-Host " 3) Cloudflare DNS-01 Challenge (Manual)" -ForegroundColor White
+        $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
+        if ($sslChoice -eq "2") {
+            $SSL_SCENARIO = "sync"
+        } elseif ($sslChoice -eq "3") {
+            $SSL_SCENARIO = "cloudflare"
+            $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL DNS Challenge)").Trim()
+        } else {
+            $SSL_SCENARIO = "internal"
+        }
+    }
+
+    Write-Host "`nPilih Skenario Database PostgreSQL:" -ForegroundColor White
+    Write-Host " 1) Database Eksternal (Gunakan database terpisah / cloud / VM lain)" -ForegroundColor White
+    Write-Host " 2) Database Internal (Instal secara lokal di VPS ini)" -ForegroundColor White
+    $dbChoice = Read-Host "Pilih [1-2] (Default: 1)"
+
+    $INSTALL_POSTGRES = "N"
+    if ($dbChoice -eq "2") {
+        $INSTALL_POSTGRES = "Y"
+        $suggestedDbUrl = "postgresql://postgres:123123123@localhost:5432/absensi"
+    } else {
+        $suggestedDbUrl = $defaultDbUrl
+    }
+    $DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [$suggestedDbUrl]").Trim()
+    if ([string]::IsNullOrWhiteSpace($DB_URL)) { $DB_URL = $suggestedDbUrl }
+    $INSTALL_REDIS = (Read-Host "Apakah Anda ingin memasang Redis Server secara otomatis? [y/N]").Trim()
+    if ([string]::IsNullOrWhiteSpace($INSTALL_REDIS)) { $INSTALL_REDIS = "N" }
+
+    $REDIS_URL = "redis://localhost:6379"
+    if ($INSTALL_REDIS -eq "n" -or $INSTALL_REDIS -eq "N") {
+        $REDIS_URL = (Read-Host "Masukkan REDIS_URL [$defaultRedisUrl]").Trim()
+        if ([string]::IsNullOrWhiteSpace($REDIS_URL)) { $REDIS_URL = $defaultRedisUrl }
+    }
+
+    $TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [$defaultTunnelBaseDomain]").Trim()
+    if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = $defaultTunnelBaseDomain }
+
+    $LICENSE_SERVER_URL = (Read-Host "Masukkan URL Server Lisensi [$defaultLicenseServerUrl]").Trim()
+    if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = $defaultLicenseServerUrl }
+
+    $LICENSE_KEY = ""
+    $inputLic = (Read-Host "Masukkan Kunci Lisensi Absenta (Ketik 'new' jika ingin registrasi baru) [$defaultLicenseKey]").Trim()
+    if ($inputLic -eq 'new' -or $inputLic -eq 'NEW') {
+        $inputLic = ""
+        $defaultLicenseKey = ""
+    }
+    if (-not [string]::IsNullOrWhiteSpace($inputLic)) {
+        $LICENSE_KEY = $inputLic
+    } else {
+        if ($defaultLicenseKey) {
+            $LICENSE_KEY = $defaultLicenseKey
+        }
+    }
+} else {
         $requestNew = Read-Host "Belum punya lisensi? Ingin registrasi sekarang? [y/N]"
         if ($requestNew -eq 'y' -or $requestNew -eq 'Y') {
             $schoolName = ""
@@ -385,8 +440,16 @@ if (-not [string]::IsNullOrWhiteSpace($inputLic)) {
     }
 }
 
-$NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [$defaultNodeName]").Trim()
-if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = $defaultNodeName }
+if ($Silent) {
+    if ([string]::IsNullOrWhiteSpace($NodeName)) {
+        $NODE_NAME = $defaultNodeName
+    } else {
+        $NODE_NAME = $NodeName
+    }
+} else {
+    $NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [$defaultNodeName]").Trim()
+    if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = $defaultNodeName }
+}
 
 # ─── VALIDASI DOMAIN & LISENSI ONLINE (Hybrid Only) ───
 if ($DEPLOY_SCENARIO -eq "hybrid") {
@@ -461,7 +524,9 @@ if ($DEPLOY_SCENARIO -eq "hybrid") {
 
     if ($shouldExit) {
         Write-Host "[ERROR] $errMessage" -ForegroundColor Red
-        Read-Host "Tekan [ENTER] untuk keluar..."
+        if (-not $Silent) {
+            Read-Host "Tekan [ENTER] untuk keluar..."
+        }
         Exit 1
     }
 }
@@ -772,4 +837,6 @@ Show-Log "Log deploy disimpan di: $LOG_FILE" "Cyan"
 Write-Host ""
 
 Stop-Transcript
-Read-Host "Tekan [ENTER] untuk kembali ke menu utama..."
+if (-not $Silent) {
+    Read-Host "Tekan [ENTER] untuk kembali ke menu utama..."
+}
