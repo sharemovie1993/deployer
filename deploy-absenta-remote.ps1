@@ -360,10 +360,8 @@ if ($Silent) {
     } else {
         if ($defaultLicenseKey) {
             $LICENSE_KEY = $defaultLicenseKey
-        }
-    }
-} else {
-        $requestNew = Read-Host "Belum punya lisensi? Ingin registrasi sekarang? [y/N]"
+        } else {
+            $requestNew = Read-Host "Belum punya lisensi? Ingin registrasi sekarang? [y/N]"
         if ($requestNew -eq 'y' -or $requestNew -eq 'Y') {
             $schoolName = ""
             while ([string]::IsNullOrWhiteSpace($schoolName)) {
@@ -439,6 +437,7 @@ if ($Silent) {
             }
         }
     }
+}
 }
 
 if ($Silent) {
