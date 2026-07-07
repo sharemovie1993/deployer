@@ -934,21 +934,6 @@ function getHtmlContent() {
                     <span class="helper-text">Gunakan hanya huruf kecil dan angka, tanpa titik atau spasi.</span>
                 </div>
             </div>
-
-            <!-- Custom Domain Section (Hybrid Mode only) -->
-            <div class="form-group" style="margin-top: 25px;">
-                <label>Apakah ingin menggunakan Custom Domain sekolah sendiri?</label>
-                <div class="segment-control" style="max-width: 250px;">
-                    <button type="button" class="segment-btn active" onclick="setCustomDomainMode('N')" id="customdom-btn-N">Tidak</button>
-                    <button type="button" class="segment-btn" onclick="setCustomDomainMode('Y')" id="customdom-btn-Y">Ya</button>
-                </div>
-            </div>
-            
-            <div class="form-group" id="custom-domain-section">
-                <label for="custom-domain-input">Custom Domain Sekolah Anda</label>
-                <input type="text" id="custom-domain-input" placeholder="Contoh: absen.smkn1jakarta.sch.id">
-                <span class="helper-text">Pastikan Anda sudah mengarahkan CNAME/A record domain ini ke IP server Anda.</span>
-            </div>
         </div>
 
         <!-- STEP 5: SUMMARY -->
@@ -1047,8 +1032,6 @@ function getHtmlContent() {
         redisUrl: 'redis://localhost:6379',
         licenseKey: 'ABS-450A-7109-CA41',
         licenseMode: 'existing', // 'existing' or 'new'
-        customDomainMode: 'N',
-        customDomainInput: '',
         tunnelBaseDomain: 'absenta.id',
         licenseServerUrl: 'https://api.absenta.id',
         nodeName: 'absenta-node-1'
@@ -1147,13 +1130,6 @@ function getHtmlContent() {
         document.getElementById('lic-new-form').style.display = mode === 'new' ? 'block' : 'none';
     }
 
-    function setCustomDomainMode(mode) {
-        config.customDomainMode = mode;
-        document.getElementById('customdom-btn-N').classList.toggle('active', mode === 'N');
-        document.getElementById('customdom-btn-Y').classList.toggle('active', mode === 'Y');
-        
-        document.getElementById('custom-domain-section').style.display = mode === 'Y' ? 'block' : 'none';
-    }
 
     // Connect DB Port Test API
     function testDatabaseConnection() {
@@ -1305,17 +1281,10 @@ function getHtmlContent() {
         }
         else if (currentStep === 4) {
             config.licenseKey = document.getElementById('license-key').value.trim();
-            config.customDomainInput = document.getElementById('custom-domain-input').value.trim();
             
-            // Set main target domain based on custom domain configuration
+            // Set main target domain based on scenario
             if (config.deployScenario === 'hybrid') {
-                if (config.customDomainMode === 'Y' && config.customDomainInput) {
-                    config.targetDomain = config.customDomainInput;
-                } else {
-                    // Hybrid mode will resolve domain dynamically from license slug.
-                    // We can prefill it temporarily if we know the slug, or let it load
-                    config.targetDomain = ''; // Left empty to be populated by the script validation
-                }
+                config.targetDomain = ''; // Left empty to be populated by the script validation
             }
         }
         else if (currentStep === 5) {
@@ -1353,9 +1322,6 @@ function getHtmlContent() {
         document.getElementById('sum-scenario').innerHTML = config.deployScenario === 'saas' ? 'Cloud SaaS (Multi-Tenant)' : 'Hybrid Mode (VPN + Caddy)';
         
         let displayDomain = config.targetDomain || '(Ditentukan otomatis oleh Lisensi)';
-        if (config.deployScenario === 'hybrid' && config.customDomainMode === 'Y') {
-            displayDomain = config.customDomainInput + ' (Custom Domain)';
-        }
         document.getElementById('sum-domain').innerHTML = displayDomain;
         
         document.getElementById('sum-db-url').innerHTML = config.dbUrl.replace(/:[^:@]+@/, ':******@'); // Mask password
