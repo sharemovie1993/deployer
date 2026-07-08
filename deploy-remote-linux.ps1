@@ -581,20 +581,22 @@ if [ "$IS_ABSENTA" = "True" ]; then
         echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
         echo '$SUDO_PASS' | sudo -S apt-get install -y postgresql postgresql-contrib
         echo "Mengaktifkan dan menjalankan PostgreSQL..."
-        echo '$SUDO_PASS' | sudo -S systemctl enable postgresql
+        echo '$SUDO_PASS' | sudo -S systemctl enable postgresql 2>/dev/null
         echo '$SUDO_PASS' | sudo -S systemctl start postgresql
 
         # Buat database & user postgres default jika belum ada
         echo "Mengonfigurasi database absensi dan user postgres..."
-        echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER postgres PASSWORD '123123123';" || true
-        echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE absensi;" || true
+        cd / && echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER postgres PASSWORD '123123123';" || true
+        if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='absensi'" | grep -q 1; then
+            echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE absensi;"
+        fi
     fi
 
     if [[ "$INSTALL_REDIS" =~ ^[yY]$ ]]; then
         echo "Menginstal Redis Server secara lokal..."
         echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
         echo '$SUDO_PASS' | sudo -S apt-get install -y redis-server
-        echo '$SUDO_PASS' | sudo -S systemctl enable redis-server
+        echo '$SUDO_PASS' | sudo -S systemctl enable redis-server 2>/dev/null
         echo '$SUDO_PASS' | sudo -S systemctl start redis-server
     fi
 fi
@@ -643,6 +645,11 @@ mkdir -p /var/www/$TARGET_SUBDIR
 exec > >(tee -a /tmp/deploy.log) 2>&1
 
 echo "=== MEMULAI REMOTE DEPLOYMENT - $(date) ==="
+
+# Hentikan PM2 dan Caddy terlebih dahulu agar proses redeployment bersih dan lancar
+echo "Menghentikan PM2 daemon dan layanan web server Caddy..."
+pm2 kill || true
+echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
 
 # 2. Kloning / Update Repo
 if [ ! -d "/var/www/$TARGET_SUBDIR/.git" ]; then
@@ -693,6 +700,16 @@ if [ "$IS_ABSENTA" = "True" ]; then
     sed -i "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=$FRONTEND_API_BASE_URL|g" absenta_frontend/.env
     sed -i "s|^VITE_PROXY_TARGET=.*|VITE_PROXY_TARGET=http://localhost:$B_PORT|g" absenta_frontend/.env
     sed -i "s|^PORT=.*|PORT=$F_PORT|g" absenta_frontend/.env
+    if grep -q "^VITE_MAIN_DOMAIN=" absenta_frontend/.env; then
+        sed -i "s|^VITE_MAIN_DOMAIN=.*|VITE_MAIN_DOMAIN=$TARGET_DOMAIN|g" absenta_frontend/.env
+    else
+        echo "VITE_MAIN_DOMAIN=$TARGET_DOMAIN" >> absenta_frontend/.env
+    fi
+    if grep -q "^VITE_DEPLOY_SCENARIO=" absenta_frontend/.env; then
+        sed -i "s|^VITE_DEPLOY_SCENARIO=.*|VITE_DEPLOY_SCENARIO=$DEPLOY_SCENARIO|g" absenta_frontend/.env
+    else
+        echo "VITE_DEPLOY_SCENARIO=$DEPLOY_SCENARIO" >> absenta_frontend/.env
+    fi
 
     # Install & Build Backend
     cd absenta_backend

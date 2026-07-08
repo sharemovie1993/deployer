@@ -322,10 +322,12 @@ if [[ "$INSTALL_POSTGRES" =~ ^[yY]$ ]]; then
     echo "Menginstal PostgreSQL secara lokal di VPS..."
     echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* 2>/dev/null || true
     echo '$SUDO_PASS' | sudo -S apt-get install -y postgresql postgresql-contrib
-    echo '$SUDO_PASS' | sudo -S systemctl enable postgresql
+    echo '$SUDO_PASS' | sudo -S systemctl enable postgresql 2>/dev/null
     echo '$SUDO_PASS' | sudo -S systemctl start postgresql
-    echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER postgres PASSWORD '123123123';" || true
-    echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE orkestrator_licensing;" || true
+    cd / && echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER postgres PASSWORD '123123123';" || true
+    if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='orkestrator_licensing'" | grep -q 1; then
+        echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE orkestrator_licensing;"
+    fi
 fi
 
 # Konfigurasi Sysctl Forwarding & Sudo Passwordless untuk WireGuard

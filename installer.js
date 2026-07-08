@@ -889,8 +889,8 @@ function getHtmlContent() {
     <!-- Header -->
     <div class="wizard-header">
         <div class="logo-section">
-            <h1>ABSENTA SETUP WIZARD</h1>
-            <p>On-Premise Deployment Manager & License Sync</p>
+            <h1>REGISTRASI SERVER & PASANG PLATFORM</h1>
+            <p>Asisten Pemasangan Aplikasi Absenta Sekolah</p>
         </div>
         <div id="vps-status-indicator" style="font-size: 13px; color: var(--text-muted);">
             Status: <span style="color: var(--warning); font-weight: 600;">Menyiapkan parameter...</span>
@@ -900,27 +900,27 @@ function getHtmlContent() {
     <!-- Step Navigator -->
     <div class="steps-nav">
         <div class="step-item active" id="step-nav-1">
-            <div class="step-num">1</div> Target OS
+            <div class="step-num">1</div> Pilih Server
         </div>
         <div class="step-line"></div>
         <div class="step-item" id="step-nav-2">
-            <div class="step-num">2</div> Skenario
+            <div class="step-num">2</div> Mode Akses
         </div>
         <div class="step-line"></div>
         <div class="step-item" id="step-nav-3">
-            <div class="step-num">3</div> Database & Redis
+            <div class="step-num">3</div> Penyimpanan
         </div>
         <div class="step-line"></div>
         <div class="step-item" id="step-nav-4">
-            <div class="step-num">4</div> Lisensi
+            <div class="step-num">4</div> Lisensi Sekolah
         </div>
         <div class="step-line"></div>
         <div class="step-item" id="step-nav-5">
-            <div class="step-num">5</div> Ringkasan
+            <div class="step-num">5</div> Pemeriksaan
         </div>
         <div class="step-line"></div>
         <div class="step-item" id="step-nav-6">
-            <div class="step-num">6</div> Instalasi
+            <div class="step-num">6</div> Pasang
         </div>
     </div>
 
@@ -929,19 +929,19 @@ function getHtmlContent() {
         
         <!-- STEP 1: TARGET OS -->
         <div class="step-panel active" id="panel-1">
-            <h2>Pilih Target Sistem Operasi</h2>
-            <p class="subtitle">Tentukan di mana aplikasi Project Absenta akan dipasang.</p>
+            <h2>Pilih Lokasi Pemasangan Server</h2>
+            <p class="subtitle">Tentukan komputer atau server tujuan untuk menyimpan data dan menjalankan sistem absensi.</p>
             
             <div class="card-grid">
                 <div class="selection-card selected" onclick="selectTargetOS('linux')" id="os-card-linux">
                     <div class="card-icon">🐧</div>
-                    <div class="card-title">Linux VPS (Remote SSH)</div>
-                    <div class="card-desc">Menginstal secara remote dari laptop ini ke server Linux VPS (Ubuntu/Debian) menggunakan OpenSSH dan Kunci Private (.pem).</div>
+                    <div class="card-title">Server Cloud VPS Linux (Remote)</div>
+                    <div class="card-desc">Mengirim dan memasang sistem dari komputer ini ke VPS Linux di cloud menggunakan akses SSH.</div>
                 </div>
                 <div class="selection-card" onclick="selectTargetOS('windows')" id="os-card-windows">
                     <div class="card-icon">🪟</div>
-                    <div class="card-title">Windows Server (Lokal)</div>
-                    <div class="card-desc">Menginstal langsung secara lokal di komputer Windows ini. Rekomendasi untuk on-premise lokal sekolah.</div>
+                    <div class="card-title">Komputer Windows Lokal Sekolah</div>
+                    <div class="card-desc">Memasang aplikasi secara langsung pada komputer Windows yang Anda gunakan saat ini.</div>
                 </div>
             </div>
 
@@ -951,18 +951,18 @@ function getHtmlContent() {
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="vps-ip">Alamat IP Target VPS Linux</label>
+                        <label for="vps-ip">Alamat IP Server Cloud (VPS)</label>
                         <input type="text" id="vps-ip" value="103.196.155.87" placeholder="Contoh: 103.196.155.87">
                         <span class="helper-text">IP publik VPS tujuan instalasi.</span>
                     </div>
                     <div class="form-group">
-                        <label for="vps-user">Username SSH VPS</label>
+                        <label for="vps-user">Nama Pengguna Server (Username)</label>
                         <input type="text" id="vps-user" value="asepsuryadi" placeholder="default: asepsuryadi">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>File SSH Private Key (.pem)</label>
+                        <label>File Kunci Pengaman Server (.pem)</label>
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <label class="btn-action-inline" style="margin-bottom:0; cursor:pointer; text-align:center; white-space:nowrap;">
                                 Unggah Kunci (.pem)
@@ -973,10 +973,10 @@ function getHtmlContent() {
                         <span class="helper-text" id="vps-key-status">Gunakan tombol unggah di atas, atau masukkan lokasi file absolut secara manual.</span>
                     </div>
                     <div class="form-group">
-                        <label for="vps-sudopass">Sudo Password VPS Linux</label>
+                        <label for="vps-sudopass">Kata Sandi Administrator Server (Sudo Password)</label>
                         <div style="display: flex; gap: 10px;">
                             <input type="password" id="vps-sudopass" value="g1g1G1NGSUL*!2" placeholder="Password untuk eksekusi sudo" style="flex-grow: 1;">
-                            <button id="ssh-test-btn" class="btn-action-inline" type="button" onclick="testSSHConnection()">Tes Koneksi VPS</button>
+                            <button id="ssh-test-btn" class="btn-action-inline" type="button" onclick="testSSHConnection()">Cek Koneksi Server</button>
                         </div>
                     </div>
                 </div>
@@ -985,19 +985,19 @@ function getHtmlContent() {
 
         <!-- STEP 2: SCENARIO & DOMAIN -->
         <div class="step-panel" id="panel-2">
-            <h2>Pilih Skenario Deployment</h2>
-            <p class="subtitle">Skenario menentukan jenis perutean akses publik aplikasi.</p>
+            <h2>Pilih Cara Mengakses Aplikasi</h2>
+            <p class="subtitle">Tentukan apakah aplikasi ingin diakses secara lokal saja atau terhubung online ke internet.</p>
 
             <div class="card-grid">
                 <div class="selection-card" onclick="selectScenario('saas')" id="sc-card-saas">
                     <div class="card-icon">☁️</div>
-                    <div class="card-title">SaaS / Cloud Platform</div>
-                    <div class="card-desc">Aplikasi diakses secara global menggunakan domain utama (e.g. app.absenta.id) untuk sekolah banyak (multi-tenant).</div>
+                    <div class="card-title">Platform Cloud Bersama (SaaS)</div>
+                    <div class="card-desc">Aplikasi diakses secara online dari internet melalui satu domain utama terpusat.</div>
                 </div>
                 <div class="selection-card selected" onclick="selectScenario('hybrid')" id="sc-card-hybrid">
                     <div class="card-icon">⚡</div>
-                    <div class="card-title">Hybrid Mode (VPN + Caddy)</div>
-                    <div class="card-desc">Akses publik sekolah dikelola aman via Easy-Tunnel VPN Absenta dengan subdomain unik otomatis (e.g. sekolah.absenta.id).</div>
+                    <div class="card-title">Server Mandiri Sekolah (Lokal & Online)</div>
+                    <div class="card-desc">Data disimpan di server sekolah. Akses online luar dikelola via modul Easy-Tunnel Absenta.</div>
                 </div>
             </div>
 
@@ -1008,27 +1008,27 @@ function getHtmlContent() {
             </div>
             
             <div id="hybrid-domain-info" class="alert-box warning" style="display: block;">
-                <strong>INFO MODE HYBRID:</strong> Domain utama akses publik Anda akan dikonfigurasi dan divalidasi secara otomatis dari Kunci Lisensi Anda di langkah berikutnya.
+                <strong>INFO AKSES MANDIRI:</strong> Alamat web akses sekolah Anda akan dikonfigurasi dan divalidasi secara otomatis dari Kunci Lisensi Anda di langkah berikutnya.
             </div>
         </div>
 
         <!-- STEP 3: DATABASE & REDIS -->
         <div class="step-panel" id="panel-3">
-            <h2>Konfigurasi Database & Redis Cache</h2>
-            <p class="subtitle">Sesuaikan data kredensial akses PostgreSQL & status Redis.</p>
+            <h2>Pemasangan Database & Memori Sistem</h2>
+            <p class="subtitle">Sesuaikan data penyimpanan database & pengoptimal memori.</p>
 
             <div id="db-alert" class="alert-box"></div>
 
             <div class="form-group">
-                <label>Pasang PostgreSQL Server Secara Otomatis?</label>
+                <label>Buat Database Baru Secara Otomatis?</label>
                 <div class="segment-control">
-                    <button type="button" class="segment-btn active" onclick="setPostgresMode('Y')" id="db-btn-Y">Pasang Otomatis (Database Internal)</button>
-                    <button type="button" class="segment-btn" onclick="setPostgresMode('N')" id="db-btn-N">Gunakan Eksisting / Eksternal</button>
+                    <button type="button" class="segment-btn active" onclick="setPostgresMode('Y')" id="db-btn-Y">Pasang Baru (Direkomendasikan)</button>
+                    <button type="button" class="segment-btn" onclick="setPostgresMode('N')" id="db-btn-N">Gunakan Database yang Sudah Ada</button>
                 </div>
             </div>
 
             <div class="form-group">
-                <label for="db-url">DATABASE_URL PostgreSQL</label>
+                <label for="db-url">Alamat Database (DATABASE_URL)</label>
                 <div style="display: flex; gap: 10px;">
                     <input type="text" id="db-url" value="postgresql://postgres:123123123@localhost:5432/absensi" style="flex-grow: 1;">
                     <button id="db-test-btn" class="btn-action-inline" type="button" onclick="testDatabaseConnection()" style="display: none;">Tes Konektivitas</button>
@@ -1038,7 +1038,7 @@ function getHtmlContent() {
 
             <div class="form-row">
                 <div class="form-group">
-                    <label>Pasang Redis Server Secara Otomatis?</label>
+                    <label>Pasang Pengoptimal Kecepatan (Redis Cache)?</label>
                     <div class="segment-control">
                         <button type="button" class="segment-btn active" onclick="setRedisMode('Y')" id="redis-btn-Y">Pasang Otomatis</button>
                         <button type="button" class="segment-btn" onclick="setRedisMode('N')" id="redis-btn-N">Gunakan Eksisting</button>
@@ -1053,23 +1053,23 @@ function getHtmlContent() {
 
         <!-- STEP 4: LICENSING -->
         <div class="step-panel" id="panel-4">
-            <h2>Kunci Lisensi & Alokasi Domain</h2>
-            <p class="subtitle">Validasi lisensi aktif Anda atau daftarkan subdomain gratis baru langsung.</p>
+            <h2>Aktivasi Lisensi & Nama Subdomain</h2>
+            <p class="subtitle">Verifikasi kunci lisensi aktif Anda atau daftarkan nama alamat online sekolah secara gratis.</p>
 
             <div id="license-alert" class="alert-box"></div>
 
             <div class="segment-control">
-                <button type="button" class="segment-btn active" onclick="setLicenseMode('existing')" id="lic-btn-existing">Masukkan Lisensi Eksisting</button>
-                <button type="button" class="segment-btn" onclick="setLicenseMode('new')" id="lic-btn-new">Daftar Subdomain Baru gratis</button>
+                <button type="button" class="segment-btn active" onclick="setLicenseMode('existing')" id="lic-btn-existing">Gunakan Kunci Lisensi Eksisting</button>
+                <button type="button" class="segment-btn" onclick="setLicenseMode('new')" id="lic-btn-new">Buat Lisensi Baru Gratis</button>
             </div>
 
             <!-- Existing license key input -->
             <div id="lic-existing-form">
                 <div class="form-group">
-                    <label for="license-key">Kunci Lisensi Absenta (License Key)</label>
+                    <label for="license-key">Masukkan Kunci Lisensi Absenta</label>
                     <div style="display: flex; gap: 10px;">
                         <input type="text" id="license-key" value="ABS-BDF7-2D4F-159D" placeholder="Contoh: ABS-XXXX-XXXX-XXXX" style="flex-grow: 1;">
-                        <button class="btn-action-inline" type="button" onclick="checkExistingLicense()">Cek & Validasi</button>
+                        <button class="btn-action-inline" type="button" onclick="checkExistingLicense()">Periksa & Validasi</button>
                     </div>
                     <span class="helper-text">Kunci lisensi 16-karakter yang Anda terima dari tim Absenta.</span>
                 </div>
@@ -1089,7 +1089,7 @@ function getHtmlContent() {
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="reg-slug">Subdomain / Slug Easy Tunnel yang Diinginkan</label>
+                    <label for="reg-slug">Alamat Web yang Diinginkan (Subdomain)</label>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <input type="text" id="reg-slug" placeholder="Contoh: smkn1jkt" style="flex-grow: 1;">
                         <span style="font-weight: 600; color: var(--primary);">.absenta.id</span>
@@ -1102,28 +1102,28 @@ function getHtmlContent() {
 
         <!-- STEP 5: SUMMARY -->
         <div class="step-panel" id="panel-5">
-            <h2>Ringkasan Konfigurasi Deployment</h2>
-            <p class="subtitle">Periksa seluruh isian parameter sebelum memulai proses instalasi ke mesin target.</p>
+            <h2>Pemeriksaan Ulang Sebelum Memasang</h2>
+            <p class="subtitle">Pastikan semua data di bawah ini sudah benar sebelum memulai proses pemasangan.</p>
 
             <div class="summary-box">
                 <div class="summary-row">
-                    <span class="summary-label">Target Sistem Operasi</span>
+                    <span class="summary-label">Lokasi Pemasangan</span>
                     <span class="summary-value" id="sum-target-os">-</span>
                 </div>
                 <div class="summary-row" id="sum-row-vps-ip">
-                    <span class="summary-label">IP VPS Target</span>
+                    <span class="summary-label">IP Server Cloud</span>
                     <span class="summary-value" id="sum-vps-ip">-</span>
                 </div>
                 <div class="summary-row">
-                    <span class="summary-label">Skenario Deployment</span>
+                    <span class="summary-label">Cara Akses</span>
                     <span class="summary-value" id="sum-scenario">-</span>
                 </div>
                 <div class="summary-row">
-                    <span class="summary-label">Domain Publik Aplikasi</span>
+                    <span class="summary-label">Alamat Web Sekolah</span>
                     <span class="summary-value" id="sum-domain">-</span>
                 </div>
                 <div class="summary-row">
-                    <span class="summary-label">Kredensial Database URL</span>
+                    <span class="summary-label">Koneksi Database</span>
                     <span class="summary-value" id="sum-db-url" style="font-family: monospace; font-size:12px;">-</span>
                 </div>
                 <div class="summary-row">
@@ -1149,20 +1149,20 @@ function getHtmlContent() {
             </div>
 
             <div class="alert-box warning" style="display: block; margin-top: 15px;">
-                <strong>PERINGATAN:</strong> Mengklik tombol <strong>Mulai Deployment</strong> akan mengubah konfigurasi server target dan memulai proses kompilasi kode. Pastikan koneksi internet laptop stabil.
+                <strong>PEMBERITAHUAN:</strong> Mengklik tombol <strong>Mulai Pemasangan 🚀</strong> akan mulai memasang dan mengonfigurasi aplikasi pada server tujuan. Mohon tunggu hingga proses selesai.
             </div>
         </div>
 
         <!-- STEP 6: INSTALLATION LOGS -->
         <div class="step-panel" id="panel-6">
-            <h2>Proses Deployment Sedang Berjalan...</h2>
-            <p class="subtitle">Instalasi diproses di latar belakang laptop Anda. Harap pantau terminal log di bawah.</p>
+            <h2>Sedang Memasang Aplikasi...</h2>
+            <p class="subtitle">Proses pemasangan berjalan di latar belakang. Silakan pantau log di bawah.</p>
 
             <div class="progress-bar-container">
                 <div class="progress-bar-fill" id="install-progress-fill"></div>
             </div>
             <div class="progress-text-container">
-                <span id="install-progress-status">Menghubungkan ke sub-proses PowerShell...</span>
+                <span id="install-progress-status">Menghubungkan ke server...</span>
                 <span id="install-progress-percent">0%</span>
             </div>
 
@@ -1622,7 +1622,7 @@ function getHtmlContent() {
 
     // Build Summary list content
     function buildSummary() {
-        document.getElementById('sum-target-os').innerHTML = config.targetOS === 'linux' ? '🐧 Linux VPS (Remote SSH)' : '🪟 Windows Server (Lokal)';
+        document.getElementById('sum-target-os').innerHTML = config.targetOS === 'linux' ? '🐧 Server Cloud VPS Linux (Remote)' : '🪟 Komputer Windows Lokal Sekolah';
         
         const vpsRow = document.getElementById('sum-row-vps-ip');
         if (config.targetOS === 'linux') {
@@ -1632,7 +1632,7 @@ function getHtmlContent() {
             vpsRow.style.display = 'none';
         }
 
-        document.getElementById('sum-scenario').innerHTML = config.deployScenario === 'saas' ? 'Cloud SaaS (Multi-Tenant)' : 'Hybrid Mode (VPN + Caddy)';
+        document.getElementById('sum-scenario').innerHTML = config.deployScenario === 'saas' ? 'Platform Cloud Bersama (SaaS)' : 'Server Mandiri Sekolah (Lokal & Online)';
         
         let displayDomain = config.targetDomain || '(Ditentukan otomatis oleh Lisensi)';
         document.getElementById('sum-domain').innerHTML = displayDomain;
@@ -1706,7 +1706,55 @@ function getHtmlContent() {
                     updateProgress(progress, 'Deployment Selesai Sukses! 🎉');
                     
                     finalAlert.className = 'alert-box success';
-                    finalAlert.innerHTML = '<strong>Instalasi Berhasil!</strong><br>Project Absenta telah sukses terpasang pada domain target.<br>Aplikasi sudah berjalan. Halaman ini akan ditutup dalam 5 detik.';
+                    
+                    let successHtml = '<strong>Instalasi Berhasil!</strong><br>Project Absenta telah sukses terpasang pada VPS.';
+                    
+                    const isHybrid = config.deployScenario === 'hybrid';
+                    const hasEasyTunnel = config.licenseDetails && (config.licenseDetails.product_id === 'easy-tunnel' || config.licenseDetails.productId === 'easy-tunnel');
+                    
+                    if (isHybrid) {
+                        if (hasEasyTunnel) {
+                            successHtml += '<div style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.08); border-radius: 8px; text-align: left; border: 1px solid #10B981;">' +
+                                '<strong style="color: #10B981; font-size: 15px;">🟢 Langkah Selanjutnya untuk Akses Online (Easy-Tunnel):</strong>' +
+                                '<ol style="margin: 10px 0 0 20px; padding: 0; line-height: 1.6;">' +
+                                    '<li>Pastikan aplikasi <strong>Easy Tunnel Gateway Manager</strong> dijalankan di server lokal target.</li>' +
+                                    '<li>Masukkan Lisensi Anda (<strong>' + config.licenseKey + '</strong>) lalu klik <strong>Hubungkan</strong>.</li>' +
+                                    '<li>Setelah tunnel terhubung, aplikasi Anda siap diakses publik di: <a href="https://' + config.targetDomain + '" target="_blank" style="color: #60A5FA; text-decoration: underline; font-weight: 600;">https://' + config.targetDomain + '</a></li>' +
+                                '</ol>' +
+                                '<strong style="color: #38BDF8; font-size: 14px; display: block; margin-top: 15px;">🚀 Langkah Registrasi Platform:</strong>' +
+                                '<ol style="margin: 8px 0 0 20px; padding: 0; line-height: 1.6;">' +
+                                    '<li>Buka halaman akses utama (melalui link online di atas setelah terhubung).</li>' +
+                                    '<li>Pada halaman masuk (Login Page), pilih menu <strong>Daftar Sekolah / Registrasi Sekolah</strong> untuk mendaftarkan akun administrator sekolah Anda pertama kali.</li>' +
+                                '</ol>' +
+                                '<p style="margin: 12px 0 0 0; font-size: 12px; color: #9CA3AF; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;">' +
+                                    'Akses lokal (intranet) saat ini dapat diuji di: <a href="http://' + config.vpsIp + ':' + config.frontendPort + '" target="_blank" style="color: #60A5FA;">http://' + config.vpsIp + ':' + config.frontendPort + '</a>' +
+                                '</p>' +
+                            '</div>';
+                        } else {
+                            successHtml += '<div style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.08); border-radius: 8px; text-align: left; border: 1px solid #F59E0B;">' +
+                                '<strong style="color: #F59E0B; font-size: 15px;">🟡 Akses Lokal Aktif (On-Premise Only):</strong>' +
+                                '<p style="margin: 8px 0 0 0; line-height: 1.5;">Akses aplikasi langsung via IP: <a href="http://' + config.vpsIp + ':' + config.frontendPort + '" target="_blank" style="color: #60A5FA; text-decoration: underline; font-weight: 600;">http://' + config.vpsIp + ':' + config.frontendPort + '</a></p>' +
+                                '<strong style="color: #38BDF8; font-size: 14px; display: block; margin-top: 15px;">⚙️ Konfigurasi DNS Lokal (Agar HTTPS Aktif):</strong>' +
+                                '<ol style="margin: 8px 0 0 20px; padding: 0; line-height: 1.6;">' +
+                                    '<li>Masuk ke router/Mikrotik sekolah Anda.</li>' +
+                                    '<li>Tambahkan entri <strong>DNS Static</strong> baru yang memetakan domain sekolah <strong>' + config.targetDomain + '</strong> ke IP server lokal <strong>' + config.vpsIp + '</strong>.</li>' +
+                                    '<li>Setelah DNS dipetakan, komputer di jaringan sekolah dapat mengakses aplikasi secara aman via HTTPS di: <a href="https://' + config.targetDomain + '" target="_blank" style="color: #38BDF8; font-weight: 600; text-decoration: underline;">https://' + config.targetDomain + '</a></li>' +
+                                '</ol>' +
+                                '<strong style="color: #A78BFA; font-size: 14px; display: block; margin-top: 15px;">🚀 Langkah Registrasi Platform:</strong>' +
+                                '<ol style="margin: 8px 0 0 20px; padding: 0; line-height: 1.6;">' +
+                                    '<li>Buka halaman login sekolah (menggunakan alamat IP lokal atau domain HTTPS lokal).</li>' +
+                                    '<li>Pilih menu <strong>Daftar Sekolah / Registrasi Sekolah</strong> untuk mendaftarkan akun administrator sekolah Anda pertama kali.</li>' +
+                                '</ol>' +
+                                '<p style="margin: 12px 0 0 0; font-size: 12px; color: #FCA5A5; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;">' +
+                                    '⚠️ <strong>Catatan:</strong> Lisensi ini tidak menyertakan modul Easy-Tunnel. Akses luar dari internet publik via domain <a href="https://' + config.targetDomain + '" target="_blank" style="color: #FCA5A5; text-decoration: underline;">https://' + config.targetDomain + '</a> sengaja dinonaktifkan.' +
+                                '</p>' +
+                            '</div>';
+                        }
+                    } else {
+                        successHtml += '<p style="margin-top: 10px;">Akses Aplikasi SaaS: <a href="https://' + config.targetDomain + '" target="_blank" style="color: #60A5FA; text-decoration: underline;">https://' + config.targetDomain + '</a></p>';
+                    }
+                    
+                    finalAlert.innerHTML = successHtml;
                     return;
                 }
 

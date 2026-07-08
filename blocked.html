@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akses Online Belum Aktif — Absenta.id</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #04080F;
+            --card-bg: rgba(15, 23, 42, 0.6);
+            --border: rgba(255, 255, 255, 0.08);
+            --text-main: #F1F5F9;
+            --text-muted: #94A3B8;
+            --primary: #8B5CF6;
+            --primary-hover: #7C3AED;
+            --warning: #F59E0B;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 580px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .icon-container {
+            width: 80px;
+            height: 80px;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            color: var(--warning);
+            font-size: 32px;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 12px;
+            background: linear-gradient(to right, #F59E0B, #EF4444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        p.main-desc {
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-main);
+            margin-bottom: 24px;
+        }
+
+        .info-sections {
+            text-align: left;
+            margin-bottom: 30px;
+        }
+
+        .section-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 15px;
+        }
+
+        .section-box:last-child {
+            margin-bottom: 0;
+        }
+
+        .section-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-desc {
+            font-size: 13.5px;
+            line-height: 1.5;
+            color: var(--text-muted);
+        }
+
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary), #6366F1);
+            color: #FFFFFF;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            padding: 14px 28px;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .footer {
+            margin-top: 24px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon-container">⚠️</div>
+        <h2>Akses Terbatas</h2>
+        <h1>Layanan Online Belum Aktif</h1>
+        <p class="main-desc">Aplikasi Absenta untuk sekolah ini sudah berhasil dipasang pada komputer server sekolah Anda. Namun, saat ini aplikasi baru bisa diakses secara lokal di dalam jaringan intranet lingkungan sekolah.</p>
+        
+        <div class="info-sections">
+            <div class="section-box" style="border-left: 3px solid var(--warning);">
+                <div class="section-title" style="color: var(--warning);">🏫 Bagi Pengguna Sekolah (Guru / Siswa / Operator)</div>
+                <div class="section-desc">Agar aplikasi ini dapat diakses secara online dari rumah atau luar sekolah, mohon hubungi <strong>Teknisi IT Sekolah</strong> Anda untuk mengaktifkan modul koneksi online pusat.</div>
+            </div>
+
+            <div class="section-box" style="border-left: 3px solid var(--primary);">
+                <div class="section-title" style="color: var(--primary);">🔧 Bagi Teknisi IT / Pengelola Server</div>
+                <div class="section-desc">Pastikan aplikasi <strong>Easy Tunnel Gateway Manager</strong> di server sekolah sudah dijalankan dan statusnya terhubung (Connected) menggunakan Kunci Lisensi resmi sekolah Anda.</div>
+            </div>
+        </div>
+
+        <a href="https://absenta.id" class="btn">Kembali ke Beranda</a>
+        <div class="footer">Absenta.id — Hak Cipta Terpelihara</div>
+    </div>
+</body>
+</html>
