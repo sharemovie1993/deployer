@@ -261,6 +261,21 @@ function Run-RemoteScript {
 Show-Header "FASE 1: PROVISIONING VPS TARGET"
 Show-Log "Menginstal dependensi sistem di VPS ($NEW_IP)..." "Yellow"
 
+$DB_NAME = "orkestrator_licensing"
+try {
+    $cleanDbUrl = $DB_URL
+    if ($cleanDbUrl.StartsWith("[")) { $cleanDbUrl = $cleanDbUrl.Substring(1) }
+    if ($cleanDbUrl.EndsWith("]")) { $cleanDbUrl = $cleanDbUrl.Substring(0, $cleanDbUrl.Length - 1) }
+    $uri = [System.Uri]$cleanDbUrl
+    $parsedDbName = $uri.AbsolutePath.TrimStart('/')
+    if ($parsedDbName -match "^([^?#/]+)") {
+        $parsedDbName = $Matches[1]
+    }
+    if ($parsedDbName) {
+        $DB_NAME = $parsedDbName
+    }
+} catch {}
+
 $provisionScript = @"
 set -e
 # Cepat clear locks
@@ -325,8 +340,8 @@ if [[ "$INSTALL_POSTGRES" =~ ^[yY]$ ]]; then
     echo '$SUDO_PASS' | sudo -S systemctl enable postgresql 2>/dev/null
     echo '$SUDO_PASS' | sudo -S systemctl start postgresql
     cd / && echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER postgres PASSWORD '123123123';" || true
-    if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='orkestrator_licensing'" | grep -q 1; then
-        echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE orkestrator_licensing;"
+    if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
+        echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;"
     fi
 fi
 

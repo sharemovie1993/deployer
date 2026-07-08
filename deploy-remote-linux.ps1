@@ -497,6 +497,21 @@ try {
 Show-Header "FASE 1: PROVISIONING VPS TARGET"
 Show-Log "Menghubungkan ke VPS ($NEW_IP) untuk instalasi dependensi..." "Yellow"
 
+$DB_NAME = "absensi"
+try {
+    $cleanDbUrl = $DB_URL
+    if ($cleanDbUrl.StartsWith("[")) { $cleanDbUrl = $cleanDbUrl.Substring(1) }
+    if ($cleanDbUrl.EndsWith("]")) { $cleanDbUrl = $cleanDbUrl.Substring(0, $cleanDbUrl.Length - 1) }
+    $uri = [System.Uri]$cleanDbUrl
+    $parsedDbName = $uri.AbsolutePath.TrimStart('/')
+    if ($parsedDbName -match "^([^?#/]+)") {
+        $parsedDbName = $Matches[1]
+    }
+    if ($parsedDbName) {
+        $DB_NAME = $parsedDbName
+    }
+} catch {}
+
 $provisionScript = @"
 set -e
 # Auto-fix dpkg lock sebelum apt-get
@@ -531,15 +546,15 @@ fi
 if [ -f /tmp/caddy_offline ]; then
     NEEDS_COPY=true
     if [ -f /usr/bin/caddy ]; then
-        MD5_OFFLINE=`$(md5sum /tmp/caddy_offline | awk '{print `$1}')
-        MD5_INSTALLED=`$(md5sum /usr/bin/caddy | awk '{print `$1}')
-        if [ "`$MD5_OFFLINE" = "`$MD5_INSTALLED" ]; then
+        MD5_OFFLINE=`$(md5sum /tmp/caddy_offline | awk '{print `$1}')`
+        MD5_INSTALLED=`$(md5sum /usr/bin/caddy | awk '{print `$1}')`
+        if [ "$MD5_OFFLINE" = "$MD5_INSTALLED" ]; then
             echo "Caddy kustom offline sudah sama dengan yang terpasang. Melewati pembaruan binary."
             NEEDS_COPY=false
         fi
     fi
 
-    if [ "`$NEEDS_COPY" = "true" ]; then
+    if [ "$NEEDS_COPY" = "true" ]; then
         echo "Memasang Caddy menggunakan berkas kustom offline..."
         if ! command -v caddy &>/dev/null; then
             echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
@@ -585,10 +600,10 @@ if [ "$IS_ABSENTA" = "True" ]; then
         echo '$SUDO_PASS' | sudo -S systemctl start postgresql
 
         # Buat database & user postgres default jika belum ada
-        echo "Mengonfigurasi database absensi dan user postgres..."
+        echo "Mengonfigurasi database $DB_NAME dan user postgres..."
         cd / && echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER postgres PASSWORD '123123123';" || true
-        if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='absensi'" | grep -q 1; then
-            echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE absensi;"
+        if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
+            echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;"
         fi
     fi
 
