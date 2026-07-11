@@ -372,7 +372,8 @@ function requestHandler(req, res) {
                 '-BackendPort', installParams.backendPort || '3003',
                 '-FrontendPort', installParams.frontendPort || '5175',
                 '-DeployMode', installParams.deployScenario || 'hybrid',
-                '-ServerDomain', installParams.targetDomain || ''
+                '-ServerDomain', installParams.targetDomain || '',
+                '-NodeName', installParams.nodeName || 'absenta-node-1'
             ];
         }
 
