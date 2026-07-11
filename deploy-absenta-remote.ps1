@@ -699,7 +699,11 @@ cd /var/www/$TARGET_SUBDIR
 cp absenta_backend/.env.example absenta_backend/.env || true
 sed -i "s|^PORT=.*|PORT=$B_PORT|g" absenta_backend/.env
 sed -i "s|^DATABASE_URL=.*|DATABASE_URL=$DB_URL|g" absenta_backend/.env
-sed -i "s|^NODE_NAME=.*|NODE_NAME=$NODE_NAME|g" absenta_backend/.env
+if grep -q "^NODE_NAME=" absenta_backend/.env; then
+    sed -i "s|^NODE_NAME=.*|NODE_NAME=$NODE_NAME|g" absenta_backend/.env
+else
+    echo "NODE_NAME=$NODE_NAME" >> absenta_backend/.env
+fi
 sed -i "s|^REDIS_MODE=.*|REDIS_MODE=single|g" absenta_backend/.env
 sed -i "s|^REDIS_URL=.*|REDIS_URL=$REDIS_URL|g" absenta_backend/.env
 sed -i "s|^LICENSE_SERVER_URL=.*|LICENSE_SERVER_URL=$LICENSE_SERVER_URL|g" absenta_backend/.env
