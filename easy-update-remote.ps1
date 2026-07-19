@@ -132,6 +132,7 @@ cd absenta_backend
 npm install
 npx prisma generate
 npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal."
+npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
 npm run build
 
 # 2. Update Frontend
