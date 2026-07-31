@@ -119,15 +119,82 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 echo -e "${GREEN}✓ Docker Daemon log rotation (Max 50MB x 5) & ulimits berhasil di-tuning!${NC}"
 
-# 6. Waktu & Zona Waktu (NTP Synchronization)
+# 6. PostgreSQL & Redis Dynamic Hardware-Adaptive Tuning
+echo -e "${CYAN}[4/6] Mengonfigurasi Auto-Tuning PostgreSQL & Redis (RAM Adaptive)...${NC}"
+
+# Calculate PostgreSQL Parameters based on TOTAL_RAM_MB
+# shared_buffers = 25% of RAM (Cap at 8GB)
+PG_SHARED_BUFFERS_MB=$((TOTAL_RAM_MB / 4))
+if [ $PG_SHARED_BUFFERS_MB -gt 8192 ]; then
+    PG_SHARED_BUFFERS_MB=8192
+fi
+
+# effective_cache_size = 75% of RAM
+PG_EFFECTIVE_CACHE_MB=$((TOTAL_RAM_MB * 3 / 4))
+
+# max_connections: Adaptive based on RAM
+if [ $TOTAL_RAM_MB -ge 16000 ]; then
+    PG_MAX_CONN=500
+elif [ $TOTAL_RAM_MB -ge 8000 ]; then
+    PG_MAX_CONN=300
+else
+    PG_MAX_CONN=200
+fi
+
+# Calculate Redis Parameters based on TOTAL_RAM_MB
+# maxmemory = 20% of RAM
+REDIS_MAX_MEM_MB=$((TOTAL_RAM_MB / 5))
+if [ $REDIS_MAX_MEM_MB -lt 512 ]; then
+    REDIS_MAX_MEM_MB=512
+fi
+
+mkdir -p /etc/absenta/config
+
+cat << EOF > /etc/absenta/config/postgresql.conf
+# ==============================================================================
+# Absenta Production Optimized PostgreSQL Configuration
+# Auto-Calculated for ${TOTAL_RAM_MB}MB RAM (${TOTAL_RAM_GB}GB) & ${CPU_CORES} CPU Cores
+# ==============================================================================
+max_connections = ${PG_MAX_CONN}
+shared_buffers = ${PG_SHARED_BUFFERS_MB}MB
+effective_cache_size = ${PG_EFFECTIVE_CACHE_MB}MB
+work_mem = 32MB
+maintenance_work_mem = 512MB
+min_wal_size = 1GB
+max_wal_size = 4GB
+checkpoint_completion_target = 0.9
+wal_buffers = 16MB
+default_statistics_target = 100
+random_page_cost = 1.1
+effective_io_concurrency = 200
+max_worker_processes = ${CPU_CORES}
+max_parallel_workers_per_gather = 2
+max_parallel_workers = ${CPU_CORES}
+EOF
+
+cat << EOF > /etc/absenta/config/redis.conf
+# ==============================================================================
+# Absenta Production Optimized Redis Configuration
+# Auto-Calculated for ${TOTAL_RAM_MB}MB RAM (${TOTAL_RAM_GB}GB)
+# ==============================================================================
+maxmemory ${REDIS_MAX_MEM_MB}mb
+maxmemory-policy allkeys-lru
+tcp-backlog 65535
+timeout 0
+tcp-keepalive 300
+EOF
+
+echo -e "${GREEN}✓ Konfigurasi Postgres (Shared Buffers: ${PG_SHARED_BUFFERS_MB}MB, Conn: ${PG_MAX_CONN}) & Redis (MaxMem: ${REDIS_MAX_MEM_MB}MB, Policy: allkeys-lru) ter-generate di /etc/absenta/config/!${NC}"
+
+# 7. Waktu & Zona Waktu (NTP Synchronization)
 TARGET_TZ="${1:-UTC}"
-echo -e "${CYAN}[4/5] Mengonfigurasi Zona Waktu ($TARGET_TZ) & Synchronisasi Waktu (NTP)...${NC}"
+echo -e "${CYAN}[5/6] Mengonfigurasi Zona Waktu ($TARGET_TZ) & Synchronisasi Waktu (NTP)...${NC}"
 timedatectl set-timezone "$TARGET_TZ" || true
 timedatectl set-ntp true || true
 echo -e "${GREEN}✓ Zona waktu di-set ke $TARGET_TZ & NTP sinkronisasi aktif!${NC}"
 
-# 7. Network Firewall Minimalis (UFW)
-echo -e "${CYAN}[5/5] Mengonfigurasi Firewall UFW Minimalis...${NC}"
+# 8. Network Firewall Minimalis (UFW)
+echo -e "${CYAN}[6/6] Mengonfigurasi Firewall UFW Minimalis...${NC}"
 if command -v ufw >/dev/null 2>&1; then
     ufw allow 22/tcp >/dev/null 2>&1 || true
     ufw allow 80/tcp >/dev/null 2>&1 || true
@@ -140,4 +207,4 @@ fi
 
 echo -e "----------------------------------------------------------"
 echo -e "${GREEN}✅ TUNING SISTEM PRODUKSI ABSENTA BERHASIL SELESAI!${NC}"
-echo -e "${CYAN}Server siap untuk skenario On-Premise maupun SaaS Multi-Tenant!${NC}"
+echo -e "${CYAN}Server (OS Kernel, Postgres DB, Redis Cache, Docker) Siap untuk On-Premise maupun SaaS!${NC}"
