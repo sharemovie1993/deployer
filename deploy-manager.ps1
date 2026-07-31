@@ -292,6 +292,7 @@ while ($true) {
     Write-Host "   7) Setup SWAP Space 4GB Linux (Remote)"
     Write-Host "   8) Perluas Partisi Disk Linux VM/VPS (Remote)"
     Write-Host "   9) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
+    Write-Host "  12) Kernel & System Tuning Produksi Absenta (Remote)"
     Write-Host ""
     Write-Host " 🚨 [EMERGENCY & CLEANUP]" -ForegroundColor Cyan
     Write-Host "   10) Kill Semua Proses Node.js (Emergency)"
@@ -300,7 +301,7 @@ while ($true) {
     Write-Host " 🚪 [EXIT]" -ForegroundColor Cyan
     Write-Host "   0) Keluar"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [0-11]"
+    $choice = Read-Host "Pilih opsi [0-12]"
 
     switch ($choice) {
         "1" {
@@ -943,6 +944,20 @@ while ($true) {
                 }
             } else {
                 Write-Host "Script easy-setup-ssh.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
+                Wait-Key
+            }
+        }
+        "12" {
+            $tuningScript = Join-Path $PSScriptRoot "easy-tuning.ps1"
+            if (Test-Path $tuningScript) {
+                try {
+                    & $tuningScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-tuning: $_" -ForegroundColor Red
+                    Wait-Key
+                }
+            } else {
+                Write-Host "Script easy-tuning.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }
