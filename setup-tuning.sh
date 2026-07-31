@@ -120,10 +120,11 @@ fi
 echo -e "${GREEN}✓ Docker Daemon log rotation (Max 50MB x 5) & ulimits berhasil di-tuning!${NC}"
 
 # 6. Waktu & Zona Waktu (NTP Synchronization)
-echo -e "${CYAN}[4/5] Mengonfigurasi Zona Waktu & Synchronisasi Waktu (NTP)...${NC}"
-timedatectl set-timezone Asia/Jakarta || true
+TARGET_TZ="${1:-UTC}"
+echo -e "${CYAN}[4/5] Mengonfigurasi Zona Waktu ($TARGET_TZ) & Synchronisasi Waktu (NTP)...${NC}"
+timedatectl set-timezone "$TARGET_TZ" || true
 timedatectl set-ntp true || true
-echo -e "${GREEN}✓ Zona waktu di-set ke Asia/Jakarta & NTP sinkronisasi aktif!${NC}"
+echo -e "${GREEN}✓ Zona waktu di-set ke $TARGET_TZ & NTP sinkronisasi aktif!${NC}"
 
 # 7. Network Firewall Minimalis (UFW)
 echo -e "${CYAN}[5/5] Mengonfigurasi Firewall UFW Minimalis...${NC}"

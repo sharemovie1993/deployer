@@ -51,6 +51,18 @@ if (-not (Test-Path $KEY_FILE)) {
 $SUDO_PASS = (Read-Host "Masukkan password sudo VPS Anda [Default: 1]").Trim()
 if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "1" }
 
+Write-Host "`nPilih Zona Waktu Server OS:" -ForegroundColor Yellow
+Write-Host " 1) UTC (Standar SaaS Multi-Tenant Cloud)" -ForegroundColor White
+Write-Host " 2) Asia/Jakarta (WIB - On-Premise Jawa/Sumatera)" -ForegroundColor White
+Write-Host " 3) Asia/Makassar (WITA - Bali, Sulawesi, Kalsel, Kaltim, NTB, NTT)" -ForegroundColor White
+Write-Host " 4) Asia/Jayapura (WIT - Papua, Maluku)" -ForegroundColor White
+$tzChoice = Read-Host "Pilih zona waktu [1-4] (Default: 1 - UTC)"
+
+$CHOSEN_TZ = "UTC"
+if ($tzChoice -eq "2") { $CHOSEN_TZ = "Asia/Jakarta" }
+elseif ($tzChoice -eq "3") { $CHOSEN_TZ = "Asia/Makassar" }
+elseif ($tzChoice -eq "4") { $CHOSEN_TZ = "Asia/Jayapura" }
+
 # Perbaiki permission SSH Key agar Windows OpenSSH tidak memblokirnya
 $SAFE_KEY = Join-Path $env:TEMP "safe-tuning-key.pem"
 Remove-Item $SAFE_KEY -Force -ErrorAction SilentlyContinue
@@ -81,8 +93,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 2. Jalankan secara remote menggunakan sudo
-Show-Log "Menjalankan skrip tuning produksi di VPS..."
-& ssh -i "$SAFE_KEY" -o StrictHostKeyChecking=no "${TARGET_USER}@${TARGET_IP}" "echo '$SUDO_PASS' | sudo -S bash /tmp/setup-tuning.sh"
+Show-Log "Menjalankan skrip tuning produksi ($CHOSEN_TZ) di VPS..."
+& ssh -i "$SAFE_KEY" -o StrictHostKeyChecking=no "${TARGET_USER}@${TARGET_IP}" "echo '$SUDO_PASS' | sudo -S bash /tmp/setup-tuning.sh $CHOSEN_TZ"
 if ($LASTEXITCODE -ne 0) {
     throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE"
 }
