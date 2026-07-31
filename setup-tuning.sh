@@ -120,17 +120,34 @@ fi
 echo -e "${GREEN}✓ Docker Daemon log rotation (Max 50MB x 5) & ulimits berhasil di-tuning!${NC}"
 
 # 6. PostgreSQL & Redis Dynamic Hardware-Adaptive Tuning
-echo -e "${CYAN}[4/6] Mengonfigurasi Auto-Tuning PostgreSQL & Redis (RAM Adaptive)...${NC}"
+SERVER_ROLE="${2:-all-in-one}"
+echo -e "${CYAN}[4/6] Mengonfigurasi Auto-Tuning PostgreSQL & Redis (Profile: ${SERVER_ROLE})...${NC}"
 
-# Calculate PostgreSQL Parameters based on TOTAL_RAM_MB
-# shared_buffers = 25% of RAM (Cap at 8GB)
-PG_SHARED_BUFFERS_MB=$((TOTAL_RAM_MB / 4))
-if [ $PG_SHARED_BUFFERS_MB -gt 8192 ]; then
-    PG_SHARED_BUFFERS_MB=8192
+if [ "$SERVER_ROLE" = "dedicated-postgres" ]; then
+    # Dedicated PostgreSQL Server: 50% RAM shared_buffers
+    PG_SHARED_BUFFERS_MB=$((TOTAL_RAM_MB / 2))
+    if [ $PG_SHARED_BUFFERS_MB -gt 16384 ]; then
+        PG_SHARED_BUFFERS_MB=16384
+    fi
+    PG_EFFECTIVE_CACHE_MB=$((TOTAL_RAM_MB * 3 / 4))
+    REDIS_MAX_MEM_MB=512
+elif [ "$SERVER_ROLE" = "dedicated-redis" ]; then
+    # Dedicated Redis Server: 70% RAM maxmemory
+    REDIS_MAX_MEM_MB=$((TOTAL_RAM_MB * 70 / 100))
+    PG_SHARED_BUFFERS_MB=$((TOTAL_RAM_MB / 8))
+    PG_EFFECTIVE_CACHE_MB=$((TOTAL_RAM_MB / 4))
+else
+    # All-In-One Single Server (Default): 25% Postgres, 20% Redis
+    PG_SHARED_BUFFERS_MB=$((TOTAL_RAM_MB / 4))
+    if [ $PG_SHARED_BUFFERS_MB -gt 8192 ]; then
+        PG_SHARED_BUFFERS_MB=8192
+    fi
+    PG_EFFECTIVE_CACHE_MB=$((TOTAL_RAM_MB * 3 / 4))
+    REDIS_MAX_MEM_MB=$((TOTAL_RAM_MB / 5))
+    if [ $REDIS_MAX_MEM_MB -lt 512 ]; then
+        REDIS_MAX_MEM_MB=512
+    fi
 fi
-
-# effective_cache_size = 75% of RAM
-PG_EFFECTIVE_CACHE_MB=$((TOTAL_RAM_MB * 3 / 4))
 
 # max_connections: Adaptive based on RAM
 if [ $TOTAL_RAM_MB -ge 16000 ]; then
@@ -139,13 +156,6 @@ elif [ $TOTAL_RAM_MB -ge 8000 ]; then
     PG_MAX_CONN=300
 else
     PG_MAX_CONN=200
-fi
-
-# Calculate Redis Parameters based on TOTAL_RAM_MB
-# maxmemory = 20% of RAM
-REDIS_MAX_MEM_MB=$((TOTAL_RAM_MB / 5))
-if [ $REDIS_MAX_MEM_MB -lt 512 ]; then
-    REDIS_MAX_MEM_MB=512
 fi
 
 mkdir -p /etc/absenta/config

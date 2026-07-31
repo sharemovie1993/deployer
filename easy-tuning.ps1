@@ -63,6 +63,16 @@ if ($tzChoice -eq "2") { $CHOSEN_TZ = "Asia/Jakarta" }
 elseif ($tzChoice -eq "3") { $CHOSEN_TZ = "Asia/Makassar" }
 elseif ($tzChoice -eq "4") { $CHOSEN_TZ = "Asia/Jayapura" }
 
+Write-Host "`nPilih Profil Peran Server (Server Deployment Profile):" -ForegroundColor Yellow
+Write-Host " 1) All-In-One Server (Gabungan OS + App + Postgres + Redis dalam 1 VPS) [Default]" -ForegroundColor White
+Write-Host " 2) Dedicated PostgreSQL Database Server (Khusus Server DB Postgres)" -ForegroundColor White
+Write-Host " 3) Dedicated Redis Caching Server (Khusus Server Cache Redis)" -ForegroundColor White
+$roleChoice = Read-Host "Pilih profil [1-3] (Default: 1 - All-In-One)"
+
+$CHOSEN_ROLE = "all-in-one"
+if ($roleChoice -eq "2") { $CHOSEN_ROLE = "dedicated-postgres" }
+elseif ($roleChoice -eq "3") { $CHOSEN_ROLE = "dedicated-redis" }
+
 # Perbaiki permission SSH Key agar Windows OpenSSH tidak memblokirnya
 $SAFE_KEY = Join-Path $env:TEMP "safe-tuning-key.pem"
 Remove-Item $SAFE_KEY -Force -ErrorAction SilentlyContinue
@@ -93,8 +103,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 2. Jalankan secara remote menggunakan sudo
-Show-Log "Menjalankan skrip tuning produksi ($CHOSEN_TZ) di VPS..."
-& ssh -i "$SAFE_KEY" -o StrictHostKeyChecking=no "${TARGET_USER}@${TARGET_IP}" "echo '$SUDO_PASS' | sudo -S bash /tmp/setup-tuning.sh $CHOSEN_TZ"
+Show-Log "Menjalankan skrip tuning produksi ($CHOSEN_TZ | Profil: $CHOSEN_ROLE) di VPS..."
+& ssh -i "$SAFE_KEY" -o StrictHostKeyChecking=no "${TARGET_USER}@${TARGET_IP}" "echo '$SUDO_PASS' | sudo -S bash /tmp/setup-tuning.sh $CHOSEN_TZ $CHOSEN_ROLE"
 if ($LASTEXITCODE -ne 0) {
     throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE"
 }
