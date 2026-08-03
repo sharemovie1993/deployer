@@ -256,12 +256,14 @@ function handleWatchdogStatus(req, res, parsedUrl) {
         'CADDY=$(systemctl is-active caddy 2>/dev/null || echo "unknown")',
         'PM2=$(pgrep -c -f "PM2" 2>/dev/null | awk \'{if($1+0>0) print "running"; else print "dead"}\')',
         `TIMER=$(echo '${sudoPass}' | sudo -S systemctl is-active absenta-tunnel-watchdog.timer 2>/dev/null || echo "not-installed")`,
+        'ALL_IPS=$(ip -4 addr show 2>/dev/null | awk \'/inet / {print $NF "=>" $2}\' | tr \'\\n\' \',\' | sed \'s/,$//\')',
         'echo "WG_IFACES=$WG_IFACES"',
         'echo "WG_STATUS=$WG_STATUS"',
         'echo "WG_HS=$WG_HS"',
         'echo "CADDY=$CADDY"',
         'echo "PM2=$PM2"',
         'echo "TIMER=$TIMER"',
+        'echo "ALL_IPS=$ALL_IPS"',
         'echo "LOG_BEGIN"',
         'tail -4 /var/log/absenta-tunnel-watchdog.log 2>/dev/null || true',
         'echo "LOG_END"',
@@ -341,6 +343,7 @@ function handleWatchdogStatus(req, res, parsedUrl) {
             caddy:        kv['CADDY']        || 'unknown',
             pm2:          kv['PM2']          || 'dead',
             timer:        kv['TIMER']        || 'not-installed',
+            all_ips:      kv['ALL_IPS']      || '',
             last_log:     logLines.slice(-4).join('|'),
         };
 

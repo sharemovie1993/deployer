@@ -328,6 +328,21 @@ function checkWatchdogStatus(presetId) {
             ).join('')
             : '<div style="color:var(--text-muted);font-size:11px;">Belum ada log</div>';
 
+        const ipList = d.all_ips
+            ? d.all_ips.split(',').filter(Boolean).map(item => {
+                const parts = item.split('=>');
+                const iface = parts[0] || '';
+                const ipAddr = parts[1] || '';
+                const isWg = iface.startsWith('et-') || iface.startsWith('wg');
+                const icon = iface === 'lo' ? '🏠' : (isWg ? '🔒' : '🌐');
+                const color = isWg ? '#a78bfa' : '#38bdf8';
+                return '<div style="font-family:\'Fira Code\',monospace;font-size:11.5px;display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,0.05);">' +
+                    '<span style="color:' + color + ';font-weight:600;">' + icon + ' ' + iface + '</span>' +
+                    '<span style="color:#6ee7b7;font-weight:500;">' + ipAddr + '</span>' +
+                '</div>';
+            }).join('')
+            : '<div style="font-size:11px;color:var(--text-muted);">Tidak ada IP terdeteksi</div>';
+
         content.innerHTML =
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
                 '<div>' + dot(wgOk) + 'WireGuard: ' + badge(wgOk, 'UP', 'DOWN') + '</div>' +
@@ -335,9 +350,15 @@ function checkWatchdogStatus(presetId) {
                 '<div>' + dot(pm2Ok) + 'PM2: ' + badge(pm2Ok, 'running', 'mati') + '</div>' +
                 '<div>' + dot(timerOk) + 'Watchdog: ' + badge(timerOk, 'aktif', 'belum pasang') + '</div>' +
             '</div>' +
-            (wgOk ? '<div style="margin-bottom:8px;font-size:11.5px;">📡 Interface: <span style="color:#a78bfa;">' + wgIfaces + '</span> &nbsp;|&nbsp; ⏱️ Handshake: <span style="color:#6ee7b7;">' + wgHs + '</span></div>' : '') +
-            '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px;border:1px solid rgba(255,255,255,0.05);">' +
-                '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">📋 Log Watchdog Terakhir:</div>' +
+            '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.05);margin-bottom:10px;">' +
+                '<div style="font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:6px;display:flex;justify-content:space-between;">' +
+                    '<span>🌐 Interface & Alamat IP:</span>' +
+                    (wgHs ? '<span style="color:#6ee7b7;font-size:10.5px;font-weight:normal;">⏱️ Handshake: ' + wgHs + '</span>' : '') +
+                '</div>' +
+                ipList +
+            '</div>' +
+            '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.05);">' +
+                '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">📋 Log Watchdog Terakhir:</div>' +
                 logs +
             '</div>';
     })
