@@ -256,7 +256,7 @@ function handleWatchdogStatus(req, res, parsedUrl) {
         'CADDY=$(systemctl is-active caddy 2>/dev/null || echo "unknown")',
         'PM2=$(pgrep -c -f "PM2" 2>/dev/null | awk \'{if($1+0>0) print "running"; else print "dead"}\')',
         `TIMER=$(echo '${sudoPass}' | sudo -S systemctl is-active absenta-tunnel-watchdog.timer 2>/dev/null || echo "not-installed")`,
-        'ALL_IPS=$(ip -4 addr show 2>/dev/null | awk \'/inet / {print $NF "=>" $2}\' | tr \'\\n\' \',\' | sed \'s/,$//\')',
+        'ALL_IPS=$(ip -o -4 addr show 2>/dev/null | awk \'{print $2 "=>" $4}\' | tr \'\\n\' \',\' | sed \'s/,$//\')',
         'echo "WG_IFACES=$WG_IFACES"',
         'echo "WG_STATUS=$WG_STATUS"',
         'echo "WG_HS=$WG_HS"',
