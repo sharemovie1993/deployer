@@ -242,7 +242,7 @@ function handleWatchdogStatus(req, res, parsedUrl) {
     const keyPath = preset.vpsKeyPath || path.join(__dirname, '..', 'nginxonly.pem');
     const ip = preset.vpsIp;
     const user = preset.vpsUser || 'asepsuryadi';
-    const sudoPass = preset.vpsSudoPass || '1';
+    const sudoPass = (preset.vpsSudoPass || '1').replace(/'/g, "'\\''"); // escape single quotes
 
     // Fix key permissions on Windows
     const safeKey = path.join(require('os').tmpdir(), 'watchdog-check-key.pem');
@@ -250,40 +250,92 @@ function handleWatchdogStatus(req, res, parsedUrl) {
         const fs2 = require('fs');
         fs2.writeFileSync(safeKey, fs2.readFileSync(keyPath));
         if (process.platform === 'win32') {
-            require('child_process').execSync(`icacls "${safeKey}" /inheritance:r /grant:r "%USERNAME%:R"`, { stdio: 'ignore' });
+            require('child_process').execSync(
+                `icacls "${safeKey}" /inheritance:r /grant:r "%USERNAME%:R"`,
+                { stdio: 'ignore' }
+            );
         }
     } catch(e) { /* ignore */ }
 
-    const checkScript = [
-        `WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oP '^\\d+: \\K[^:]+' | tr '\\n' ',')`,
-        `WG_STATUS=$([ -n "$WG_IFACES" ] && echo "UP" || echo "DOWN")`,
-        `WG_HS=$(wg show all latest-handshakes 2>/dev/null | awk '{if($2>0){ago=systime()-$2; if(ago<60) printf ago"s lalu"; else if(ago<3600) printf int(ago/60)"m lalu"; else printf "STALE"}}')`,
-        `CADDY=$(systemctl is-active caddy 2>/dev/null)`,
-        `PM2=$(pgrep -f pm2 &>/dev/null && echo "running" || echo "dead")`,
-        `TIMER=$(echo '${sudoPass}' | sudo -S systemctl is-active absenta-tunnel-watchdog.timer 2>/dev/null || echo "not-installed")`,
-        `LAST_LOG=$(tail -5 /var/log/absenta-tunnel-watchdog.log 2>/dev/null | tr '\\n' '|')`,
-        `echo "{\"wg_ifaces\":\"$WG_IFACES\",\"wg_status\":\"$WG_STATUS\",\"wg_handshake\":\"$WG_HS\",\"caddy\":\"$CADDY\",\"pm2\":\"$PM2\",\"timer\":\"$TIMER\",\"last_log\":\"$LAST_LOG\"}"`,
-    ].join('; ');
+    // Gunakan output key=value per baris — AMAN dari karakter JSON berbahaya
+    // Script dikirim via stdin (heredoc) bukan inline argument
+    const checkScript = `
+WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oP '^\\d+: \\K[^:]+' | tr '\\n' ',' | sed 's/,$//')
+WG_STATUS=$([ -n "$WG_IFACES" ] && echo "UP" || echo "DOWN")
+WG_HS=$(wg show all latest-handshakes 2>/dev/null | awk 'BEGIN{r=""}{if($2+0>0){ago=systime()-$2+0; if(ago<60){r=ago"s lalu"}else if(ago<3600){r=int(ago/60)"m lalu"}else{r="STALE"}}}END{print r}')
+CADDY=$(systemctl is-active caddy 2>/dev/null || echo "unknown")
+PM2=$(pgrep -c -f "PM2" 2>/dev/null | grep -q "^[1-9]" && echo "running" || echo "dead")
+TIMER=$(echo '${sudoPass}' | sudo -S systemctl is-active absenta-tunnel-watchdog.timer 2>/dev/null || echo "not-installed")
+# Log: ambil 4 baris terakhir, encode spesial chars
+LAST_LOG_RAW=$(tail -4 /var/log/absenta-tunnel-watchdog.log 2>/dev/null || echo "")
+echo "WG_IFACES=$WG_IFACES"
+echo "WG_STATUS=$WG_STATUS"
+echo "WG_HS=$WG_HS"
+echo "CADDY=$CADDY"
+echo "PM2=$PM2"
+echo "TIMER=$TIMER"
+echo "LOG_BEGIN"
+echo "$LAST_LOG_RAW"
+echo "LOG_END"
+`;
 
-    const sshCmd = `ssh -i "${safeKey}" -o StrictHostKeyChecking=no -o ConnectTimeout=8 ${user}@${ip} "${checkScript}"`;
+    // Kirim script via SCP lalu jalankan — menghindari escaping masalah di inline SSH
+    const fs3 = require('fs');
+    const tmpScript = path.join(require('os').tmpdir(), 'absenta-wdcheck.sh');
+    fs3.writeFileSync(tmpScript, checkScript.replace(/\r\n/g, '\n'));
 
-    exec(sshCmd, { timeout: 15000 }, (err, stdout, stderr) => {
-        if (err) {
+    const scpCmd = `scp -i "${safeKey}" -o StrictHostKeyChecking=no -o ConnectTimeout=8 "${tmpScript}" ${user}@${ip}:/tmp/absenta-wdcheck.sh`;
+    const sshRunCmd = `ssh -i "${safeKey}" -o StrictHostKeyChecking=no -o ConnectTimeout=8 ${user}@${ip} "bash /tmp/absenta-wdcheck.sh"`;
+
+    exec(scpCmd, { timeout: 12000 }, (scpErr) => {
+        if (scpErr) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, message: `SSH gagal: ${err.message}`, offline: true }));
+            res.end(JSON.stringify({ success: false, message: `SSH/SCP gagal ke ${ip}`, offline: true }));
             return;
         }
-        try {
-            const raw = stdout.trim();
-            const jsonStart = raw.lastIndexOf('{');
-            const jsonStr = jsonStart >= 0 ? raw.slice(jsonStart) : raw;
-            const data = JSON.parse(jsonStr);
+
+        exec(sshRunCmd, { timeout: 15000 }, (err, stdout, stderr) => {
+            if (err && !stdout) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: `SSH gagal: ${err.message}`, offline: true }));
+                return;
+            }
+
+            // Parse output key=value per baris
+            const lines = stdout.split('\n');
+            const kv = {};
+            let logLines = [];
+            let inLog = false;
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed === 'LOG_BEGIN') { inLog = true; continue; }
+                if (trimmed === 'LOG_END') { inLog = false; continue; }
+                if (inLog) {
+                    if (trimmed) logLines.push(trimmed);
+                    continue;
+                }
+                const eqIdx = trimmed.indexOf('=');
+                if (eqIdx > 0) {
+                    const key = trimmed.slice(0, eqIdx);
+                    const val = trimmed.slice(eqIdx + 1);
+                    kv[key] = val;
+                }
+            }
+
+            const data = {
+                wg_ifaces:    kv['WG_IFACES']  || '',
+                wg_status:    kv['WG_STATUS']   || 'DOWN',
+                wg_handshake: kv['WG_HS']       || '',
+                caddy:        kv['CADDY']        || 'unknown',
+                pm2:          kv['PM2']          || 'dead',
+                timer:        kv['TIMER']        || 'not-installed',
+                last_log:     logLines.slice(-4).join('|'),
+            };
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true, data }));
-        } catch(e) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, message: 'Parse error: ' + stdout }));
-        }
+        });
     });
 }
 
