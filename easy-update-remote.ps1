@@ -166,7 +166,7 @@ npm run build
 # 3. Reload PM2
 echo "Memuat ulang layanan PM2..."
 cd ..
-pm2 reload ecosystem.config.js || pm2 restart ecosystem.config.js
+pm2 start absenta_backend/ecosystem.config.js || pm2 reload absenta_backend/ecosystem.config.js || pm2 start ecosystem.config.js || pm2 reload ecosystem.config.js || pm2 reload all
 pm2 save
 
 # Pastikan PM2 terdaftar di systemd startup (agar tetap jalan setelah reboot)
