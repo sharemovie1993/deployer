@@ -113,6 +113,93 @@ sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/
 sudo systemctl restart ssh || sudo systemctl restart sshd
 echo "SSH Hardened."
 
+# 5. Absenta Tunnel & Service Watchdog (Auto-Recovery)
+echo "Memasang Tunnel & Service Watchdog (auto-recovery tiap 30 detik)..."
+
+cat > /tmp/absenta-tunnel-watchdog.sh << 'WATCHDOG'
+#!/bin/bash
+LOG_FILE="/var/log/absenta-tunnel-watchdog.log"
+MAX_LOG_SIZE=5242880
+ET_PEER_IP="10.0.0.1"
+STALE_HANDSHAKE_SECS=180
+log() {
+  [ -f "$LOG_FILE" ] && [ "$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)" -gt $MAX_LOG_SIZE ] && { mv "$LOG_FILE" "${LOG_FILE}.1"; touch "$LOG_FILE"; }
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+}
+check_wireguard() {
+  for iface in $(ip link show type wireguard 2>/dev/null | grep -oP '^\d+: \K[^:]+'); do
+    if ! ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+      log "⚠️  WireGuard $iface DOWN - restore..."
+      ip link set "$iface" up 2>/dev/null || true; sleep 3
+      ip link show "$iface" 2>/dev/null | grep -q "UP" && log "✅ WG $iface UP" || log "❌ WG $iface gagal"
+    else
+      LAST_HS=$(wg show "$iface" latest-handshakes 2>/dev/null | awk '{print $2}' | head -1)
+      if [ -n "$LAST_HS" ] && [ "$LAST_HS" != "0" ]; then
+        DIFF=$(( $(date +%s) - LAST_HS ))
+        if [ "$DIFF" -gt "$STALE_HANDSHAKE_SECS" ]; then
+          log "⚠️  WG $iface stale ${DIFF}s - reconnect..."; ping -c 3 -W 5 "$ET_PEER_IP" &>/dev/null || true; sleep 5; log "🔄 WG reconnect"
+        fi
+      fi
+    fi
+  done
+}
+check_pm2() {
+  if ! pgrep -f "pm2" &>/dev/null; then
+    log "⚠️  PM2 mati - resurrect..."; su - asepsuryadi -c "pm2 resurrect" 2>/dev/null || true; sleep 5
+    pgrep -f "pm2" &>/dev/null && log "✅ PM2 hidup" || log "❌ PM2 gagal"
+  fi
+}
+check_caddy() {
+  if ! systemctl is-active --quiet caddy 2>/dev/null; then
+    log "⚠️  Caddy DOWN - restart..."; systemctl restart caddy 2>/dev/null; sleep 3
+    systemctl is-active --quiet caddy && log "✅ Caddy OK" || log "❌ Caddy gagal"
+  fi
+}
+COUNTER_FILE="/tmp/absenta-watchdog-counter"
+COUNTER=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0); COUNTER=$((COUNTER+1)); echo "$COUNTER" > "$COUNTER_FILE"
+if [ "$COUNTER" -ge 10 ]; then echo "0" > "$COUNTER_FILE"
+  WG_STATUS=$(ip link show type wireguard 2>/dev/null | grep -q "UP" && echo "UP" || echo "DOWN")
+  log "📊 WG=$WG_STATUS Caddy=$(systemctl is-active caddy 2>/dev/null) PM2=$(pgrep -f pm2 &>/dev/null && echo ok || echo dead)"
+fi
+check_wireguard; check_pm2; check_caddy
+WATCHDOG
+
+sudo cp /tmp/absenta-tunnel-watchdog.sh /usr/local/bin/absenta-tunnel-watchdog.sh
+sudo chmod +x /usr/local/bin/absenta-tunnel-watchdog.sh
+
+cat > /tmp/absenta-tunnel-watchdog.service << 'EOF'
+[Unit]
+Description=Absenta Tunnel & Service Watchdog
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/absenta-tunnel-watchdog.sh
+User=root
+EOF
+
+cat > /tmp/absenta-tunnel-watchdog.timer << 'EOF'
+[Unit]
+Description=Run Absenta Tunnel Watchdog every 30 seconds
+Requires=absenta-tunnel-watchdog.service
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo cp /tmp/absenta-tunnel-watchdog.service /etc/systemd/system/
+sudo cp /tmp/absenta-tunnel-watchdog.timer /etc/systemd/system/
+sudo mkdir -p /etc/systemd/system/caddy.service.d
+printf '[Service]\nRestart=always\nRestartSec=10\nStartLimitIntervalSec=120\nStartLimitBurst=10\n' | sudo tee /etc/systemd/system/caddy.service.d/restart-override.conf > /dev/null
+sudo systemctl daemon-reload
+sudo systemctl enable absenta-tunnel-watchdog.timer
+sudo systemctl restart absenta-tunnel-watchdog.timer
+echo "Watchdog aktif: monitor WireGuard + PM2 + Caddy setiap 30 detik."
+echo "Log: /var/log/absenta-tunnel-watchdog.log"
+
 echo "=== PROSES HARDENING SELESAI DENGAN SUKSES ==="
 "@
 
