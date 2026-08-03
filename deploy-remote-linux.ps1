@@ -900,28 +900,28 @@ MAX_LOG_SIZE=5242880
 ET_PEER_IP="10.0.0.1"
 STALE_HANDSHAKE_SECS=180
 log() {
-  [ -f "$LOG_FILE" ] && [ "$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)" -gt $MAX_LOG_SIZE ] && { mv "$LOG_FILE" "${LOG_FILE}.1"; touch "$LOG_FILE"; }
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+  [ -f "`$LOG_FILE" ] && [ "`$(stat -c%s "`$LOG_FILE" 2>/dev/null || echo 0)" -gt `$MAX_LOG_SIZE ] && { mv "`$LOG_FILE" "`${LOG_FILE}.1"; touch "`$LOG_FILE"; }
+  echo "[`$(date '+%Y-%m-%d %H:%M:%S')] `$1" >> "`$LOG_FILE"
 }
 check_wireguard() {
-  CONF_FILES=$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
-  for cfile in $CONF_FILES; do
-    [ -f "$cfile" ] || continue
-    bname=$(basename "$cfile")
-    iface="${bname%.conf}"
-    if [ "$cfile" != "/etc/wireguard/$bname" ]; then
-      cp -f "$cfile" "/etc/wireguard/$bname" 2>/dev/null || true; chmod 600 "/etc/wireguard/$bname" 2>/dev/null || true
+  CONF_FILES=`$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
+  for cfile in `$CONF_FILES; do
+    [ -f "`$cfile" ] || continue
+    bname=`$(basename "`$cfile")
+    iface="`${bname%.conf}"
+    if [ "`$cfile" != "/etc/wireguard/`$bname" ]; then
+      cp -f "`$cfile" "/etc/wireguard/`$bname" 2>/dev/null || true; chmod 600 "/etc/wireguard/`$bname" 2>/dev/null || true
     fi
-    systemctl is-enabled "wg-quick@$iface" &>/dev/null || systemctl enable "wg-quick@$iface" 2>/dev/null || true
-    if ! ip link show "$iface" 2>/dev/null | grep -q "UP"; then
-      log "⚠️  WG $iface DOWN - restore..."; wg-quick up "$iface" 2>/dev/null || systemctl restart "wg-quick@$iface" 2>/dev/null || true; sleep 3
-      ip link show "$iface" 2>/dev/null | grep -q "UP" && log "✅ WG $iface UP" || log "❌ WG $iface gagal"
+    systemctl is-enabled "wg-quick@`$iface" &>/dev/null || systemctl enable "wg-quick@`$iface" 2>/dev/null || true
+    if ! ip link show "`$iface" 2>/dev/null | grep -q "UP"; then
+      log "⚠️  WG `$iface DOWN - restore..."; wg-quick up "`$iface" 2>/dev/null || systemctl restart "wg-quick@`$iface" 2>/dev/null || true; sleep 3
+      ip link show "`$iface" 2>/dev/null | grep -q "UP" && log "✅ WG `$iface UP" || log "❌ WG `$iface gagal"
     else
-      LAST_HS=$(wg show "$iface" latest-handshakes 2>/dev/null | awk '{print $2}' | head -1)
-      if [ -n "$LAST_HS" ] && [ "$LAST_HS" != "0" ]; then
-        DIFF=$(( $(date +%s) - LAST_HS ))
-        if [ "$DIFF" -gt "$STALE_HANDSHAKE_SECS" ]; then
-          log "⚠️  WG $iface stale ${DIFF}s - reconnect..."; ping -c 3 -W 5 "$ET_PEER_IP" &>/dev/null || true; sleep 5; log "🔄 WG reconnect"
+      LAST_HS=`$(wg show "`$iface" latest-handshakes 2>/dev/null | awk '{print `$2}' | head -1)
+      if [ -n "`$LAST_HS" ] && [ "`$LAST_HS" != "0" ]; then
+        DIFF=`$(( `$(date +%s) - LAST_HS ))
+        if [ "`$DIFF" -gt "`$STALE_HANDSHAKE_SECS" ]; then
+          log "⚠️  WG `$iface stale `${DIFF}s - reconnect..."; ping -c 3 -W 5 "`$ET_PEER_IP" &>/dev/null || true; sleep 5; log "🔄 WG reconnect"
         fi
       fi
     fi
@@ -940,10 +940,10 @@ check_caddy() {
   fi
 }
 COUNTER_FILE="/tmp/absenta-watchdog-counter"
-COUNTER=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0); COUNTER=$((COUNTER+1)); echo "$COUNTER" > "$COUNTER_FILE"
-if [ "$COUNTER" -ge 10 ]; then echo "0" > "$COUNTER_FILE"
-  WG_STATUS=$(ip link show type wireguard 2>/dev/null | grep -q "UP" && echo "UP" || echo "DOWN")
-  log "📊 WG=$WG_STATUS Caddy=$(systemctl is-active caddy 2>/dev/null) PM2=$(pgrep -f pm2 &>/dev/null && echo ok || echo dead)"
+COUNTER=`$(cat "`$COUNTER_FILE" 2>/dev/null || echo 0); COUNTER=`$((COUNTER+1)); echo "`$COUNTER" > "`$COUNTER_FILE"
+if [ "`$COUNTER" -ge 10 ]; then echo "0" > "`$COUNTER_FILE"
+  WG_STATUS=`$(ip link show type wireguard 2>/dev/null | grep -q "UP" && echo "UP" || echo "DOWN")
+  log "📊 WG=`$WG_STATUS Caddy=`$(systemctl is-active caddy 2>/dev/null) PM2=`$(pgrep -f pm2 &>/dev/null && echo ok || echo dead)"
 fi
 check_wireguard; check_pm2; check_caddy
 WATCHDOG
