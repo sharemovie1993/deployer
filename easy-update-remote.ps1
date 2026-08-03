@@ -192,12 +192,28 @@ log() {
 }
 
 check_wireguard() {
-  for iface in $(ip link show type wireguard 2>/dev/null | grep -oP '^\d+: \K[^:]+'); do
+  CONF_FILES=$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
+  for cfile in $CONF_FILES; do
+    [ -f "$cfile" ] || continue
+    bname=$(basename "$cfile")
+    iface="${bname%.conf}"
+    
+    if [ "$cfile" != "/etc/wireguard/$bname" ]; then
+      cp -f "$cfile" "/etc/wireguard/$bname" 2>/dev/null || true
+      chmod 600 "/etc/wireguard/$bname" 2>/dev/null || true
+    fi
+    
+    systemctl is-enabled "wg-quick@$iface" &>/dev/null || systemctl enable "wg-quick@$iface" 2>/dev/null || true
+
     if ! ip link show "$iface" 2>/dev/null | grep -q "UP"; then
       log "⚠️  WireGuard $iface DOWN - mencoba restore..."
-      ip link set "$iface" up 2>/dev/null || true
+      wg-quick up "$iface" 2>/dev/null || systemctl restart "wg-quick@$iface" 2>/dev/null || true
       sleep 3
-      ip link show "$iface" 2>/dev/null | grep -q "UP" && log "✅ WireGuard $iface UP kembali" || log "❌ WireGuard $iface gagal UP"
+      if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+        log "✅ WireGuard $iface UP kembali"
+      else
+        log "❌ WireGuard $iface gagal UP"
+      fi
     else
       LAST_HS=$(wg show "$iface" latest-handshakes 2>/dev/null | awk '{print $2}' | head -1)
       if [ -n "$LAST_HS" ] && [ "$LAST_HS" != "0" ]; then

@@ -239,28 +239,19 @@ function handleWatchdogStatus(req, res, parsedUrl) {
         return;
     }
 
-    const keyPath = preset.vpsKeyPath || path.join(__dirname, '..', 'nginxonly.pem');
+    const fs = require('fs');
+    let effectiveKey = (preset.vpsKeyPath && fs.existsSync(preset.vpsKeyPath))
+        ? preset.vpsKeyPath
+        : path.join(__dirname, '..', 'nginxonly.pem');
+
     const ip = preset.vpsIp;
     const user = preset.vpsUser || 'asepsuryadi';
     const sudoPass = (preset.vpsSudoPass || '1');
 
-    // Fix key permissions on Windows
-    const safeKey = path.join(require('os').tmpdir(), 'watchdog-check-key.pem');
-    try {
-        const fs2 = require('fs');
-        fs2.writeFileSync(safeKey, fs2.readFileSync(keyPath));
-        if (process.platform === 'win32') {
-            require('child_process').execSync(
-                `icacls "${safeKey}" /inheritance:r /grant:r "%USERNAME%:R"`,
-                { stdio: 'ignore' }
-            );
-        }
-    } catch(e) { /* ignore */ }
-
     // Script bash — output key=value per baris, log di-wrap dengan delimiter
     const checkScript = [
-        'WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oP \'^\\d+: \\K[^:]+\' | tr \'\\n\' \',\' | sed \'s/,$//\')',
-        'WG_STATUS=$([ -n "$WG_IFACES" ] && echo "UP" || echo "DOWN")',
+        'WG_IFACES=$( (ip link show type wireguard 2>/dev/null | grep -oP \'^\\d+: \\K[^\:]+\'; ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null | xargs -n1 basename 2>/dev/null | sed \'s/\\.conf$//\') | sort -u | tr \'\\n\' \',\' | sed \'s/,$//\' )',
+        'WG_STATUS=$([ -n "$(ip link show type wireguard 2>/dev/null)" ] && echo "UP" || echo "DOWN")',
         'WG_HS=$(wg show all latest-handshakes 2>/dev/null | awk \'BEGIN{r=""}{if($2+0>0){ago=systime()-$2+0;if(ago<60){r=ago"s lalu"}else if(ago<3600){r=int(ago/60)"m lalu"}else{r="STALE"}}}END{print r}\')',
         'CADDY=$(systemctl is-active caddy 2>/dev/null || echo "unknown")',
         'PM2=$(pgrep -c -f "PM2" 2>/dev/null | awk \'{if($1+0>0) print "running"; else print "dead"}\')',
@@ -279,7 +270,7 @@ function handleWatchdogStatus(req, res, parsedUrl) {
     // Gunakan spawn + stdin pipe — satu koneksi SSH, andal di Windows
     const { spawn } = require('child_process');
     const sshArgs = [
-        '-i', safeKey,
+        '-i', effectiveKey,
         '-o', 'StrictHostKeyChecking=no',
         '-o', 'ConnectTimeout=10',
         '-o', 'BatchMode=yes',
