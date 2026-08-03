@@ -242,7 +242,7 @@ function handleWatchdogStatus(req, res, parsedUrl) {
     const keyPath = preset.vpsKeyPath || path.join(__dirname, '..', 'nginxonly.pem');
     const ip = preset.vpsIp;
     const user = preset.vpsUser || 'asepsuryadi';
-    const sudoPass = (preset.vpsSudoPass || '1').replace(/'/g, "'\\''"); // escape single quotes
+    const sudoPass = (preset.vpsSudoPass || '1');
 
     // Fix key permissions on Windows
     const safeKey = path.join(require('os').tmpdir(), 'watchdog-check-key.pem');
@@ -257,88 +257,120 @@ function handleWatchdogStatus(req, res, parsedUrl) {
         }
     } catch(e) { /* ignore */ }
 
-    // Gunakan output key=value per baris — AMAN dari karakter JSON berbahaya
-    // Script dikirim via stdin (heredoc) bukan inline argument
-    const checkScript = `
-WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oP '^\\d+: \\K[^:]+' | tr '\\n' ',' | sed 's/,$//')
-WG_STATUS=$([ -n "$WG_IFACES" ] && echo "UP" || echo "DOWN")
-WG_HS=$(wg show all latest-handshakes 2>/dev/null | awk 'BEGIN{r=""}{if($2+0>0){ago=systime()-$2+0; if(ago<60){r=ago"s lalu"}else if(ago<3600){r=int(ago/60)"m lalu"}else{r="STALE"}}}END{print r}')
-CADDY=$(systemctl is-active caddy 2>/dev/null || echo "unknown")
-PM2=$(pgrep -c -f "PM2" 2>/dev/null | grep -q "^[1-9]" && echo "running" || echo "dead")
-TIMER=$(echo '${sudoPass}' | sudo -S systemctl is-active absenta-tunnel-watchdog.timer 2>/dev/null || echo "not-installed")
-# Log: ambil 4 baris terakhir, encode spesial chars
-LAST_LOG_RAW=$(tail -4 /var/log/absenta-tunnel-watchdog.log 2>/dev/null || echo "")
-echo "WG_IFACES=$WG_IFACES"
-echo "WG_STATUS=$WG_STATUS"
-echo "WG_HS=$WG_HS"
-echo "CADDY=$CADDY"
-echo "PM2=$PM2"
-echo "TIMER=$TIMER"
-echo "LOG_BEGIN"
-echo "$LAST_LOG_RAW"
-echo "LOG_END"
-`;
+    // Script bash — output key=value per baris, log di-wrap dengan delimiter
+    const checkScript = [
+        'WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oP \'^\\d+: \\K[^:]+\' | tr \'\\n\' \',\' | sed \'s/,$//\')',
+        'WG_STATUS=$([ -n "$WG_IFACES" ] && echo "UP" || echo "DOWN")',
+        'WG_HS=$(wg show all latest-handshakes 2>/dev/null | awk \'BEGIN{r=""}{if($2+0>0){ago=systime()-$2+0;if(ago<60){r=ago"s lalu"}else if(ago<3600){r=int(ago/60)"m lalu"}else{r="STALE"}}}END{print r}\')',
+        'CADDY=$(systemctl is-active caddy 2>/dev/null || echo "unknown")',
+        'PM2=$(pgrep -c -f "PM2" 2>/dev/null | awk \'{if($1+0>0) print "running"; else print "dead"}\')',
+        `TIMER=$(echo '${sudoPass}' | sudo -S systemctl is-active absenta-tunnel-watchdog.timer 2>/dev/null || echo "not-installed")`,
+        'echo "WG_IFACES=$WG_IFACES"',
+        'echo "WG_STATUS=$WG_STATUS"',
+        'echo "WG_HS=$WG_HS"',
+        'echo "CADDY=$CADDY"',
+        'echo "PM2=$PM2"',
+        'echo "TIMER=$TIMER"',
+        'echo "LOG_BEGIN"',
+        'tail -4 /var/log/absenta-tunnel-watchdog.log 2>/dev/null || true',
+        'echo "LOG_END"',
+    ].join('\n') + '\n';
 
-    // Kirim script via SCP lalu jalankan — menghindari escaping masalah di inline SSH
-    const fs3 = require('fs');
-    const tmpScript = path.join(require('os').tmpdir(), 'absenta-wdcheck.sh');
-    fs3.writeFileSync(tmpScript, checkScript.replace(/\r\n/g, '\n'));
+    // Gunakan spawn + stdin pipe — satu koneksi SSH, andal di Windows
+    const { spawn } = require('child_process');
+    const sshArgs = [
+        '-i', safeKey,
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'ConnectTimeout=10',
+        '-o', 'BatchMode=yes',
+        `${user}@${ip}`,
+        'bash'
+    ];
 
-    const scpCmd = `scp -i "${safeKey}" -o StrictHostKeyChecking=no -o ConnectTimeout=8 "${tmpScript}" ${user}@${ip}:/tmp/absenta-wdcheck.sh`;
-    const sshRunCmd = `ssh -i "${safeKey}" -o StrictHostKeyChecking=no -o ConnectTimeout=8 ${user}@${ip} "bash /tmp/absenta-wdcheck.sh"`;
+    let stdout = '';
+    let stderr = '';
+    let responded = false;
 
-    exec(scpCmd, { timeout: 12000 }, (scpErr) => {
-        if (scpErr) {
+    const proc = spawn('ssh', sshArgs, { windowsHide: true });
+
+    // Timeout 18 detik
+    const timer = setTimeout(() => {
+        if (!responded) {
+            responded = true;
+            proc.kill();
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, message: `SSH/SCP gagal ke ${ip}`, offline: true }));
+            res.end(JSON.stringify({ success: false, message: `Timeout koneksi ke ${ip}`, offline: true }));
+        }
+    }, 18000);
+
+    proc.stdout.on('data', d => { stdout += d.toString(); });
+    proc.stderr.on('data', d => { stderr += d.toString(); });
+
+    proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (responded) return;
+        responded = true;
+
+        if (code !== 0 && !stdout.trim()) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                message: `SSH gagal (exit ${code}): ${stderr.trim().split('\n').pop() || 'tidak ada output'}`,
+                offline: true
+            }));
             return;
         }
 
-        exec(sshRunCmd, { timeout: 15000 }, (err, stdout, stderr) => {
-            if (err && !stdout) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, message: `SSH gagal: ${err.message}`, offline: true }));
-                return;
+        // Parse output key=value per baris
+        const lines = stdout.split('\n');
+        const kv = {};
+        const logLines = [];
+        let inLog = false;
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed === 'LOG_BEGIN') { inLog = true; continue; }
+            if (trimmed === 'LOG_END')   { inLog = false; continue; }
+            if (inLog) {
+                if (trimmed) logLines.push(trimmed);
+                continue;
             }
-
-            // Parse output key=value per baris
-            const lines = stdout.split('\n');
-            const kv = {};
-            let logLines = [];
-            let inLog = false;
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (trimmed === 'LOG_BEGIN') { inLog = true; continue; }
-                if (trimmed === 'LOG_END') { inLog = false; continue; }
-                if (inLog) {
-                    if (trimmed) logLines.push(trimmed);
-                    continue;
-                }
-                const eqIdx = trimmed.indexOf('=');
-                if (eqIdx > 0) {
-                    const key = trimmed.slice(0, eqIdx);
-                    const val = trimmed.slice(eqIdx + 1);
-                    kv[key] = val;
-                }
+            const eqIdx = trimmed.indexOf('=');
+            if (eqIdx > 0) {
+                const key = trimmed.slice(0, eqIdx);
+                const val = trimmed.slice(eqIdx + 1);
+                kv[key] = val;
             }
+        }
 
-            const data = {
-                wg_ifaces:    kv['WG_IFACES']  || '',
-                wg_status:    kv['WG_STATUS']   || 'DOWN',
-                wg_handshake: kv['WG_HS']       || '',
-                caddy:        kv['CADDY']        || 'unknown',
-                pm2:          kv['PM2']          || 'dead',
-                timer:        kv['TIMER']        || 'not-installed',
-                last_log:     logLines.slice(-4).join('|'),
-            };
+        const data = {
+            wg_ifaces:    kv['WG_IFACES']  || '',
+            wg_status:    kv['WG_STATUS']   || 'DOWN',
+            wg_handshake: kv['WG_HS']       || '',
+            caddy:        kv['CADDY']        || 'unknown',
+            pm2:          kv['PM2']          || 'dead',
+            timer:        kv['TIMER']        || 'not-installed',
+            last_log:     logLines.slice(-4).join('|'),
+        };
 
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, data }));
-        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, data }));
     });
+
+    proc.on('error', (err) => {
+        clearTimeout(timer);
+        if (responded) return;
+        responded = true;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: `SSH error: ${err.message}`, offline: true }));
+    });
+
+    // Kirim script via stdin
+    proc.stdin.write(checkScript);
+    proc.stdin.end();
 }
 
 module.exports = {
     handleRequest
 };
+
