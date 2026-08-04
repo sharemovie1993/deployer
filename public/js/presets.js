@@ -446,25 +446,27 @@ function auditTunnelPreset(presetId) {
                 const sysEnabled = t.systemd_enabled;
                 const lic = t.license_data;
                 const isExpired = lic ? lic.expired : false;
+                const hsSec = t.handshake_sec || 0;
 
-                let badge = isExpired ? '<span style="background: rgba(239,68,68,0.2); color: #f87171; padding: 2px 6px; border-radius: 4px; font-weight: bold;">⛔ KEDALUWARSA</span>' :
-                            isUp ? '<span style="background: rgba(16,185,129,0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-weight: bold;">● AKTIF (UP)</span>' :
-                            '<span style="background: rgba(100,116,139,0.2); color: #94a3b8; padding: 2px 6px; border-radius: 4px;">○ NONAKTIF</span>';
+                let badge = isExpired ? '<span style="background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4); padding: 2px 8px; border-radius: 4px; font-weight: bold;">⛔ KEDALUWARSA</span>' :
+                            (isUp && hsSec > 0) ? '<span style="background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4); padding: 2px 8px; border-radius: 4px; font-weight: bold;">● TERHUBUNG & AKTIF</span>' :
+                            isUp ? '<span style="background: rgba(251,191,36,0.2); color: #fbbf24; border: 1px solid rgba(251,191,36,0.4); padding: 2px 8px; border-radius: 4px; font-weight: bold;">🟡 INTERFACE UP (BELUM HANDSHAKE)</span>' :
+                            '<span style="background: rgba(100,116,139,0.2); color: #94a3b8; border: 1px solid rgba(100,116,139,0.4); padding: 2px 8px; border-radius: 4px;">⚪ NONAKTIF (DOWN)</span>';
 
                 html += '<div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; margin-bottom: 8px;">';
                 html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
-                html += `<strong>et-${t.slug}</strong> ${badge}`;
+                html += `<div><strong style="color: #fff; font-size: 13px;">et-${t.slug}</strong> ${t.vpn_ip ? `<span style="color: var(--text-muted); font-size: 11px; margin-left: 6px;">(${t.vpn_ip})</span>` : ''}</div> ${badge}`;
                 html += `</div>`;
-                html += `<div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Systemd Service: ${sysEnabled ? '✅ Enabled' : '⚪ Disabled'}</div>`;
+                html += `<div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Systemd Service: ${sysEnabled ? '<span style="color: #34d399;">✅ Enabled</span>' : '<span style="color: #94a3b8;">⚪ Disabled</span>'}</div>`;
 
                 if (lic) {
-                    html += `<div style="color: #6ee7b7; font-size: 11px; margin-top: 2px;">Sekolah: ${lic.school_name || '-'}</div>`;
+                    html += `<div style="color: #6ee7b7; font-size: 11px; margin-top: 2px;">Institusi/Sekolah: <strong>${lic.school_name || '-'}</strong></div>`;
                     if (lic.expires_at) {
                         const exp = new Date(lic.expires_at).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
-                        html += `<div style="color: ${isExpired ? '#f87171' : '#a78bfa'}; font-size: 11px;">Masa Berlaku: ${exp} ${isExpired ? '(Kedaluwarsa)' : ''}</div>`;
+                        html += `<div style="color: ${isExpired ? '#f87171' : '#a78bfa'}; font-size: 11px;">Masa Berlaku Lisensi: ${exp} ${isExpired ? '(Telah Kedaluwarsa)' : ''}</div>`;
                     }
                 } else if (t.license_key) {
-                    html += `<div style="color: var(--text-muted); font-size: 11px; margin-top: 2px;">Lisensi: ${t.license_key.slice(0,8)}•••</div>`;
+                    html += `<div style="color: var(--text-muted); font-size: 11px; margin-top: 2px;">Kunci Lisensi: ${t.license_key.slice(0,8)}••••••••</div>`;
                 }
                 html += '</div>';
             });

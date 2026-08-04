@@ -629,23 +629,44 @@ function handleAuditTunnels(req, res, parsedUrl) {
     const keyPath = isLocal ? '' : (keyChoice === 'custom' ? p.vpsKeyPath : path.join(__dirname, '..', keyChoice));
 
     const scriptText = [
-        'echo "=== WG_INTERFACES ==="',
-        'ip link show type wireguard 2>/dev/null || true',
-        'echo "=== SYSTEMD_SERVICES ==="',
-        'systemctl list-unit-files 2>/dev/null | grep -E "wg-quick@et-" || true',
-        'echo "=== CONFIG_FILES ==="',
-        'ls -la /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true',
-        'echo "=== CONF_HEADERS ==="',
-        'grep -H -E "(Address|PrivateKey|Endpoint|LicenseKey|# LicenseKey)" /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true',
-        'echo "=== WG_SHOW ==="',
-        'sudo wg show 2>/dev/null || true'
+        'for conf in /etc/wireguard/et-*.conf /var/www/project-absenta/tunnels/et-*.conf; do',
+        '  [ -f "$conf" ] || continue',
+        '  bname=$(basename "$conf")',
+        '  iface="${bname%.conf}"',
+        '  ',
+        '  is_up="DOWN"',
+        '  if ip link show "$iface" 2>/dev/null | grep -q "UP"; then',
+        '    is_up="UP"',
+        '  fi',
+        '  ',
+        '  is_enabled="disabled"',
+        '  if systemctl is-enabled "wg-quick@$iface" 2>/dev/null | grep -q "enabled"; then',
+        '    is_enabled="enabled"',
+        '  fi',
+        '  ',
+        '  lic_key=$(grep -iE "LicenseKey" "$conf" 2>/dev/null | head -1 | awk -F"=" "{print \\$2}" | xargs || true)',
+        '  vpn_ip=$(grep -iE "Address" "$conf" 2>/dev/null | head -1 | awk -F"=" "{print \\$2}" | xargs || true)',
+        '  hs=$(sudo wg show "$iface" latest-handshakes 2>/dev/null | awk "{print \\$2}" | head -1 || echo "0")',
+        '  ',
+        '  echo "AUDIT_ITEM|${iface}|${is_up}|${is_enabled}|${lic_key}|${vpn_ip}|${hs}"',
+        'done'
     ].join('\n') + '\n';
 
     let proc;
     if (isLocal && process.platform === 'win32') {
         const psCmd = `
-            Get-Service | Where-Object Name -like 'WireGuardTunnel$et-*' | Select-Object Name, Status | ConvertTo-Json
-            Get-ChildItem -Path "d:\\BarayaProject\\Project Absenta\\tunnels\\*.conf","C:\\Program Files\\WireGuard\\Data\\Configurations\\*.conf" -ErrorAction SilentlyContinue | Select-Object FullName
+            Get-ChildItem -Path "d:\\BarayaProject\\Project Absenta\\tunnels\\*.conf","C:\\Program Files\\WireGuard\\Data\\Configurations\\*.conf" -ErrorAction SilentlyContinue | ForEach-Object {
+                $ifName = $_.BaseName
+                $svc = Get-Service -Name "WireGuardTunnel$ifName" -ErrorAction SilentlyContinue
+                $status = if ($svc -and $svc.Status -eq 'Running') { 'UP' } else { 'DOWN' }
+                $enabled = if ($svc) { 'enabled' } else { 'disabled' }
+                $confStr = Get-Content $_.FullName -ErrorAction SilentlyContinue | Out-String
+                $keyMatch = [regex]::Match($confStr, 'LicenseKey\\s*=\\s*(\\S+)')
+                $licKey = if ($keyMatch.Success) { $keyMatch.Groups[1].Value } else { '' }
+                $ipMatch = [regex]::Match($confStr, 'Address\\s*=\\s*(\\S+)')
+                $vpnIp = if ($ipMatch.Success) { $ipMatch.Groups[1].Value } else { '' }
+                "AUDIT_ITEM|$ifName|$status|$enabled|$licKey|$vpnIp|0"
+            }
         `;
         proc = spawn('powershell.exe', ['-NoProfile', '-Command', psCmd], { windowsHide: true });
     } else {
@@ -681,35 +702,43 @@ function handleAuditTunnels(req, res, parsedUrl) {
         responded = true;
 
         const items = [];
-        const matches = stdout.match(/et-[a-zA-Z0-9_-]+/g) || [];
-        const uniqueSlugs = [...new Set(matches.map(m => m.replace(/^et-/, '')))];
+        const lines = stdout.split('\n');
+        const processedIfaces = new Set();
 
-        for (const slug of uniqueSlugs) {
-            const ifName = `et-${slug}`;
-            const isUp = stdout.includes(ifName) && (stdout.includes('UP') || stdout.includes('RUNNING') || stdout.includes('latest handshake'));
-            const isEnabled = stdout.includes(`wg-quick@${ifName}.service`) && stdout.includes('enabled');
-            
-            let licenseKey = '';
-            const keyMatch = stdout.match(new RegExp(`${slug}.*LicenseKey\\s*=\\s*(\\S+)`, 'i')) || stdout.match(/ET-[A-Z0-9]{8,}/);
-            if (keyMatch) licenseKey = keyMatch[1] || keyMatch[0];
+        for (const line of lines) {
+            if (line.startsWith('AUDIT_ITEM|')) {
+                const parts = line.trim().split('|');
+                const ifName = parts[1];
+                if (!ifName || processedIfaces.has(ifName)) continue;
+                processedIfaces.add(ifName);
 
-            let licenseData = null;
-            if (licenseKey) {
-                try {
-                    const fetchRes = await fetch(`https://api.absenta.id/api/license/easy-tunnel/validate/${encodeURIComponent(licenseKey)}`, { signal: AbortSignal.timeout(5000) });
-                    const json = await fetchRes.json();
-                    if (json.success) licenseData = json.data;
-                } catch (e) {}
+                const slug = ifName.replace(/^et-/, '');
+                const isUp = parts[2] === 'UP';
+                const isEnabled = parts[3] === 'enabled';
+                const licenseKey = parts[4] || '';
+                const vpnIp = parts[5] || '';
+                const hsSec = parseInt(parts[6] || '0', 10);
+
+                let licenseData = null;
+                if (licenseKey) {
+                    try {
+                        const fetchRes = await fetch(`https://api.absenta.id/api/license/easy-tunnel/validate/${encodeURIComponent(licenseKey)}`, { signal: AbortSignal.timeout(5000) });
+                        const json = await fetchRes.json();
+                        if (json.success) licenseData = json.data;
+                    } catch (e) {}
+                }
+
+                items.push({
+                    slug,
+                    interface_name: ifName,
+                    is_up: isUp,
+                    systemd_enabled: isEnabled,
+                    license_key: licenseKey,
+                    vpn_ip: vpnIp,
+                    handshake_sec: hsSec,
+                    license_data: licenseData
+                });
             }
-
-            items.push({
-                slug,
-                interface_name: ifName,
-                is_up: isUp,
-                systemd_enabled: isEnabled,
-                license_key: licenseKey,
-                license_data: licenseData
-            });
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
