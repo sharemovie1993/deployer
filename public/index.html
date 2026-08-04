@@ -24,6 +24,7 @@
             <button class="mode-tab-btn active" id="mode-btn-wizard" onclick="switchAppMode('wizard')">🧙 Full Setup Wizard</button>
             <button class="mode-tab-btn" id="mode-btn-preset" onclick="switchAppMode('preset')">⚡ Quick Update Multi-Preset</button>
             <button class="mode-tab-btn" id="mode-btn-cluster" onclick="switchAppMode('cluster')">🌐 Multi-VM Cluster Deploy</button>
+            <button class="mode-tab-btn" id="mode-btn-logs" onclick="switchAppMode('logs')">📜 Monitor Log Server (PM2)</button>
         </div>
     </div>
 
@@ -304,6 +305,75 @@
         </div>
     </div>
 
+    <!-- VIEW 4: MONITOR LOG SERVER (PM2) -->
+    <div class="container" id="logs-view-container" style="display: none;">
+        <div class="wizard-header">
+            <div class="logo-section">
+                <h1>📜 MONITOR LOG SERVER & PM2</h1>
+                <p>Pantau Aliran Log Real-Time (SSE Stream) Server Lokal Maupun Remote VPS</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-secondary" type="button" onclick="flushPm2LogsFromUI()">🧹 Flush Log PM2</button>
+                <button class="btn btn-secondary" type="button" onclick="clearLogTerminalUI()">🗑️ Clear Terminal</button>
+            </div>
+        </div>
+
+        <div class="wizard-body" style="gap: 20px; display: flex; flex-direction: column;">
+            <!-- Controls Form -->
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;">
+                <div style="flex: 1; min-width: 220px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Pilih Target Server</label>
+                    <select id="log-target-preset" style="width: 100%; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px;">
+                        <option value="local">💻 Server Windows Lokal (Localhost)</option>
+                        <!-- Populated dynamically via JS -->
+                    </select>
+                </div>
+
+                <div style="flex: 1; min-width: 200px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Target Aplikasi</label>
+                    <select id="log-target-app" style="width: 100%; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px;" onchange="toggleCustomLogAppInput()">
+                        <option value="all">🌐 SEMUA Aplikasi (Gabungan PM2)</option>
+                        <option value="absenta-backend">⚙️ Backend Absenta (absenta-backend)</option>
+                        <option value="absenta-frontend">🎨 Frontend Absenta (absenta-frontend)</option>
+                        <option value="caddy">🛡️ Reverse Proxy Caddy</option>
+                        <option value="custom">✏️ Nama/ID Aplikasi Kustom...</option>
+                    </select>
+                </div>
+
+                <div id="log-custom-app-group" style="display: none; flex: 1; min-width: 180px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Nama App Kustom</label>
+                    <input type="text" id="log-custom-app-name" placeholder="absenta-backend:3003" style="width: 100%; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px;">
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" id="btn-start-log-stream" type="button" onclick="startPm2LogStreamUI()" style="padding: 10px 20px;">▶ Start Stream Log</button>
+                    <button class="btn btn-secondary" id="btn-stop-log-stream" type="button" onclick="stopPm2LogStreamUI()" style="padding: 10px 20px; display: none; border-color: rgba(239,68,68,0.4); color: #f87171;">⏹ Stop Stream</button>
+                </div>
+            </div>
+
+            <!-- Log Terminal Output -->
+            <div style="border-radius: 16px; overflow: hidden; border: 1px solid var(--glass-border);">
+                <div class="terminal-header">
+                    <div class="terminal-dots">
+                        <span class="dot dot-red"></span>
+                        <span class="dot dot-yellow"></span>
+                        <span class="dot dot-green"></span>
+                    </div>
+                    <div id="log-terminal-title" style="font-family: 'Fira Code', monospace; font-size: 12px; color: #a78bfa;">bash - pm2 log stream session</div>
+                    <div style="display: flex; gap: 12px; align-items: center; font-size: 11px; color: var(--text-muted);">
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="log-autoscroll-check" checked> Auto-Scroll
+                        </label>
+                        <span id="log-lines-counter" style="font-family: 'Fira Code', monospace;">0 baris</span>
+                    </div>
+                </div>
+                <div class="console-container" id="log-terminal-output" style="height: 480px; border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; font-size: 12.5px; line-height: 1.6;">
+                    <div style="color: var(--text-muted); padding: 10px;">Pilih target server di atas lalu klik <strong>▶ Start Stream Log</strong> untuk memantau log secara real-time.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div> <!-- end .app-wrapper -->
 
 <!-- Modal Dialog Add/Edit Preset -->
@@ -449,6 +519,7 @@
 <script src="/js/wizard.js"></script>
 <script src="/js/presets.js"></script>
 <script src="/js/cluster.js"></script>
+<script src="/js/logs.js"></script>
 
 </body>
 </html>

@@ -4,7 +4,7 @@ const http = require('http');
 const https = require('https');
 const { spawn, exec } = require('child_process');
 const { getPresets, savePresets } = require('./preset-store');
-const { handleStreamQuickUpdate, handleStreamInstall, handleStreamClusterInstall, handleStreamSetupSsh } = require('./sse');
+const { handleStreamQuickUpdate, handleStreamInstall, handleStreamClusterInstall, handleStreamSetupSsh, handleStreamPm2Logs } = require('./sse');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
@@ -109,6 +109,16 @@ function handleRequest(req, res) {
 
     if (pathname === '/api/watchdog-status' && req.method === 'GET') {
         handleWatchdogStatus(req, res, parsedUrl);
+        return;
+    }
+
+    if (pathname === '/api/stream-pm2-logs' && req.method === 'GET') {
+        handleStreamPm2Logs(req, res, parsedUrl);
+        return;
+    }
+
+    if (pathname === '/api/flush-pm2-logs' && (req.method === 'GET' || req.method === 'POST')) {
+        handleFlushPm2Logs(req, res, parsedUrl);
         return;
     }
 
@@ -546,6 +556,54 @@ function handleFixTunnels(req, res, parsedUrl) {
 
     proc.stdin.write(scriptText);
     proc.stdin.end();
+}
+
+function handleFlushPm2Logs(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+
+    if (presetId && presetId !== 'local') {
+        const presets = getPresets();
+        const preset = presets.find(p => p.id === presetId);
+        if (!preset) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+            return;
+        }
+
+        const keyPath = preset.vpsKeyPath || path.join(__dirname, '..', preset.sshKeyChoice || 'nginxonly.pem');
+        const user = preset.vpsUser || 'asepsuryadi';
+        const ip = preset.vpsIp;
+
+        const sshArgs = [
+            '-i', keyPath,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'ConnectTimeout=10',
+            `${user}@${ip}`,
+            'pm2 flush'
+        ];
+
+        const proc = spawn('ssh', sshArgs, { windowsHide: true });
+        let stdout = '';
+        proc.stdout.on('data', d => stdout += d.toString());
+        proc.on('close', (code) => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: code === 0,
+                message: code === 0 ? `Log PM2 di VPS ${ip} berhasil dibersihkan (pm2 flush).` : 'Gagal pm2 flush di VPS.'
+            }));
+        });
+    } else {
+        const isWin = process.platform === 'win32';
+        const cmd = isWin ? 'pm2.cmd' : 'pm2';
+        const proc = spawn(cmd, ['flush'], { windowsHide: true, shell: isWin });
+        proc.on('close', (code) => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: code === 0,
+                message: code === 0 ? 'Log PM2 lokal berhasil dibersihkan (pm2 flush).' : 'Gagal pm2 flush lokal.'
+            }));
+        });
+    }
 }
 
 module.exports = {

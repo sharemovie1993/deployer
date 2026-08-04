@@ -7,6 +7,9 @@ function loadPresets() {
         if (res.success && res.data) {
             globalPresets = res.data;
             renderPresetsGrid(res.data);
+            if (typeof populateLogTargetPresets === 'function') {
+                populateLogTargetPresets();
+            }
         }
     })
     .catch(err => console.error('Gagal memuat preset:', err));
@@ -56,8 +59,9 @@ function renderPresetsGrid(presets) {
             '<div style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 16px; display: flex; flex-direction: column; gap: 8px;">' +
                 '<button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 14px; font-weight: 700;" onclick="runQuickUpdatePreset(\'' + safeId + '\')">⚡ Quick Update Sekarang</button>' +
                 '<div style="display: flex; gap: 8px;">' +
-                    '<button id="watchdog-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 9px; font-size: 12.5px;" onclick="checkWatchdogStatus(\'' + safeId + '\')">🛡️ Cek Status Watchdog</button>' +
-                    '<button id="tunnel-fix-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 9px; font-size: 12.5px; border-color: rgba(251,191,36,0.4); color: #fbbf24; background: rgba(251,191,36,0.08);" onclick="fixTunnelPreset(\'' + safeId + '\')">🔧 Perbaiki Tunnel</button>' +
+                    '<button id="watchdog-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 9px; font-size: 12px;" onclick="checkWatchdogStatus(\'' + safeId + '\')">🛡️ Status Watchdog</button>' +
+                    '<button id="tunnel-fix-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 9px; font-size: 12px; border-color: rgba(251,191,36,0.4); color: #fbbf24; background: rgba(251,191,36,0.08);" onclick="fixTunnelPreset(\'' + safeId + '\')">🔧 Perbaiki Tunnel</button>' +
+                    '<button class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 9px; font-size: 12px; border-color: rgba(167,139,250,0.4); color: #a78bfa; background: rgba(167,139,250,0.08);" onclick="openLogMonitorForPreset(\'' + safeId + '\')">📜 Stream Log PM2</button>' +
                 '</div>' +
             '</div>' +
         '</div>';

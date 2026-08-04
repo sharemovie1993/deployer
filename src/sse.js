@@ -303,9 +303,100 @@ function handleStreamSetupSsh(req, res, parsedUrl) {
     });
 }
 
+function handleStreamPm2Logs(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const appName = parsedUrl.searchParams.get('app') || 'all';
+    const linesCount = parsedUrl.searchParams.get('lines') || '100';
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    let proc;
+
+    if (presetId && presetId !== 'local') {
+        const presets = getPresets();
+        const preset = presets.find(p => p.id === presetId);
+        if (!preset) {
+            res.write(`data: [ERROR] Preset server dengan ID ${presetId} tidak ditemukan.\n\n`);
+            res.end();
+            return;
+        }
+
+        const keyPath = preset.vpsKeyPath || path.join(ROOT_DIR, preset.sshKeyChoice || 'nginxonly.pem');
+        const user = preset.vpsUser || 'asepsuryadi';
+        const ip = preset.vpsIp;
+
+        const logTarget = (appName && appName !== 'all') ? appName : '';
+        const remoteCmd = `pm2 logs ${logTarget} --lines ${linesCount} --raw`.trim();
+
+        res.write(`data: 📜 Memulai Stream Log Remote VPS via SSH: ${user}@${ip}\n`);
+        res.write(`data: 📌 Target Aplikasi: ${appName === 'all' ? 'SEMUA Aplikasi (Gabungan)' : appName}\n\n`);
+
+        const sshArgs = [
+            '-i', keyPath,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'ConnectTimeout=10',
+            `${user}@${ip}`,
+            remoteCmd
+        ];
+
+        proc = spawn('ssh', sshArgs, { windowsHide: true });
+    } else {
+        res.write(`data: 📜 Membaca Log PM2 Lokal (Windows)...\n`);
+        res.write(`data: 📌 Target Aplikasi: ${appName === 'all' ? 'SEMUA Aplikasi (Gabungan)' : appName}\n\n`);
+
+        const pm2Args = ['logs'];
+        if (appName && appName !== 'all') {
+            pm2Args.push(appName);
+        }
+        pm2Args.push('--lines', linesCount, '--raw');
+
+        const isWin = process.platform === 'win32';
+        const cmd = isWin ? 'pm2.cmd' : 'pm2';
+        proc = spawn(cmd, pm2Args, { windowsHide: true, shell: isWin });
+    }
+
+    const heartbeat = setInterval(() => {
+        res.write(': heartbeat\n\n');
+    }, 10000);
+
+    proc.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    proc.stderr.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    proc.on('close', (code) => {
+        clearInterval(heartbeat);
+        res.write(`data: [LOG_STREAM_END] Sesi stream log dihentikan.\n\n`);
+        res.end();
+    });
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        try { proc.kill(); } catch (e) {}
+    });
+}
+
 module.exports = {
     handleStreamQuickUpdate,
     handleStreamInstall,
     handleStreamClusterInstall,
-    handleStreamSetupSsh
+    handleStreamSetupSsh,
+    handleStreamPm2Logs
 };
