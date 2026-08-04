@@ -1,24 +1,51 @@
 let logEventSource = null;
 let logLineCount = 0;
 
-function populateLogTargetPresets() {
+function populateLogTargetPresets(callback) {
     const select = document.getElementById('log-target-preset');
     if (!select) return;
 
-    // Simpan pilihan user jika ada
-    const currentValue = select.value;
+    const renderSelectOptions = (presets) => {
+        const currentValue = select.value;
+        let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
+        if (Array.isArray(presets) && presets.length > 0) {
+            presets.forEach(p => {
+                const pName = p.name || ('Server ' + p.vpsIp);
+                const projLabel = p.project === 'licensing' ? '[Server Lisensi]' : '[Project Absenta]';
+                html += `<option value="${p.id}">🌐 ${pName} (${p.vpsIp}) ${projLabel}</option>`;
+            });
+        }
+        select.innerHTML = html;
+        if (currentValue) select.value = currentValue;
+        if (typeof callback === 'function') callback();
+    };
 
-    let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
-    if (typeof globalPresets !== 'undefined' && Array.isArray(globalPresets)) {
-        globalPresets.forEach(p => {
-            const pName = p.name || ('Server ' + p.vpsIp);
-            html += `<option value="${p.id}">🌐 ${pName} (${p.vpsIp})</option>`;
+    if (typeof globalPresets !== 'undefined' && Array.isArray(globalPresets) && globalPresets.length > 0) {
+        renderSelectOptions(globalPresets);
+    } else {
+        fetch('/api/presets')
+        .then(res => res.json())
+        .then(res => {
+            if (res.success && res.data) {
+                if (typeof globalPresets !== 'undefined') {
+                    globalPresets = res.data;
+                }
+                renderSelectOptions(res.data);
+            } else {
+                renderSelectOptions([]);
+            }
+        })
+        .catch(err => {
+            console.error('Gagal mengambil data preset untuk log monitor:', err);
+            renderSelectOptions([]);
         });
     }
-
-    select.innerHTML = html;
-    if (currentValue) select.value = currentValue;
 }
+
+// Auto populate preset dropdown saat halaman selesai dimuat
+document.addEventListener('DOMContentLoaded', () => {
+    populateLogTargetPresets();
+});
 
 function toggleCustomLogAppInput() {
     const appSelect = document.getElementById('log-target-app');
@@ -149,9 +176,11 @@ function openLogMonitorForPreset(presetId, appName) {
     if (typeof switchAppMode === 'function') {
         switchAppMode('logs');
     }
-    const selectPreset = document.getElementById('log-target-preset');
-    if (selectPreset) {
-        selectPreset.value = presetId;
-    }
-    startPm2LogStreamUI(presetId, appName || 'all');
+    populateLogTargetPresets(() => {
+        const selectPreset = document.getElementById('log-target-preset');
+        if (selectPreset) {
+            selectPreset.value = presetId;
+        }
+        startPm2LogStreamUI(presetId, appName || 'all');
+    });
 }
