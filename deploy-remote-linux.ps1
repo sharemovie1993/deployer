@@ -714,6 +714,45 @@ if [ "$IS_ABSENTA" = "True" ]; then
         echo "DEPLOY_SCENARIO=$DEPLOY_SCENARIO" >> absenta_backend/.env
     fi
 
+    # S3 MinIO Storage Configuration for On-Premise / Production
+    if grep -q "^STORAGE_DRIVER=" absenta_backend/.env; then
+        sed -i "s|^STORAGE_DRIVER=.*|STORAGE_DRIVER=s3|g" absenta_backend/.env
+    else
+        echo "STORAGE_DRIVER=s3" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_BUCKET=" absenta_backend/.env; then
+        sed -i "s|^S3_BUCKET=.*|S3_BUCKET=absenta-storage|g" absenta_backend/.env
+    else
+        echo "S3_BUCKET=absenta-storage" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_ENDPOINT=" absenta_backend/.env; then
+        sed -i "s|^S3_ENDPOINT=.*|S3_ENDPOINT=http://127.0.0.1:9000|g" absenta_backend/.env
+    else
+        echo "S3_ENDPOINT=http://127.0.0.1:9000" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_ACCESS_KEY=" absenta_backend/.env; then
+        sed -i "s|^S3_ACCESS_KEY=.*|S3_ACCESS_KEY=minioadmin|g" absenta_backend/.env
+    else
+        echo "S3_ACCESS_KEY=minioadmin" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_SECRET_KEY=" absenta_backend/.env; then
+        sed -i "s|^S3_SECRET_KEY=.*|S3_SECRET_KEY=minioadmin|g" absenta_backend/.env
+    else
+        echo "S3_SECRET_KEY=minioadmin" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_FORCE_PATH_STYLE=" absenta_backend/.env; then
+        sed -i "s|^S3_FORCE_PATH_STYLE=.*|S3_FORCE_PATH_STYLE=true|g" absenta_backend/.env
+    else
+        echo "S3_FORCE_PATH_STYLE=true" >> absenta_backend/.env
+    fi
+
+    # Otomatis Pemasangan & Inisialisasi MinIO S3 Storage Server
+    echo "Menjalankan otomatisasi setup MinIO Self-Hosted S3 Storage Server..."
+    if [ -f /var/www/project-absenta/deployer/setup-minio.sh ]; then
+        chmod +x /var/www/project-absenta/deployer/setup-minio.sh || true
+        echo '$SUDO_PASS' | sudo -S bash /var/www/project-absenta/deployer/setup-minio.sh || true
+    fi
+
     # Frontend Setup
     cp absenta_frontend/.env.example absenta_frontend/.env || true
     sed -i "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=$FRONTEND_API_BASE_URL|g" absenta_frontend/.env

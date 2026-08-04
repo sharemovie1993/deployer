@@ -148,6 +148,47 @@ echo "Menarik kode terbaru dari branch main..."
 git fetch origin main
 git reset --hard origin/main
 
+# Ensure MinIO S3 Storage Server is installed & running
+if [ -f /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh ]; then
+    echo "Memeriksa & mengaktifkan MinIO Self-Hosted S3 Storage Server..."
+    chmod +x /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh || true
+    echo '$SUDO_PASS' | sudo -S bash /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh || true
+fi
+
+# Ensure Backend .env has S3 Storage variables
+if [ -f absenta_backend/.env ]; then
+    if grep -q "^STORAGE_DRIVER=" absenta_backend/.env; then
+        sed -i "s|^STORAGE_DRIVER=.*|STORAGE_DRIVER=s3|g" absenta_backend/.env
+    else
+        echo "STORAGE_DRIVER=s3" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_BUCKET=" absenta_backend/.env; then
+        sed -i "s|^S3_BUCKET=.*|S3_BUCKET=absenta-storage|g" absenta_backend/.env
+    else
+        echo "S3_BUCKET=absenta-storage" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_ENDPOINT=" absenta_backend/.env; then
+        sed -i "s|^S3_ENDPOINT=.*|S3_ENDPOINT=http://127.0.0.1:9000|g" absenta_backend/.env
+    else
+        echo "S3_ENDPOINT=http://127.0.0.1:9000" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_ACCESS_KEY=" absenta_backend/.env; then
+        sed -i "s|^S3_ACCESS_KEY=.*|S3_ACCESS_KEY=minioadmin|g" absenta_backend/.env
+    else
+        echo "S3_ACCESS_KEY=minioadmin" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_SECRET_KEY=" absenta_backend/.env; then
+        sed -i "s|^S3_SECRET_KEY=.*|S3_SECRET_KEY=minioadmin|g" absenta_backend/.env
+    else
+        echo "S3_SECRET_KEY=minioadmin" >> absenta_backend/.env
+    fi
+    if grep -q "^S3_FORCE_PATH_STYLE=" absenta_backend/.env; then
+        sed -i "s|^S3_FORCE_PATH_STYLE=.*|S3_FORCE_PATH_STYLE=true|g" absenta_backend/.env
+    else
+        echo "S3_FORCE_PATH_STYLE=true" >> absenta_backend/.env
+    fi
+fi
+
 # 1. Update Backend
 echo "Memproses Backend..."
 cd absenta_backend
