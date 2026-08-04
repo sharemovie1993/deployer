@@ -25,6 +25,7 @@
             <button class="mode-tab-btn" id="mode-btn-preset" onclick="switchAppMode('preset')">⚡ Quick Update Multi-Preset</button>
             <button class="mode-tab-btn" id="mode-btn-cluster" onclick="switchAppMode('cluster')">🌐 Multi-VM Cluster Deploy</button>
             <button class="mode-tab-btn" id="mode-btn-logs" onclick="switchAppMode('logs')">📜 Monitor Log Server (PM2)</button>
+            <button class="mode-tab-btn" id="mode-btn-health" onclick="switchAppMode('health')">🩺 System Health & Services</button>
         </div>
     </div>
 
@@ -374,6 +375,40 @@
         </div>
     </div>
 
+    <!-- VIEW 5: STATUS HEALTH SERVER & SERVICES -->
+    <div class="container" id="health-view-container" style="display: none;">
+        <div class="wizard-header">
+            <div class="logo-section">
+                <h1>🩺 MONITOR HEALTH LAYANAN SERVER & WORKERS</h1>
+                <p>Pantau Kesehatan Real-Time Caddy Proxy, Process PM2, Enkripsi, & Tunnel VPN</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-secondary" type="button" onclick="refreshHealthMatrixUI()">🔄 Refresh Matrix</button>
+            </div>
+        </div>
+
+        <div class="wizard-body" style="gap: 20px; display: flex; flex-direction: column;">
+            <!-- Target Selection Header -->
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;">
+                <div style="flex: 1; min-width: 250px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Pilih Target Server VPS/Lokal</label>
+                    <select id="health-target-preset" style="width: 100%; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px;" onchange="refreshHealthMatrixUI()">
+                        <option value="local">💻 Server Windows Lokal (Localhost)</option>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div>
+                    <button class="btn btn-primary" type="button" onclick="refreshHealthMatrixUI()" style="padding: 10px 24px; font-weight: 700;">🩺 Muat Ulang Diagnosa Health</button>
+                </div>
+            </div>
+
+            <!-- Health Grid Display Container -->
+            <div id="health-matrix-display" style="display: flex; flex-direction: column; gap: 20px;">
+                <div style="color: var(--text-muted); text-align: center; padding: 40px;">Pilih target server di atas untuk menampilkan status kesehatan layanan...</div>
+            </div>
+        </div>
+    </div>
+
 </div> <!-- end .app-wrapper -->
 
 <!-- Modal Dialog Add/Edit Preset -->
@@ -520,6 +555,7 @@
 <script src="/js/presets.js"></script>
 <script src="/js/cluster.js"></script>
 <script src="/js/logs.js"></script>
+<script src="/js/health.js"></script>
 
 </body>
 </html>
