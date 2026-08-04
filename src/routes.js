@@ -132,6 +132,11 @@ function handleRequest(req, res) {
         return;
     }
 
+    if (pathname === '/api/restart-service' && (req.method === 'GET' || req.method === 'POST')) {
+        handleRestartService(req, res, parsedUrl);
+        return;
+    }
+
     if (pathname === '/api/clean-ghost-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
         handleCleanGhostTunnels(req, res, parsedUrl);
         return;
@@ -900,7 +905,7 @@ function handleServerHealth(req, res, parsedUrl) {
         'echo "=== CADDY_STATUS ==="',
         'systemctl is-active caddy 2>/dev/null || echo "inactive"',
         'echo "=== CADDY_LISTEN ==="',
-        'ss -tulpn 2>/dev/null | grep caddy || true',
+        'echo "' + sudoPass + '" | sudo -S ss -tulpn 2>/dev/null | grep caddy || ss -tulpn 2>/dev/null | grep -E ":(443|80)\\b" || true',
         'echo "=== RAM_INFO ==="',
         'free -m 2>/dev/null || true',
         'echo "=== DISK_INFO ==="',
@@ -1007,6 +1012,84 @@ function handleServerHealth(req, res, parsedUrl) {
 
     if (proc.stdin) {
         proc.stdin.write(scriptText);
+        proc.stdin.end();
+    }
+}
+
+function handleRestartService(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const serviceName = parsedUrl.searchParams.get('service') || 'all';
+    const presets = getPresets();
+    const p = presets.find(item => item.id === presetId);
+
+    if (!p && presetId !== 'local') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+        return;
+    }
+
+    const isLocal = !p || presetId === 'local';
+    const ip = isLocal ? '127.0.0.1' : p.vpsIp;
+    const user = isLocal ? '' : (p.vpsUser || 'asepsuryadi');
+    const sudoPass = isLocal ? '' : (p.vpsSudoPass || '1');
+    const keyChoice = isLocal ? '' : (p.sshKeyChoice || 'nginxonly.pem');
+    const keyPath = isLocal ? '' : (keyChoice === 'custom' ? p.vpsKeyPath : path.join(__dirname, '..', keyChoice));
+
+    let restartCmd = '';
+    if (serviceName === 'caddy') {
+        restartCmd = `echo "${sudoPass}" | sudo -S systemctl restart caddy`;
+    } else if (serviceName === 'all') {
+        restartCmd = `pm2 restart all && pm2 save`;
+    } else {
+        restartCmd = `pm2 restart "${serviceName}" && pm2 save`;
+    }
+
+    let proc;
+    if (isLocal && process.platform === 'win32') {
+        const psCmd = serviceName === 'caddy' ? `Restart-Service -Name caddy -ErrorAction SilentlyContinue` : `pm2 restart ${serviceName}`;
+        proc = spawn('powershell.exe', ['-NoProfile', '-Command', psCmd], { windowsHide: true });
+    } else {
+        const safeKeyPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'restart-key-safe.pem');
+        try { fs.copyFileSync(keyPath, safeKeyPath); } catch (e) {}
+        const sshArgs = [
+            '-i', safeKeyPath,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'ConnectTimeout=10',
+            '-o', 'BatchMode=yes',
+            `${user}@${ip}`,
+            'bash'
+        ];
+        proc = spawn('ssh', sshArgs, { windowsHide: true });
+    }
+
+    let stdout = '';
+    let responded = false;
+    const timer = setTimeout(() => {
+        if (responded) return;
+        responded = true;
+        try { proc.kill(); } catch (e) {}
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Restart SSH timeout (15 detik).' }));
+    }, 15000);
+
+    if (proc.stdout) proc.stdout.on('data', d => stdout += d.toString());
+    if (proc.stderr) proc.stderr.on('data', d => stdout += d.toString());
+
+    proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (responded) return;
+        responded = true;
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: code === 0,
+            message: code === 0 ? `Layanan '${serviceName}' berhasil di-restart di server ${ip}.` : `Gagal restart layanan '${serviceName}'.`,
+            raw_output: stdout
+        }));
+    });
+
+    if (proc.stdin) {
+        proc.stdin.write(restartCmd + '\n');
         proc.stdin.end();
     }
 }

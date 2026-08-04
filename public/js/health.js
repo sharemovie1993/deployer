@@ -72,10 +72,11 @@ function refreshHealthMatrixUI() {
                     <div style="font-weight: 700; font-size: 15px; color: #fff;">🛡️ Reverse Proxy Caddy</div>
                     ${caddyBadge}
                 </div>
-                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
-                    <div>Port Listener: ${caddy.ports_bound ? '✅ Port 80 & 443' : '⚠️ Tidak Terdeteksi'}</div>
+                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+                    <div>Port Listener: ${caddy.ports_bound ? '<span style="color:#34d399;">✅ Port 80 & 443 (Aktif)</span>' : '<span style="color:#fbbf24;">⚠️ Caddy Listening</span>'}</div>
                     <div>Health API Backend: ${res.backend_http_code === '200' ? '<span style="color:#34d399;">HTTP 200 OK</span>' : `<span style="color:#fbbf24;">Code ${res.backend_http_code}</span>`}</div>
                 </div>
+                <button class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 6px 12px; font-size: 11.5px; border-color: rgba(52,211,153,0.4); color: #34d399;" onclick="restartServiceUI('caddy')">🔄 Restart Reverse Proxy Caddy</button>
             </div>
         `;
 
@@ -113,11 +114,12 @@ function refreshHealthMatrixUI() {
         // SECTION 2: PM2 PROCESSES HEALTH MATRIX TABLE
         html += `
             <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; margin-top: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0;">⚙️ Matrix PM2 Worker Processes (${workers.length} Layanan)</h3>
                         <p style="font-size: 12px; color: var(--text-muted); margin: 4px 0 0 0;">Status kesehatan real-time seluruh worker backend/frontend PM2</p>
                     </div>
+                    <button class="btn btn-secondary" style="padding: 8px 16px; font-size: 12px; border-color: rgba(167,139,250,0.4); color: #a78bfa;" onclick="restartServiceUI('all')">⚡ Restart Semua Worker PM2</button>
                 </div>
         `;
 
@@ -136,6 +138,7 @@ function refreshHealthMatrixUI() {
                                 <th style="padding: 10px;">Memory (RAM)</th>
                                 <th style="padding: 10px;">Restarts</th>
                                 <th style="padding: 10px;">Uptime</th>
+                                <th style="padding: 10px; text-align: right;">Aksi IT Admin</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -163,6 +166,9 @@ function refreshHealthMatrixUI() {
                         <td style="padding: 12px 10px; font-family: monospace; color: #a78bfa;">${w.memory_mb} MB</td>
                         <td style="padding: 12px 10px; font-family: monospace; color: ${w.restarts > 5 ? '#f87171' : 'inherit'};">${w.restarts}x</td>
                         <td style="padding: 12px 10px; color: var(--text-muted);">${uptimeStr}</td>
+                        <td style="padding: 12px 10px; text-align: right;">
+                            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="restartServiceUI('${w.name}')">🔄 Restart</button>
+                        </td>
                     </tr>
                 `;
             });
@@ -180,5 +186,32 @@ function refreshHealthMatrixUI() {
     })
     .catch(err => {
         display.innerHTML = `<div style="color: #f87171; text-align: center; padding: 30px;">❌ Error koneksi: ${err.message}</div>`;
+    });
+}
+
+function restartServiceUI(serviceName) {
+    const select = document.getElementById('health-target-preset');
+    if (!select) return;
+    const presetId = select.value;
+
+    if (!confirm(`Apakah Anda yakin ingin melakukan restart layanan '${serviceName}' pada server ini?`)) return;
+
+    const display = document.getElementById('health-matrix-display');
+    if (display) display.innerHTML = `<div style="color: #fbbf24; font-family: monospace; text-align: center; padding: 30px;">⏳ Melakukan restart layanan '${serviceName}'...</div>`;
+
+    fetch('/api/restart-service?id=' + encodeURIComponent(presetId) + '&service=' + encodeURIComponent(serviceName))
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            alert(`✅ ${res.message}`);
+            refreshHealthMatrixUI();
+        } else {
+            alert(`❌ Gagal restart: ${res.message}`);
+            refreshHealthMatrixUI();
+        }
+    })
+    .catch(err => {
+        alert('❌ Error koneksi: ' + err.message);
+        refreshHealthMatrixUI();
     });
 }
