@@ -233,6 +233,21 @@ log() {
 }
 
 check_wireguard() {
+  # Single-Interface Conflict Protection: Jika ada >1 interface et-* yang UP, matikan & disable yang lama
+  UP_IFACES=`$(ip link show | grep -o 'et-[a-zA-Z0-9-]*' | sort -u)
+  IFACE_COUNT=`$(echo "`$UP_IFACES" | grep -c '^et-' || echo 0)
+  if [ "`$IFACE_COUNT" -gt 1 ]; then
+    log "⚠️ Terdeteksi `$IFACE_COUNT interface WireGuard aktif bersamaan. Membersihkan interface lama..."
+    LAST_IFACE=`$(echo "`$UP_IFACES" | tail -n 1)
+    for old_if in `$UP_IFACES; do
+      if [ "`$old_if" != "`$LAST_IFACE" ]; then
+        log "🧹 Mematikan & disable interface bentrok: `$old_if"
+        wg-quick down "`$old_if" 2>/dev/null || true
+        systemctl disable "wg-quick@`$old_if" 2>/dev/null || true
+      fi
+    done
+  fi
+
   CONF_FILES=`$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
   for cfile in `$CONF_FILES; do
     [ -f "`$cfile" ] || continue
