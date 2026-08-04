@@ -135,7 +135,7 @@ $UpstreamTargets = ($ApiNodes | ForEach-Object { "$($_):3003" }) -join " "
 Show-Log "Menyusun Caddy Upstream Targets: $UpstreamTargets" "Cyan"
 
 $CaddyConfigScript = @"
-echo '$SudoPass' | sudo -S systemctl stop caddy || true
+echo '$SudoPass' | sudo -S systemctl stop caddy 2>/dev/null || true
 
 # Pastikan Watchdog WireGuard Tunnel Aktif
 CONF_FILES=`$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
@@ -144,14 +144,16 @@ for cfile in `$CONF_FILES; do
   bname=`$(basename "`$cfile")
   iface="`${bname%.conf}"
   if [ "`$cfile" != "/etc/wireguard/`$bname" ]; then
-    cp -f "`$cfile" "/etc/wireguard/`$bname" 2>/dev/null || true
-    chmod 600 "/etc/wireguard/`$bname" 2>/dev/null || true
+    echo '$SudoPass' | sudo -S cp -f "`$cfile" "/etc/wireguard/`$bname" 2>/dev/null || true
+    echo '$SudoPass' | sudo -S chmod 600 "/etc/wireguard/`$bname" 2>/dev/null || true
   fi
-  systemctl is-enabled "wg-quick@`$iface" &>/dev/null || systemctl enable "wg-quick@`$iface" 2>/dev/null || true
-  ip link show "`$iface" 2>/dev/null | grep -q "UP" || wg-quick up "`$iface" 2>/dev/null || true
+  echo '$SudoPass' | sudo -S systemctl is-enabled "wg-quick@`$iface" &>/dev/null || echo '$SudoPass' | sudo -S systemctl enable "wg-quick@`$iface" 2>/dev/null || true
+  if ! ip link show "`$iface" 2>/dev/null | grep -q "UP"; then
+    echo '$SudoPass' | sudo -S wg-quick up "`$iface" 2>/dev/null || true
+  fi
 done
 
-echo '$SudoPass' | sudo -S systemctl restart caddy || true
+echo '$SudoPass' | sudo -S systemctl restart caddy 2>/dev/null || true
 "@
 
 & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${LoadBalancerNode}" "$CaddyConfigScript"
