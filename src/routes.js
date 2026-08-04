@@ -258,37 +258,60 @@ function runSshTest(ip, user, keyPath, callback) {
 
 function testClusterNodes(data, callback) {
     const apiNodes = (data.apiNodes || '10.10.10.99').split(',').map(s => s.trim()).filter(Boolean);
-    const waNode = data.waNode || '10.10.10.99';
-    const lbNode = data.loadBalancerNode || '10.10.10.99';
-    const dbNode = data.dbNode || '10.10.10.99';
+    const waNode = (data.waNode || '10.10.10.99').trim();
+    const lbNode = (data.loadBalancerNode || '10.10.10.99').trim();
+    const dbNode = (data.dbNode || '10.10.10.99').trim();
     const user = data.targetUser || 'asepsuryadi';
     const ROOT_DIR = path.join(__dirname, '..');
     const rawKey = (data.keyPath || '').trim();
     const keyPath = path.isAbsolute(rawKey) ? rawKey : path.join(ROOT_DIR, rawKey || 'nginxonly.pem');
 
-    const uniqueNodes = [];
-    apiNodes.forEach((ip, idx) => uniqueNodes.push({ role: `API Worker Node ${idx + 1}`, ip }));
-    uniqueNodes.push({ role: 'Singleton WA Daemon Node', ip: waNode });
-    uniqueNodes.push({ role: 'Edge Router / Load Balancer Node', ip: lbNode });
-    uniqueNodes.push({ role: 'DB & Redis Node', ip: dbNode });
+    const ipRolesMap = new Map();
+    const addRole = (ip, role) => {
+        if (!ip) return;
+        if (!ipRolesMap.has(ip)) ipRolesMap.set(ip, []);
+        ipRolesMap.get(ip).push(role);
+    };
 
+    apiNodes.forEach((ip, idx) => addRole(ip, `API Worker Node ${idx + 1}`));
+    addRole(waNode, 'Singleton WA Daemon Node');
+    addRole(lbNode, 'Edge Router / Load Balancer Node');
+    addRole(dbNode, 'DB & Redis Node');
+
+    const uniqueIps = Array.from(ipRolesMap.keys());
+
+    if (process.platform === 'win32') {
+        const fixCmd = `icacls "${keyPath}" /inheritance:r /grant:r "%USERNAME%:R"`;
+        exec(fixCmd, () => runSequentialSshCheck(uniqueIps, ipRolesMap, user, keyPath, callback));
+    } else {
+        exec(`chmod 600 "${keyPath}"`, () => runSequentialSshCheck(uniqueIps, ipRolesMap, user, keyPath, callback));
+    }
+}
+
+function runSequentialSshCheck(uniqueIps, ipRolesMap, user, keyPath, callback) {
     const results = [];
-    let completed = 0;
+    let index = 0;
 
-    uniqueNodes.forEach((node) => {
-        const sshCmd = `ssh -i "${keyPath}" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=4 ${user}@${node.ip} "echo SSH_OK"`;
+    function checkNext() {
+        if (index >= uniqueIps.length) {
+            return callback(results);
+        }
+        const ip = uniqueIps[index];
+        const roles = ipRolesMap.get(ip).join(', ');
+        const sshCmd = `ssh -i "${keyPath}" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 ${user}@${ip} "echo SSH_OK"`;
+
         exec(sshCmd, (err, stdout) => {
             if (err || !stdout.includes('SSH_OK')) {
-                results.push({ role: node.role, ip: node.ip, status: 'offline', message: `❌ SSH Gagal / Timeout ke ${user}@${node.ip}` });
+                results.push({ role: roles, ip, status: 'offline', message: `❌ SSH Gagal / Timeout ke ${user}@${ip}` });
             } else {
-                results.push({ role: node.role, ip: node.ip, status: 'online', message: `🟢 TERHUBUNG (SSH Port 22 OK)` });
+                results.push({ role: roles, ip, status: 'online', message: `🟢 TERHUBUNG (SSH Port 22 OK)` });
             }
-            completed++;
-            if (completed === uniqueNodes.length) {
-                callback(results);
-            }
+            index++;
+            checkNext();
         });
-    });
+    }
+
+    checkNext();
 }
 
 function handleWatchdogStatus(req, res, parsedUrl) {
