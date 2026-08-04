@@ -152,9 +152,22 @@ function refreshHealthMatrixUI() {
 
                 let uptimeStr = '-';
                 if (w.uptime_sec > 0) {
-                    const hrs = Math.floor(w.uptime_sec / 3600);
-                    const mins = Math.floor((w.uptime_sec % 3600) / 60);
-                    uptimeStr = `${hrs}j ${mins}m`;
+                    const sec = w.uptime_sec;
+                    if (sec < 60) {
+                        uptimeStr = `${sec} detik`;
+                    } else if (sec < 3600) {
+                        const mins = Math.floor(sec / 60);
+                        const secs = sec % 60;
+                        uptimeStr = `${mins} mnt ${secs} dtk`;
+                    } else if (sec < 86400) {
+                        const hrs = Math.floor(sec / 3600);
+                        const mins = Math.floor((sec % 3600) / 60);
+                        uptimeStr = `${hrs} jam ${mins} mnt`;
+                    } else {
+                        const days = Math.floor(sec / 86400);
+                        const hrs = Math.floor((sec % 86400) / 3600);
+                        uptimeStr = `${days} hari ${hrs} jam`;
+                    }
                 }
 
                 html += `
