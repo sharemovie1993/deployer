@@ -54,10 +54,25 @@ function Show-Log {
     Write-Host "[$Timestamp] $Msg" -ForegroundColor $Color
 }
 
+if (-not (Test-Path $KeyPath)) {
+    throw "SSH Key file tidak ditemukan di path: $KeyPath"
+}
+
+# Amankan permission SSH Key di Windows agar tidak ditolak oleh OpenSSH client
+$SAFE_KEY = Join-Path $env:TEMP "safe-cluster-deploy-key.pem"
+Remove-Item $SAFE_KEY -Force -ErrorAction SilentlyContinue
+Get-Content -Path $KeyPath | Set-Content -Path $SAFE_KEY
+$acl = New-Object System.Security.AccessControl.FileSecurity
+$acl.SetAccessRuleProtection($true, $false)
+$rule = New-Object System.Security.AccessControl.FileSystemAccessRule([System.Security.Principal.WindowsIdentity]::GetCurrent().Name, 'FullControl', 'Allow')
+$acl.AddAccessRule($rule)
+Set-Acl -Path $SAFE_KEY -AclObject $acl
+$KeyPath = $SAFE_KEY
+
 function Test-SSHConnection {
     param([string]$IP)
     Show-Log "Memeriksa konektivitas SSH ke node: $IP..." "Cyan"
-    $Result = & ssh -i "$KeyPath" -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${TargetUser}@${IP}" "echo 'SSH_OK'" 2>$null
+    $Result = & ssh -i "$KeyPath" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${TargetUser}@${IP}" "echo 'SSH_OK'" 2>$null
     if ($Result -match "SSH_OK") {
         Show-Log "✅ Koneksi SSH ke $IP BERHASIL!" "Green"
         return $true
@@ -101,7 +116,7 @@ pm2 start ecosystem.config.js --only "absenta-wa-service" || pm2 reload absenta-
 pm2 save
 "@
 
-& ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${WaNode}" "$DeployWaScript"
+& ssh -i "$KeyPath" -o BatchMode=yes -o StrictHostKeyChecking=no "${TargetUser}@${WaNode}" "$DeployWaScript"
 Show-Log "✅ Dedicated WA Gateway Daemon aktif di node $WaNode!" "Green"
 
 # ── 3. DEPLOY API WORKER NODES (HORIZONTAL SCALE) ──────────────────────────────
@@ -124,7 +139,7 @@ cd ..
 pm2 start absenta_backend/ecosystem.config.js --only "absenta-api:3003" || pm2 reload "absenta-api:3003"
 pm2 save
 "@
-    & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${ApiIP}" "$DeployApiScript"
+    & ssh -i "$KeyPath" -o BatchMode=yes -o StrictHostKeyChecking=no "${TargetUser}@${ApiIP}" "$DeployApiScript"
     Show-Log "✅ API Workers berhasil di-deploy ke node $ApiIP!" "Green"
 }
 
@@ -156,7 +171,7 @@ done
 echo '$SudoPass' | sudo -S systemctl restart caddy 2>/dev/null || true
 "@
 
-& ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${LoadBalancerNode}" "$CaddyConfigScript"
+& ssh -i "$KeyPath" -o BatchMode=yes -o StrictHostKeyChecking=no "${TargetUser}@${LoadBalancerNode}" "$CaddyConfigScript"
 Show-Log "✅ Edge Router & Dynamic Load Balancer berhasil di-provisioning!" "Green"
 
 # ── 5. FINAL CLUSTER SUMMARY ───────────────────────────────────────────────────

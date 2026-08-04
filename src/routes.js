@@ -171,17 +171,17 @@ function handleRequest(req, res) {
 
     if (pathname === '/api/test-cluster-nodes' && req.method === 'POST') {
         let body = '';
-        req.on('data', chunk => body += chunk);
+        req.on('data', chunk => { body += chunk.toString('utf8'); });
         req.on('end', () => {
             try {
-                const data = JSON.parse(body);
+                const data = body.trim() ? JSON.parse(body) : {};
                 testClusterNodes(data, (results) => {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true, nodes: results }));
                 });
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, message: 'Invalid JSON' }));
+                res.end(JSON.stringify({ success: false, message: 'Invalid JSON: ' + e.message }));
             }
         });
         return;
@@ -246,7 +246,7 @@ function testSshConnection(data, callback) {
 }
 
 function runSshTest(ip, user, keyPath, callback) {
-    const sshCmd = `ssh -i "${keyPath}" -o StrictHostKeyChecking=no -o ConnectTimeout=5 ${user}@${ip} "echo SSH_OK"`;
+    const sshCmd = `ssh -i "${keyPath}" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 ${user}@${ip} "echo SSH_OK"`;
     exec(sshCmd, (err, stdout) => {
         if (err || !stdout.includes('SSH_OK')) {
             callback(false, `Koneksi SSH Gagal ke ${user}@${ip}. Pastikan IP, user, dan file Key benar.`);
@@ -276,7 +276,7 @@ function testClusterNodes(data, callback) {
     let completed = 0;
 
     uniqueNodes.forEach((node) => {
-        const sshCmd = `ssh -i "${keyPath}" -o StrictHostKeyChecking=no -o ConnectTimeout=4 ${user}@${node.ip} "echo SSH_OK"`;
+        const sshCmd = `ssh -i "${keyPath}" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=4 ${user}@${node.ip} "echo SSH_OK"`;
         exec(sshCmd, (err, stdout) => {
             if (err || !stdout.includes('SSH_OK')) {
                 results.push({ role: node.role, ip: node.ip, status: 'offline', message: `❌ SSH Gagal / Timeout ke ${user}@${node.ip}` });
