@@ -122,6 +122,11 @@ function handleRequest(req, res) {
         return;
     }
 
+    if (pathname === '/api/audit-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
+        handleAuditTunnels(req, res, parsedUrl);
+        return;
+    }
+
     if (pathname === '/api/fix-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
         handleFixTunnels(req, res, parsedUrl);
         return;
@@ -603,6 +608,123 @@ function handleFlushPm2Logs(req, res, parsedUrl) {
                 message: code === 0 ? 'Log PM2 lokal berhasil dibersihkan (pm2 flush).' : 'Gagal pm2 flush lokal.'
             }));
         });
+    }
+}
+
+function handleAuditTunnels(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const p = presets.find(item => item.id === presetId);
+
+    if (!p && presetId !== 'local') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+        return;
+    }
+
+    const isLocal = !p || presetId === 'local';
+    const ip = isLocal ? '127.0.0.1' : p.vpsIp;
+    const user = isLocal ? '' : (p.vpsUser || 'asepsuryadi');
+    const keyChoice = isLocal ? '' : (p.sshKeyChoice || 'nginxonly.pem');
+    const keyPath = isLocal ? '' : (keyChoice === 'custom' ? p.vpsKeyPath : path.join(__dirname, '..', keyChoice));
+
+    const scriptText = [
+        'echo "=== WG_INTERFACES ==="',
+        'ip link show type wireguard 2>/dev/null || true',
+        'echo "=== SYSTEMD_SERVICES ==="',
+        'systemctl list-unit-files 2>/dev/null | grep -E "wg-quick@et-" || true',
+        'echo "=== CONFIG_FILES ==="',
+        'ls -la /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true',
+        'echo "=== CONF_HEADERS ==="',
+        'grep -H -E "(Address|PrivateKey|Endpoint|LicenseKey|# LicenseKey)" /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true',
+        'echo "=== WG_SHOW ==="',
+        'sudo wg show 2>/dev/null || true'
+    ].join('\n') + '\n';
+
+    let proc;
+    if (isLocal && process.platform === 'win32') {
+        const psCmd = `
+            Get-Service | Where-Object Name -like 'WireGuardTunnel$et-*' | Select-Object Name, Status | ConvertTo-Json
+            Get-ChildItem -Path "d:\\BarayaProject\\Project Absenta\\tunnels\\*.conf","C:\\Program Files\\WireGuard\\Data\\Configurations\\*.conf" -ErrorAction SilentlyContinue | Select-Object FullName
+        `;
+        proc = spawn('powershell.exe', ['-NoProfile', '-Command', psCmd], { windowsHide: true });
+    } else {
+        const safeKeyPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'audit-key-safe.pem');
+        try { fs.copyFileSync(keyPath, safeKeyPath); } catch (e) {}
+        const sshArgs = [
+            '-i', safeKeyPath,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'ConnectTimeout=10',
+            '-o', 'BatchMode=yes',
+            `${user}@${ip}`,
+            'bash'
+        ];
+        proc = spawn('ssh', sshArgs, { windowsHide: true });
+    }
+
+    let stdout = '';
+    let responded = false;
+    const timer = setTimeout(() => {
+        if (responded) return;
+        responded = true;
+        try { proc.kill(); } catch (e) {}
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Audit SSH timeout (15 detik).' }));
+    }, 15000);
+
+    if (proc.stdout) proc.stdout.on('data', d => stdout += d.toString());
+    if (proc.stderr) proc.stderr.on('data', d => stdout += d.toString());
+
+    proc.on('close', async (code) => {
+        clearTimeout(timer);
+        if (responded) return;
+        responded = true;
+
+        const items = [];
+        const matches = stdout.match(/et-[a-zA-Z0-9_-]+/g) || [];
+        const uniqueSlugs = [...new Set(matches.map(m => m.replace(/^et-/, '')))];
+
+        for (const slug of uniqueSlugs) {
+            const ifName = `et-${slug}`;
+            const isUp = stdout.includes(ifName) && (stdout.includes('UP') || stdout.includes('RUNNING') || stdout.includes('latest handshake'));
+            const isEnabled = stdout.includes(`wg-quick@${ifName}.service`) && stdout.includes('enabled');
+            
+            let licenseKey = '';
+            const keyMatch = stdout.match(new RegExp(`${slug}.*LicenseKey\\s*=\\s*(\\S+)`, 'i')) || stdout.match(/ET-[A-Z0-9]{8,}/);
+            if (keyMatch) licenseKey = keyMatch[1] || keyMatch[0];
+
+            let licenseData = null;
+            if (licenseKey) {
+                try {
+                    const fetchRes = await fetch(`https://api.absenta.id/api/license/easy-tunnel/validate/${encodeURIComponent(licenseKey)}`, { signal: AbortSignal.timeout(5000) });
+                    const json = await fetchRes.json();
+                    if (json.success) licenseData = json.data;
+                } catch (e) {}
+            }
+
+            items.push({
+                slug,
+                interface_name: ifName,
+                is_up: isUp,
+                systemd_enabled: isEnabled,
+                license_key: licenseKey,
+                license_data: licenseData
+            });
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            server_ip: ip,
+            tunnels_count: items.length,
+            tunnels: items,
+            raw_output: stdout
+        }));
+    });
+
+    if (proc.stdin) {
+        proc.stdin.write(scriptText);
+        proc.stdin.end();
     }
 }
 

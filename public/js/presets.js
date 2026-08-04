@@ -58,10 +58,11 @@ function renderPresetsGrid(presets) {
             '</div>' +
             '<div style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 16px; display: flex; flex-direction: column; gap: 8px;">' +
                 '<button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 14px; font-weight: 700;" onclick="runQuickUpdatePreset(\'' + safeId + '\')">⚡ Quick Update Sekarang</button>' +
-                '<div style="display: flex; gap: 8px;">' +
-                    '<button id="watchdog-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 9px; font-size: 12px;" onclick="checkWatchdogStatus(\'' + safeId + '\')">🛡️ Status Watchdog</button>' +
-                    '<button id="tunnel-fix-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 9px; font-size: 12px; border-color: rgba(251,191,36,0.4); color: #fbbf24; background: rgba(251,191,36,0.08);" onclick="fixTunnelPreset(\'' + safeId + '\')">🔧 Perbaiki Tunnel</button>' +
-                    '<button class="btn btn-secondary" style="flex: 1; justify-content: center; padding: 9px; font-size: 12px; border-color: rgba(167,139,250,0.4); color: #a78bfa; background: rgba(167,139,250,0.08);" onclick="openLogMonitorForPreset(\'' + safeId + '\')">📜 Stream Log PM2</button>' +
+                '<div style="display: flex; gap: 6px; flex-wrap: wrap;">' +
+                    '<button id="watchdog-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px;" onclick="checkWatchdogStatus(\'' + safeId + '\')">🛡️ Status Watchdog</button>' +
+                    '<button id="audit-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(52,211,153,0.4); color: #34d399; background: rgba(52,211,153,0.08);" onclick="auditTunnelPreset(\'' + safeId + '\')">🌐 Audit Lisensi</button>' +
+                    '<button id="tunnel-fix-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(251,191,36,0.4); color: #fbbf24; background: rgba(251,191,36,0.08);" onclick="fixTunnelPreset(\'' + safeId + '\')">🔧 Perbaiki Tunnel</button>' +
+                    '<button class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(167,139,250,0.4); color: #a78bfa; background: rgba(167,139,250,0.08);" onclick="openLogMonitorForPreset(\'' + safeId + '\')">📜 Log PM2</button>' +
                 '</div>' +
             '</div>' +
         '</div>';
@@ -405,5 +406,78 @@ function fixTunnelPreset(presetId) {
             btn.innerHTML = '🔧 Perbaiki Tunnel';
         }
         alert('❌ Error koneksi: ' + err.message);
+    });
+}
+
+function auditTunnelPreset(presetId) {
+    const btn = document.getElementById('audit-btn-' + presetId);
+    const content = document.getElementById('watchdog-content-' + presetId);
+    const panel = document.getElementById('watchdog-panel-' + presetId);
+
+    if (panel) panel.style.display = 'block';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Auditing...';
+    }
+    if (content) {
+        content.innerHTML = '<div style="color: #6ee7b7; font-family: monospace;">⏳ Memindai interface WireGuard & status lisensi online...</div>';
+    }
+
+    fetch('/api/audit-tunnels?id=' + encodeURIComponent(presetId))
+    .then(r => r.json())
+    .then(res => {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '🌐 Audit Lisensi';
+        }
+        if (!res.success) {
+            if (content) content.innerHTML = '<span style="color: #f87171;">❌ Gagal audit: ' + (res.message || 'Error') + '</span>';
+            return;
+        }
+
+        let html = '<div style="font-size: 12px; line-height: 1.5;">';
+        html += `<div style="margin-bottom: 8px; font-weight: bold; color: #a78bfa;">Terdeteksi ${res.tunnels_count} Terowongan WireGuard di Server ${res.server_ip}:</div>`;
+
+        if (!res.tunnels || res.tunnels.length === 0) {
+            html += '<div style="color: var(--text-muted);">Tidak ada interface WireGuard (et-*) yang terpasang di server ini.</div>';
+        } else {
+            res.tunnels.forEach(t => {
+                const isUp = t.is_up;
+                const sysEnabled = t.systemd_enabled;
+                const lic = t.license_data;
+                const isExpired = lic ? lic.expired : false;
+
+                let badge = isExpired ? '<span style="background: rgba(239,68,68,0.2); color: #f87171; padding: 2px 6px; border-radius: 4px; font-weight: bold;">⛔ KEDALUWARSA</span>' :
+                            isUp ? '<span style="background: rgba(16,185,129,0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-weight: bold;">● AKTIF (UP)</span>' :
+                            '<span style="background: rgba(100,116,139,0.2); color: #94a3b8; padding: 2px 6px; border-radius: 4px;">○ NONAKTIF</span>';
+
+                html += '<div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; margin-bottom: 8px;">';
+                html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
+                html += `<strong>et-${t.slug}</strong> ${badge}`;
+                html += `</div>`;
+                html += `<div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Systemd Service: ${sysEnabled ? '✅ Enabled' : '⚪ Disabled'}</div>`;
+
+                if (lic) {
+                    html += `<div style="color: #6ee7b7; font-size: 11px; margin-top: 2px;">Sekolah: ${lic.school_name || '-'}</div>`;
+                    if (lic.expires_at) {
+                        const exp = new Date(lic.expires_at).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+                        html += `<div style="color: ${isExpired ? '#f87171' : '#a78bfa'}; font-size: 11px;">Masa Berlaku: ${exp} ${isExpired ? '(Kedaluwarsa)' : ''}</div>`;
+                    }
+                } else if (t.license_key) {
+                    html += `<div style="color: var(--text-muted); font-size: 11px; margin-top: 2px;">Lisensi: ${t.license_key.slice(0,8)}•••</div>`;
+                }
+                html += '</div>';
+            });
+        }
+        html += '</div>';
+
+        if (content) content.innerHTML = html;
+    })
+    .catch(err => {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '🌐 Audit Lisensi';
+        }
+        if (content) content.innerHTML = '<span style="color: #f87171;">❌ Gagal audit: ' + err.message + '</span>';
     });
 }
