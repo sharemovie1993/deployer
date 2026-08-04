@@ -1,16 +1,41 @@
 // public/js/health.js - System & Worker Health Matrix UI for IT Admins
 
-function populateHealthPresetDropdown() {
+function populateHealthPresetDropdown(callback) {
     const select = document.getElementById('health-target-preset');
     if (!select) return;
 
-    let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
-    if (window.globalPresets && Array.isArray(window.globalPresets)) {
-        window.globalPresets.forEach(p => {
-            html += `<option value="${p.id}">🌐 Server ${p.name || p.vpsIp} (${p.vpsIp})</option>`;
-        });
+    const renderSelectOptions = (presets) => {
+        const currentValue = select.value;
+        let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
+        if (Array.isArray(presets) && presets.length > 0) {
+            presets.forEach(p => {
+                const pName = p.name || ('Server ' + p.vpsIp);
+                const projLabel = p.project === 'licensing' ? '[Server Lisensi]' : '[Project Absenta]';
+                html += `<option value="${p.id}">🌐 ${pName} (${p.vpsIp}) ${projLabel}</option>`;
+            });
+        }
+        select.innerHTML = html;
+        if (currentValue) select.value = currentValue;
+        if (typeof callback === 'function') callback();
+    };
+
+    if (typeof globalPresets !== 'undefined' && Array.isArray(globalPresets) && globalPresets.length > 0) {
+        renderSelectOptions(globalPresets);
+    } else {
+        fetch('/api/presets')
+        .then(res => res.json())
+        .then(res => {
+            if (res.success && res.data) {
+                if (typeof globalPresets !== 'undefined') {
+                    globalPresets = res.data;
+                }
+                renderSelectOptions(res.data);
+            } else {
+                renderSelectOptions([]);
+            }
+        })
+        .catch(() => renderSelectOptions([]));
     }
-    select.innerHTML = html;
 }
 
 function refreshHealthMatrixUI() {
