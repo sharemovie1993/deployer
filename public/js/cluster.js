@@ -112,7 +112,13 @@ async function testClusterConnectivity() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ apiNodes, waNode, loadBalancerNode, dbNode, targetUser, keyPath })
         });
-        const data = await res.json();
+        const rawText = await res.text();
+        let data;
+        try {
+            data = JSON.parse(rawText);
+        } catch (_) {
+            throw new Error(`Respon server bukan JSON: ${rawText.substring(0, 120)}`);
+        }
         if (data.success && data.nodes) {
             data.nodes.forEach(node => {
                 const div = document.createElement('div');
@@ -121,6 +127,12 @@ async function testClusterConnectivity() {
                 div.textContent = `[${node.role}] (${node.ip}) ──► ${node.message}`;
                 termOutput.appendChild(div);
             });
+        } else {
+            const div = document.createElement('div');
+            div.className = 'term-line';
+            div.style.color = '#f87171';
+            div.textContent = '❌ Gagal: ' + (data.message || 'Respons tidak valid dari server');
+            termOutput.appendChild(div);
         }
     } catch (err) {
         const div = document.createElement('div');

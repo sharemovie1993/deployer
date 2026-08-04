@@ -262,7 +262,9 @@ function testClusterNodes(data, callback) {
     const lbNode = data.loadBalancerNode || '10.10.10.99';
     const dbNode = data.dbNode || '10.10.10.99';
     const user = data.targetUser || 'asepsuryadi';
-    const keyPath = data.keyPath || path.join(__dirname, '..', 'nginxonly.pem');
+    const ROOT_DIR = path.join(__dirname, '..');
+    const rawKey = (data.keyPath || '').trim();
+    const keyPath = path.isAbsolute(rawKey) ? rawKey : path.join(ROOT_DIR, rawKey || 'nginxonly.pem');
 
     const uniqueNodes = [];
     apiNodes.forEach((ip, idx) => uniqueNodes.push({ role: `API Worker Node ${idx + 1}`, ip }));
