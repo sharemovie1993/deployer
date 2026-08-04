@@ -1,13 +1,30 @@
 // Cluster Deployment JS Controller
 let clusterEventSource = null;
 
+function toggleClusterCustomKey() {
+    const choice = document.getElementById('cluster-key-choice').value;
+    const group = document.getElementById('cluster-custom-key-group');
+    if (group) {
+        group.style.display = choice === 'custom' ? 'block' : 'none';
+    }
+}
+
+function getClusterKeyPath() {
+    const choice = document.getElementById('cluster-key-choice') ? document.getElementById('cluster-key-choice').value : 'nginxonly.pem';
+    if (choice === 'custom') {
+        const customPath = document.getElementById('cluster-key-path') ? document.getElementById('cluster-key-path').value.trim() : '';
+        return customPath || 'nginxonly.pem';
+    }
+    return choice;
+}
+
 function runClusterDeployment() {
     const apiNodes = document.getElementById('cluster-api-nodes').value.trim();
     const waNode = document.getElementById('cluster-wa-node').value.trim();
     const loadBalancerNode = document.getElementById('cluster-lb-node').value.trim();
     const dbNode = document.getElementById('cluster-db-node').value.trim();
     const targetUser = document.getElementById('cluster-vps-user').value.trim() || 'asepsuryadi';
-    const keyPath = document.getElementById('cluster-key-path').value.trim() || 'nginxonly.pem';
+    const keyPath = getClusterKeyPath();
     const sudoPass = document.getElementById('cluster-sudo-pass').value.trim() || '1';
 
     if (!apiNodes) {
@@ -91,7 +108,7 @@ async function testClusterConnectivity() {
     const loadBalancerNode = document.getElementById('cluster-lb-node').value.trim();
     const dbNode = document.getElementById('cluster-db-node').value.trim();
     const targetUser = document.getElementById('cluster-vps-user').value.trim() || 'asepsuryadi';
-    const keyPath = document.getElementById('cluster-key-path').value.trim() || 'nginxonly.pem';
+    const keyPath = getClusterKeyPath();
 
     const testBtn = document.getElementById('btn-test-cluster-nodes');
     const termOutput = document.getElementById('cluster-terminal-output');

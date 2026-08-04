@@ -406,13 +406,22 @@
                     <input type="text" id="cluster-vps-user" value="asepsuryadi">
                 </div>
                 <div class="form-group">
-                    <label for="cluster-key-path">Full Path SSH Key (.pem)</label>
-                    <input type="text" id="cluster-key-path" value="nginxonly.pem">
+                    <label for="cluster-key-choice">Pilih SSH Key (.pem)</label>
+                    <select id="cluster-key-choice" onchange="toggleClusterCustomKey()">
+                        <option value="nginxonly.pem">🔑 Default (nginxonly.pem)</option>
+                        <option value="ls-key.pem">🔑 Licensing Key (ls-key.pem)</option>
+                        <option value="custom">📁 Path Kustom / Input Manual...</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="cluster-sudo-pass">Password Sudo VPS</label>
                     <input type="password" id="cluster-sudo-pass" value="1">
                 </div>
+            </div>
+
+            <div class="form-group" id="cluster-custom-key-group" style="display: none; margin-top: 15px;">
+                <label for="cluster-key-path">Full Path SSH Key Kustom (.pem)</label>
+                <input type="text" id="cluster-key-path" placeholder="D:\Path\To\your-key.pem">
             </div>
         </div>
 
