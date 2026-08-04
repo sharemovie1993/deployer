@@ -3,7 +3,13 @@ function switchAppMode(mode) {
     const wizardContainer = document.getElementById('wizard-view-container');
     const presetContainer = document.getElementById('preset-view-container');
     const clusterContainer = document.getElementById('cluster-view-container');
+    const logsContainer = document.getElementById('logs-view-container');
     const healthContainer = document.getElementById('health-view-container');
+
+    const wizardBtn = document.getElementById('mode-btn-wizard');
+    const presetBtn = document.getElementById('mode-btn-preset');
+    const clusterBtn = document.getElementById('mode-btn-cluster');
+    const logsBtn = document.getElementById('mode-btn-logs');
     const healthBtn = document.getElementById('mode-btn-health');
 
     if (!wizardContainer || !presetContainer) return;
