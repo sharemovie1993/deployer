@@ -127,6 +127,11 @@ function handleRequest(req, res) {
         return;
     }
 
+    if (pathname === '/api/clean-ghost-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
+        handleCleanGhostTunnels(req, res, parsedUrl);
+        return;
+    }
+
     if (pathname === '/api/fix-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
         handleFixTunnels(req, res, parsedUrl);
         return;
@@ -769,6 +774,96 @@ function handleAuditTunnels(req, res, parsedUrl) {
             server_ip: ip,
             tunnels_count: items.length,
             tunnels: items,
+            raw_output: stdout
+        }));
+    });
+
+    if (proc.stdin) {
+        proc.stdin.write(scriptText);
+        proc.stdin.end();
+    }
+}
+
+function handleCleanGhostTunnels(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const p = presets.find(item => item.id === presetId);
+
+    if (!p && presetId !== 'local') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+        return;
+    }
+
+    const isLocal = !p || presetId === 'local';
+    const ip = isLocal ? '127.0.0.1' : p.vpsIp;
+    const user = isLocal ? '' : (p.vpsUser || 'asepsuryadi');
+    const sudoPass = isLocal ? '' : (p.vpsSudoPass || '1');
+    const keyChoice = isLocal ? '' : (p.sshKeyChoice || 'nginxonly.pem');
+    const keyPath = isLocal ? '' : (keyChoice === 'custom' ? p.vpsKeyPath : path.join(__dirname, '..', keyChoice));
+
+    const scriptText = [
+        'echo "=== PEMBERSIHAN TUNNEL GHOST & STALE ==="',
+        'UP_IFACES=$(ip link show | grep -o "et-[a-zA-Z0-9-]*" | sort -u)',
+        'IFACE_COUNT=$(echo "$UP_IFACES" | grep -c "^et-" || echo 0)',
+        'CLEANED=0',
+        'if [ "$IFACE_COUNT" -gt 1 ]; then',
+        '  LATEST_IFACE=$(echo "$UP_IFACES" | tail -n 1)',
+        '  for old_if in $UP_IFACES; do',
+        '    if [ "$old_if" != "$LATEST_IFACE" ]; then',
+        '      echo "🧹 Mematikan interface kernel & systemd: $old_if"',
+        '      echo "' + sudoPass + '" | sudo -S ip link delete "$old_if" 2>/dev/null || true',
+        '      echo "' + sudoPass + '" | sudo -S wg-quick down "$old_if" 2>/dev/null || true',
+        '      echo "' + sudoPass + '" | sudo -S systemctl disable "wg-quick@$old_if" 2>/dev/null || true',
+        '      echo "' + sudoPass + '" | sudo -S rm -f "/etc/wireguard/$old_if.conf" "/var/www/project-absenta/tunnels/$old_if.conf" 2>/dev/null || true',
+        '      CLEANED=$((CLEANED + 1))',
+        '    fi',
+        '  done',
+        'fi',
+        'echo "CLEANUP_COUNT=$CLEANED"'
+    ].join('\n') + '\n';
+
+    let proc;
+    if (isLocal && process.platform === 'win32') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Pembersihan lokal Windows selesai.' }));
+        return;
+    } else {
+        const safeKeyPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'clean-key-safe.pem');
+        try { fs.copyFileSync(keyPath, safeKeyPath); } catch (e) {}
+        const sshArgs = [
+            '-i', safeKeyPath,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'ConnectTimeout=10',
+            '-o', 'BatchMode=yes',
+            `${user}@${ip}`,
+            'bash'
+        ];
+        proc = spawn('ssh', sshArgs, { windowsHide: true });
+    }
+
+    let stdout = '';
+    let responded = false;
+    const timer = setTimeout(() => {
+        if (responded) return;
+        responded = true;
+        try { proc.kill(); } catch (e) {}
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Pembersihan SSH timeout (15 detik).' }));
+    }, 15000);
+
+    if (proc.stdout) proc.stdout.on('data', d => stdout += d.toString());
+    if (proc.stderr) proc.stderr.on('data', d => stdout += d.toString());
+
+    proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (responded) return;
+        responded = true;
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: code === 0,
+            message: code === 0 ? 'Pembersihan tunnel bentrok/ghost di server VPS berhasil dijalankan!' : 'Gagal menjalankan pembersihan di VPS.',
             raw_output: stdout
         }));
     });

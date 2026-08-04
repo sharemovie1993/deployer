@@ -470,6 +470,12 @@ function auditTunnelPreset(presetId) {
                 }
                 html += '</div>';
             });
+
+            if (res.tunnels_count > 1) {
+                html += `<div style="margin-top: 10px; text-align: center;">
+                    <button class="btn btn-secondary" style="border-color: rgba(239,68,68,0.5); color: #f87171; background: rgba(239,68,68,0.1); width: 100%; justify-content: center; padding: 9px; font-weight: bold;" onclick="cleanGhostTunnelsPreset('${presetId}')">🧹 Bersihkan Tunnel Bentrok / Ghost Sekarang</button>
+                </div>`;
+            }
         }
         html += '</div>';
 
@@ -481,5 +487,25 @@ function auditTunnelPreset(presetId) {
             btn.innerText = '🌐 Audit Lisensi';
         }
         if (content) content.innerHTML = '<span style="color: #f87171;">❌ Gagal audit: ' + err.message + '</span>';
+    });
+}
+
+function cleanGhostTunnelsPreset(presetId) {
+    if (!confirm('Apakah Anda yakin ingin mematikan & menghapus seluruh interface bentrok/ghost di server ini?')) return;
+    const content = document.getElementById('watchdog-content-' + presetId);
+    if (content) content.innerHTML = '<div style="color: #fbbf24; font-family: monospace;">⏳ Mematikan & membersihkan interface bentrok di VPS...</div>';
+
+    fetch('/api/clean-ghost-tunnels?id=' + encodeURIComponent(presetId))
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            alert('✅ Pembersihan Berhasil!\n\n' + res.message);
+            auditTunnelPreset(presetId);
+        } else {
+            alert('❌ Gagal pembersihan: ' + res.message);
+        }
+    })
+    .catch(err => {
+        alert('❌ Error koneksi: ' + err.message);
     });
 }
