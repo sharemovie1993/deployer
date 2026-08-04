@@ -11,7 +11,7 @@ function switchAppMode(mode) {
 
     if (mode === 'preset') {
         wizardContainer.style.display = 'none';
-        presetContainer.style.display = 'none';
+        presetContainer.style.display = 'flex';
         if (clusterContainer) clusterContainer.style.display = 'none';
         wizardBtn?.classList.remove('active');
         presetBtn?.classList.add('active');
