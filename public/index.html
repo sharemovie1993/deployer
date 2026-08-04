@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absenta Deployer & Maintenance Wizard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="app-wrapper">
+
+    <!-- Top Unified Navbar -->
+    <div class="top-navbar">
+        <div class="brand-title">
+            <div class="brand-icon">⚡</div>
+            <div class="brand-text">
+                <h1>ABSENTA DEPLOYER WIZARD</h1>
+                <p>Deployment Orchestration & Server Maintenance Toolset</p>
+            </div>
+        </div>
+        <div class="mode-segmented-control">
+            <button class="mode-tab-btn active" id="mode-btn-wizard" onclick="switchAppMode('wizard')">🧙 Full Setup Wizard</button>
+            <button class="mode-tab-btn" id="mode-btn-preset" onclick="switchAppMode('preset')">⚡ Quick Update Multi-Preset</button>
+            <button class="mode-tab-btn" id="mode-btn-cluster" onclick="switchAppMode('cluster')">🌐 Multi-VM Cluster Deploy</button>
+        </div>
+    </div>
+
+    <!-- VIEW 1: FULL SETUP WIZARD -->
+    <div class="container" id="wizard-view-container">
+
+        <!-- Header -->
+        <div class="wizard-header">
+            <div class="logo-section">
+                <h1>REGISTRASI SERVER & PASANG PLATFORM</h1>
+                <p>Asisten Pemasangan Aplikasi Absenta Sekolah</p>
+            </div>
+            <div id="vps-status-indicator" style="font-size: 13px; color: var(--text-muted);">
+                Status: <span style="color: var(--warning); font-weight: 600;">Menyiapkan parameter...</span>
+            </div>
+        </div>
+
+        <!-- Step Navigator -->
+        <div class="steps-nav">
+            <div class="step-item active" id="step-nav-1">
+                <div class="step-num">1</div> Pilih Server
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-nav-2">
+                <div class="step-num">2</div> Mode Akses
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-nav-3">
+                <div class="step-num">3</div> Penyimpanan
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-nav-4">
+                <div class="step-num">4</div> Lisensi
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-nav-5">
+                <div class="step-num">5</div> Konfirmasi
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-nav-6">
+                <div class="step-num">6</div> Pemasangan
+            </div>
+        </div>
+
+        <!-- Wizard Body -->
+        <div class="wizard-body">
+
+            <!-- STEP 1: PILIH LOKASI SERVER -->
+            <div class="step-panel active" id="panel-1">
+                <h2>Pilih Target Server Pemasangan</h2>
+                <p class="subtitle">Di mana aplikasi Absenta akan dipasang?</p>
+
+                <div class="card-grid">
+                    <div class="selection-card selected" id="card-os-linux" onclick="selectTargetOS('linux')">
+                        <div class="card-title">🌐 Linux Remote VPS (Rekomendasi)</div>
+                        <div class="card-desc">Pasang ke server Linux remote (Ubuntu/Debian) menggunakan koneksi SSH. Cocok untuk cloud VPS.</div>
+                    </div>
+                    <div class="selection-card" id="card-os-windows" onclick="selectTargetOS('windows')">
+                        <div class="card-title">💻 Server Windows Lokal (On-Premise)</div>
+                        <div class="card-desc">Pasang langsung di komputer Windows ini (Localhost / Server Lokal Sekolah).</div>
+                    </div>
+                </div>
+
+                <!-- Detail VPS Linux (Dynamic) -->
+                <div id="vps-details-form" style="margin-top: 25px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="vps-ip">Alamat IP VPS Target</label>
+                            <input type="text" id="vps-ip" value="10.10.10.99" placeholder="Contoh: 10.10.10.99">
+                        </div>
+                        <div class="form-group">
+                            <label for="vps-user">Username SSH</label>
+                            <input type="text" id="vps-user" value="asepsuryadi" placeholder="asepsuryadi">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vps-key-select">Pilih File SSH Private Key (.pem)</label>
+                        <select id="vps-key-select" onchange="handleKeySelection()">
+                            <option value="nginxonly.pem">🔑 Gunakan Default Key (nginxonly.pem di folder deployer)</option>
+                            <option value="upload">📁 Upload File SSH Key (.pem) Baru...</option>
+                        </select>
+                    </div>
+
+                    <div id="key-upload-group" class="form-group" style="display: none;">
+                        <label for="key-file-input">Pilih File Private Key dari Komputer</label>
+                        <input type="file" id="key-file-input" accept=".pem,.key">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vps-sudo-pass">Password Sudo VPS (Opsional jika tanpa password)</label>
+                        <input type="password" id="vps-sudo-pass" value="1" placeholder="Password sudo VPS">
+                    </div>
+
+                    <button class="btn btn-secondary" type="button" onclick="testSSHConnection()" style="margin-top: 5px;">
+                        🔗 Uji Koneksi SSH ke Server
+                    </button>
+                    <div id="ssh-test-alert" class="alert-box"></div>
+                </div>
+            </div>
+
+            <!-- STEP 2: MODE AKSES & JARINGAN -->
+            <div class="step-panel" id="panel-2">
+                <h2>Mode Akses & Sertifikat SSL</h2>
+                <p class="subtitle">Tentukan bagaimana pengguna akan mengakses portal sekolah ini.</p>
+
+                <div class="card-grid" style="margin-bottom: 20px;">
+                    <div class="selection-card selected" id="card-mode-hybrid" onclick="selectScenario('hybrid')">
+                        <div class="card-title">🌐 Full Domain Public + Easy-Tunnel</div>
+                        <div class="card-desc">Domain publik lengkap dengan SSL Cloudflare otomatis & Easy-Tunnel publik.</div>
+                    </div>
+                    <div class="selection-card" id="card-mode-onprem" onclick="selectScenario('onprem')">
+                        <div class="card-title">🏫 On-Premise Jaringan Lokal Sekolah</div>
+                        <div class="card-desc">Hanya diakses melalui IP lokal / domain intranet sekolah tanpa tunnel publik.</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="target-domain">Domain Akses Utama Sekolah</label>
+                    <input type="text" id="target-domain" value="absenta.sekolah.sch.id" placeholder="Contoh: absenta.sekolah.sch.id">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="backend-port">Port Backend App</label>
+                        <input type="text" id="backend-port" value="3003">
+                    </div>
+                    <div class="form-group">
+                        <label for="frontend-port">Port Frontend Web</label>
+                        <input type="text" id="frontend-port" value="5175">
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 3: DATABASE & PENYIMPANAN -->
+            <div class="step-panel" id="panel-3">
+                <h2>Konfigurasi Database & Data</h2>
+                <p class="subtitle">Atur koneksi ke database PostgreSQL dan Redis.</p>
+
+                <div class="form-group">
+                    <label>Instalasi PostgreSQL Baru?</label>
+                    <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-top: 8px;">
+                        <div class="selection-card selected" id="card-pg-yes" onclick="setPostgresMode('Y')">
+                            <div class="card-title">✅ Otomatis Instal PostgreSQL</div>
+                            <div class="card-desc">Skrip akan memasang & mengonfigurasi DB lokal di server target.</div>
+                        </div>
+                        <div class="selection-card" id="card-pg-no" onclick="setPostgresMode('N')">
+                            <div class="card-title">🔗 Gunakan Database PostgreSQL Eksisting</div>
+                            <div class="card-desc">Gunakan URL koneksi database yang sudah ada.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="db-url">Database Connection URL (PostgreSQL Connection String)</label>
+                    <input type="text" id="db-url" value="postgresql://postgres:postgres@localhost:5432/absenta_db" placeholder="postgresql://user:pass@host:5432/dbname">
+                </div>
+
+                <button class="btn btn-secondary" type="button" onclick="testDatabaseConnection()">
+                    🔍 Tes Koneksi Port Database
+                </button>
+                <div id="db-test-alert" class="alert-box"></div>
+            </div>
+
+            <!-- STEP 4: LISENSI APLIKASI -->
+            <div class="step-panel" id="panel-4">
+                <h2>Aktivasi Lisensi Server Absenta</h2>
+                <p class="subtitle">Masukkan Serial Key Lisensi resmi untuk server ini.</p>
+
+                <div class="form-group">
+                    <label for="license-key">Serial Key Lisensi Server</label>
+                    <input type="text" id="license-key" placeholder="Contoh: ABSENTA-2026-XXXX-YYYY-ZZZZ">
+                </div>
+
+                <div class="form-group">
+                    <label for="school-name">Nama Resmi Sekolah / Lembaga</label>
+                    <input type="text" id="school-name" placeholder="Contoh: SMK Negeri 1 Jakarta">
+                </div>
+
+                <div class="form-group">
+                    <label for="admin-email">Email Penanggung Jawab / Admin</label>
+                    <input type="text" id="admin-email" placeholder="admin@sekolah.sch.id">
+                </div>
+
+                <button class="btn btn-secondary" type="button" onclick="checkExistingLicense()">
+                    🛡️ Verifikasi Lisensi Server
+                </button>
+                <div id="license-test-alert" class="alert-box"></div>
+            </div>
+
+            <!-- STEP 5: KONFIRMASI PARAMETER -->
+            <div class="step-panel" id="panel-5">
+                <h2>Konfirmasi Parameter Pemasangan</h2>
+                <p class="subtitle">Periksa kembali ringkasan konfigurasi sebelum skrip dijalankan.</p>
+
+                <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; font-size: 13.5px; line-height: 1.8;" id="summary-container">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+
+            <!-- STEP 6: LOG PEMASANGAN -->
+            <div class="step-panel" id="panel-6">
+                <h2>Sedang Memasang Aplikasi...</h2>
+                <p class="subtitle">Proses pemasangan berjalan di latar belakang. Silakan pantau log di bawah.</p>
+
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill" id="install-progress-fill"></div>
+                </div>
+                <div class="progress-text-container">
+                    <span id="install-progress-status">Menghubungkan ke server...</span>
+                    <span id="install-progress-percent">0%</span>
+                </div>
+
+                <div class="terminal-header" style="margin-top: 15px;">
+                    <div class="terminal-dots">
+                        <span class="dot dot-red"></span>
+                        <span class="dot dot-yellow"></span>
+                        <span class="dot dot-green"></span>
+                    </div>
+                    <div style="font-family: 'Fira Code', monospace; font-size: 12px; color: var(--text-muted);">bash - remote installation session</div>
+                    <div></div>
+                </div>
+                <div class="console-container" id="terminal-logs" style="height: 320px; border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;"></div>
+
+                <div id="final-install-alert" class="alert-box"></div>
+            </div>
+
+        </div>
+
+        <!-- Wizard Navigation Buttons -->
+        <div class="wizard-footer">
+            <button class="btn btn-secondary" id="btn-prev" onclick="prevStep()" disabled>Sebelumnya</button>
+            <button class="btn btn-primary" id="btn-next" onclick="nextStep()">Berikutnya</button>
+        </div>
+    </div>
+
+    <!-- VIEW 2: MULTI-PRESET QUICK UPDATE -->
+    <div class="container" id="preset-view-container" style="display: none;">
+        <div class="wizard-header">
+            <div class="logo-section">
+                <h1>⚡ QUICK UPDATE MULTI-PRESET</h1>
+                <p>Pembaruan Cepat 1-Click Server Remote Terdaftar</p>
+            </div>
+            <button class="btn btn-primary" type="button" onclick="openPresetModal()">➕ Tambah Preset Server</button>
+        </div>
+
+        <div class="wizard-body">
+            <div id="presets-grid-container" class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+                <!-- Dynamically populated via presets.js -->
+            </div>
+
+            <!-- Quick Update SSE Console -->
+            <div id="quick-update-console-section" style="display: none; margin-top: 30px; border-top: 1px solid var(--glass-border); padding-top: 25px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 id="quick-update-target-title" style="font-size: 16px; color: #a78bfa; font-weight: 600;">⚡ Sedang Melakukan Quick Update...</h3>
+                    <span id="quick-update-status-badge" class="badge badge-purple">Memproses...</span>
+                </div>
+                
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill" id="quick-progress-fill"></div>
+                </div>
+                <div class="progress-text-container" style="margin-bottom: 15px;">
+                    <span id="quick-progress-status">Menghubungkan SSH...</span>
+                    <span id="quick-progress-percent">0%</span>
+                </div>
+
+                <div class="terminal-header">
+                    <div class="terminal-dots">
+                        <span class="dot dot-red"></span>
+                        <span class="dot dot-yellow"></span>
+                        <span class="dot dot-green"></span>
+                    </div>
+                    <div style="font-family: 'Fira Code', monospace; font-size: 12px; color: var(--text-muted);">bash - ssh remote update session</div>
+                    <div></div>
+                </div>
+                <div class="console-container" id="quick-terminal-logs" style="height: 320px; border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;"></div>
+            </div>
+        </div>
+    </div>
+
+</div> <!-- end .app-wrapper -->
+
+<!-- Modal Dialog Add/Edit Preset -->
+<div id="preset-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="background: #1e293b; border: 1px solid var(--glass-border); border-radius: 20px; width: 90%; max-width: 550px; padding: 30px; box-shadow: 0 25px 60px rgba(0,0,0,0.6);">
+        <h3 id="preset-modal-title" style="font-size: 18px; margin-bottom: 20px; color: var(--text-main);">➕ Tambah Preset Server</h3>
+        <input type="hidden" id="preset-modal-id">
+        
+        <div class="form-group">
+            <label for="preset-modal-name">Nama Identitas Server / Sekolah</label>
+            <input type="text" id="preset-modal-name" placeholder="Contoh: Server Sekolah (10.10.10.99)">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="preset-modal-ip">Alamat IP VPS Target</label>
+                <input type="text" id="preset-modal-ip" placeholder="10.10.10.99">
+            </div>
+            <div class="form-group">
+                <label for="preset-modal-user">User SSH</label>
+                <input type="text" id="preset-modal-user" value="asepsuryadi">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="preset-modal-project">Target Proyek Deployment</label>
+            <select id="preset-modal-project">
+                <option value="absenta">Project Absenta (Aplikasi Absensi Utama)</option>
+                <option value="licensing">Server Lisensi (VPS Licensing System)</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="preset-modal-keychoice">Pilih SSH Key File</label>
+                <select id="preset-modal-keychoice" onchange="togglePresetCustomKey()">
+                    <option value="nginxonly.pem">🔑 Default (nginxonly.pem)</option>
+                    <option value="custom">📁 Path Kustom Lainnya...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="preset-modal-sudopass">Password Sudo VPS</label>
+                <input type="password" id="preset-modal-sudopass" value="1">
+            </div>
+        </div>
+
+        <div class="form-group" id="preset-custom-key-group" style="display: none;">
+            <label for="preset-modal-customkey">Full Path SSH Key File</label>
+            <input type="text" id="preset-modal-customkey" placeholder="C:\Path\To\your-key.pem">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 25px;">
+            <button class="btn btn-secondary" type="button" onclick="closePresetModal()">Batal</button>
+            <button class="btn btn-primary" type="button" onclick="savePresetSubmit()">Simpan Preset</button>
+        </div>
+    </div>
+</div>
+
+<!-- VIEW 3: MULTI-VM CLUSTER DEPLOYMENT -->
+<div class="container" id="cluster-view-container" style="display: none; flex-direction: column;">
+    <div class="wizard-header">
+        <div class="logo-section">
+            <h1>MULTI-NODE CLUSTER ORCHESTRATOR</h1>
+            <p>Deployment Horizontal Scaling untuk N-Jumlah VM/Server Absenta</p>
+        </div>
+        <div id="cluster-status-badge" class="badge badge-info">
+            Standby / Ready
+        </div>
+    </div>
+
+    <div class="wizard-body space-y-6">
+        <div class="panel-section">
+            <h2>Konfigurasi Target Cluster Nodes</h2>
+            <p class="subtitle">Tentukan daftar IP VM untuk setiap peran (*Role*) dalam cluster.</p>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="cluster-api-nodes">Daftar IP API Worker Nodes (Pisahkan dengan Koma untuk N-Jumlah VM)</label>
+                <input type="text" id="cluster-api-nodes" value="10.10.10.99, 10.10.10.100" placeholder="10.10.10.99, 10.10.10.100, 10.10.10.101">
+                <small style="color: var(--text-muted); display: block; margin-top: 4px;">Contoh: 10.10.10.99, 10.10.10.100 (Bisa memasukkan N IP VM tanpa batas)</small>
+            </div>
+
+            <div class="form-row" style="margin-top: 15px;">
+                <div class="form-group">
+                    <label for="cluster-wa-node">IP Singleton WA Daemon Node</label>
+                    <input type="text" id="cluster-wa-node" value="10.10.10.99" placeholder="10.10.10.99">
+                </div>
+                <div class="form-group">
+                    <label for="cluster-lb-node">IP Edge Router / Load Balancer Node</label>
+                    <input type="text" id="cluster-lb-node" value="10.10.10.99" placeholder="10.10.10.99">
+                </div>
+                <div class="form-group">
+                    <label for="cluster-db-node">IP DB / Redis Server Node</label>
+                    <input type="text" id="cluster-db-node" value="10.10.10.99" placeholder="10.10.10.99">
+                </div>
+            </div>
+
+            <div class="form-row" style="margin-top: 15px;">
+                <div class="form-group">
+                    <label for="cluster-vps-user">User SSH</label>
+                    <input type="text" id="cluster-vps-user" value="asepsuryadi">
+                </div>
+                <div class="form-group">
+                    <label for="cluster-key-path">Full Path SSH Key (.pem)</label>
+                    <input type="text" id="cluster-key-path" value="nginxonly.pem">
+                </div>
+                <div class="form-group">
+                    <label for="cluster-sudo-pass">Password Sudo VPS</label>
+                    <input type="password" id="cluster-sudo-pass" value="1">
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+            <button class="btn btn-primary" id="btn-run-cluster-deploy" type="button" onclick="runClusterDeployment()">
+                🚀 Mulai Multi-Node Cluster Deployment
+            </button>
+        </div>
+
+        <div class="terminal-card" style="margin-top: 25px;">
+            <div class="terminal-header">
+                <span>🖥️ Realtime Cluster Orchestrator Terminal Output Streamer</span>
+            </div>
+            <div class="terminal-body" id="cluster-terminal-output">
+                <div class="term-line" style="color: var(--text-muted);">Menunggu eksekusi deployment cluster...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script src="/js/wizard.js"></script>
+<script src="/js/presets.js"></script>
+<script src="/js/cluster.js"></script>
+
+</body>
+</html>
