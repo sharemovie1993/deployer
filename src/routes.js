@@ -501,7 +501,19 @@ function handleFixTunnels(req, res, parsedUrl) {
     } catch (e) {}
 
     const scriptText = [
-        'WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oE "et-[a-zA-Z0-9_-]+" || true)',
+        '# Matikan interface bentrok jika ada >1 interface et-*',
+        'UP_IFACES=$(ip link show | grep -o "et-[a-zA-Z0-9-]*" | sort -u)',
+        'IFACE_COUNT=$(echo "$UP_IFACES" | grep -c "^et-" || echo 0)',
+        'if [ "$IFACE_COUNT" -gt 1 ]; then',
+        '  LATEST_IFACE=$(echo "$UP_IFACES" | tail -n 1)',
+        '  for old_if in $UP_IFACES; do',
+        '    if [ "$old_if" != "$LATEST_IFACE" ]; then',
+        '      echo "' + sudoPass + '" | sudo -S wg-quick down "$old_if" 2>/dev/null || true',
+        '      echo "' + sudoPass + '" | sudo -S systemctl disable "wg-quick@$old_if" 2>/dev/null || true',
+        '      echo "' + sudoPass + '" | sudo -S rm -f "/etc/wireguard/$old_if.conf" "/var/www/project-absenta/tunnels/$old_if.conf" 2>/dev/null || true',
+        '    fi',
+        '  done',
+        'fi',
         'echo "PASS=' + sudoPass + '"',
         'if [ -d "/var/www/project-absenta/tunnels" ]; then echo "' + sudoPass + '" | sudo -S chmod 600 /var/www/project-absenta/tunnels/*.conf 2>/dev/null || true; fi',
         'if [ -d "/etc/wireguard" ]; then echo "' + sudoPass + '" | sudo -S chmod 600 /etc/wireguard/*.conf 2>/dev/null || true; fi',
@@ -512,7 +524,7 @@ function handleFixTunnels(req, res, parsedUrl) {
         '  echo "' + sudoPass + '" | sudo -S ufw allow 51820/udp 2>/dev/null || true',
         'fi',
         'echo "FIX_COMPLETE=1"',
-        'echo "WG_IFACES=$WG_IFACES"'
+        'echo "WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oE \"et-[a-zA-Z0-9_-]+\" || true)"'
     ].join('\n') + '\n';
 
     const sshArgs = [
