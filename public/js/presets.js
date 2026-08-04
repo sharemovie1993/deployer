@@ -62,6 +62,7 @@ function renderPresetsGrid(presets) {
                     '<button id="watchdog-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px;" onclick="checkWatchdogStatus(\'' + safeId + '\')">🛡️ Status Watchdog</button>' +
                     '<button id="audit-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(52,211,153,0.4); color: #34d399; background: rgba(52,211,153,0.08);" onclick="auditTunnelPreset(\'' + safeId + '\')">🌐 Audit Lisensi</button>' +
                     '<button id="tunnel-fix-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(251,191,36,0.4); color: #fbbf24; background: rgba(251,191,36,0.08);" onclick="fixTunnelPreset(\'' + safeId + '\')">🔧 Perbaiki Tunnel</button>' +
+                    '<button class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(59,130,246,0.4); color: #60a5fa; background: rgba(59,130,246,0.08);" onclick="openHealthMatrixForPreset(\'' + safeId + '\')">🩺 System Health</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(167,139,250,0.4); color: #a78bfa; background: rgba(167,139,250,0.08);" onclick="openLogMonitorForPreset(\'' + safeId + '\')">📜 Log PM2</button>' +
                 '</div>' +
             '</div>' +
@@ -508,4 +509,17 @@ function cleanGhostTunnelsPreset(presetId) {
     .catch(err => {
         alert('❌ Error koneksi: ' + err.message);
     });
+}
+
+function openHealthMatrixForPreset(presetId) {
+    if (typeof switchAppMode === 'function') {
+        switchAppMode('health');
+    }
+    const select = document.getElementById('health-target-preset');
+    if (select) {
+        select.value = presetId;
+    }
+    if (typeof refreshHealthMatrixUI === 'function') {
+        refreshHealthMatrixUI();
+    }
 }
