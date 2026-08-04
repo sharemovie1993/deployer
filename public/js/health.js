@@ -38,6 +38,27 @@ function populateHealthPresetDropdown(callback) {
     }
 }
 
+function renderSvgDonut(percent, color, size = 130, strokeWidth = 12, label = '', sublabel = '') {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference;
+
+    return `
+        <div style="position: relative; width: ${size}px; height: ${size}px; margin: 0 auto;">
+            <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform: rotate(-90deg);">
+                <circle cx="${size/2}" cy="${size/2}" r="${radius}" stroke="rgba(255,255,255,0.06)" stroke-width="${strokeWidth}" fill="transparent" />
+                <circle cx="${size/2}" cy="${size/2}" r="${radius}" stroke="${color}" stroke-width="${strokeWidth}" fill="transparent"
+                    stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round" style="transition: stroke-dashoffset 0.8s ease;" />
+            </svg>
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <div style="font-size: 20px; font-weight: 800; color: #fff; line-height: 1.1;">${percent}%</div>
+                ${label ? `<div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 4px;">${label}</div>` : ''}
+                ${sublabel ? `<div style="font-size: 10px; color: rgba(255,255,255,0.5);">${sublabel}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
 function refreshHealthMatrixUI() {
     const select = document.getElementById('health-target-preset');
     const display = document.getElementById('health-matrix-display');
@@ -61,55 +82,103 @@ function refreshHealthMatrixUI() {
 
         let html = '';
 
-        // SECTION 1: SYSTEM RESOURCES & CADDY PROXY SUMMARY
-        html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">';
+        // Calculate Worker Online Rate %
+        const onlineWorkersCount = workers.filter(w => w.status === 'online').length;
+        const workerHealthPct = workers.length > 0 ? Math.round((onlineWorkersCount / workers.length) * 100) : 100;
 
-        // Caddy Card
+        // RAM & Disk %
+        const ramPct = ram.total_mb > 0 ? Math.round((ram.used_mb / ram.total_mb) * 100) : 0;
+        const diskPct = parseInt(disk.usage_pct || '0', 10);
+
+        // SECTION 1: VISUAL DONUT & PIE CHARTS GRID
+        html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">';
+
+        // 1. Worker Health Donut Chart
+        const workerColor = workerHealthPct === 100 ? '#34d399' : workerHealthPct > 70 ? '#fbbf24' : '#f87171';
+        html += `
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px;">⚙️ Worker Services Health</div>
+                ${renderSvgDonut(workerHealthPct, workerColor, 130, 12, `${onlineWorkersCount}/${workers.length} Online`)}
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 12px;">
+                    Ketersediaan Worker PM2 Daemon
+                </div>
+            </div>
+        `;
+
+        // 2. RAM Memory Donut Chart
+        const ramColor = ramPct < 70 ? '#60a5fa' : ramPct < 90 ? '#fbbf24' : '#f87171';
+        html += `
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px;">💾 RAM Memory Usage</div>
+                ${renderSvgDonut(ramPct, ramColor, 130, 12, `${ram.used_mb || 0} MB`, `Bebas: ${ram.free_mb || 0} MB`)}
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 12px;">
+                    Total Kapasitas: ${ram.total_mb || 0} MB
+                </div>
+            </div>
+        `;
+
+        // 3. Disk Storage Donut Chart
+        const diskColor = diskPct < 75 ? '#a78bfa' : diskPct < 90 ? '#fbbf24' : '#f87171';
+        html += `
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px;">💽 Disk Storage (Root)</div>
+                ${renderSvgDonut(diskPct, diskColor, 130, 12, `${diskPct}% Terpakai`, 'Partisi Root /')}
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 12px;">
+                    Status Media: <span style="color:#34d399; font-weight: 600;">Healthy</span>
+                </div>
+            </div>
+        `;
+
+        // 4. Reverse Proxy Caddy Control Card
         const caddyBadge = caddy.active ? '<span class="badge badge-success">● RUNNING</span>' : '<span class="badge badge-error">🔴 DOWN</span>';
         html += `
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div style="font-weight: 700; font-size: 15px; color: #fff;">🛡️ Reverse Proxy Caddy</div>
-                    ${caddyBadge}
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="font-weight: 700; font-size: 14px; color: #fff;">🛡️ Reverse Proxy Caddy</div>
+                        ${caddyBadge}
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+                        <div>Port Listener: ${caddy.ports_bound ? '<span style="color:#34d399;">✅ Port 80 & 443 (Aktif)</span>' : '<span style="color:#fbbf24;">⚠️ Caddy Listening</span>'}</div>
+                        <div>Health API Backend: ${res.backend_http_code === '200' ? '<span style="color:#34d399;">HTTP 200 OK</span>' : `<span style="color:#fbbf24;">Code ${res.backend_http_code}</span>`}</div>
+                    </div>
                 </div>
-                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
-                    <div>Port Listener: ${caddy.ports_bound ? '<span style="color:#34d399;">✅ Port 80 & 443 (Aktif)</span>' : '<span style="color:#fbbf24;">⚠️ Caddy Listening</span>'}</div>
-                    <div>Health API Backend: ${res.backend_http_code === '200' ? '<span style="color:#34d399;">HTTP 200 OK</span>' : `<span style="color:#fbbf24;">Code ${res.backend_http_code}</span>`}</div>
-                </div>
-                <button class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 6px 12px; font-size: 11.5px; border-color: rgba(52,211,153,0.4); color: #34d399;" onclick="restartServiceUI('caddy')">🔄 Restart Reverse Proxy Caddy</button>
+                <button class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 8px 12px; font-size: 11.5px; border-color: rgba(52,211,153,0.4); color: #34d399;" onclick="restartServiceUI('caddy')">🔄 Restart Reverse Proxy Caddy</button>
             </div>
         `;
 
-        // RAM & Memory Card
-        const ramPct = ram.total_mb > 0 ? Math.round((ram.used_mb / ram.total_mb) * 100) : 0;
-        html += `
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div style="font-weight: 700; font-size: 15px; color: #fff;">💾 Memory RAM</div>
-                    <span class="badge badge-info">${ramPct}% Used</span>
-                </div>
-                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
-                    <div>Total RAM: ${ram.total_mb || '-'} MB</div>
-                    <div>Terpakai: ${ram.used_mb || '-'} MB (Bebas: ${ram.free_mb || '-'} MB)</div>
-                </div>
-            </div>
-        `;
+        html += '</div>'; // end top grid
 
-        // Disk Storage Card
-        html += `
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div style="font-weight: 700; font-size: 15px; color: #fff;">💽 Disk Storage (Root)</div>
-                    <span class="badge badge-info">${disk.usage_pct || '0%'} Used</span>
-                </div>
-                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
-                    <div>Penggunaan Disk Root: ${disk.usage_pct || '0%'}</div>
-                    <div>Status Media: <span style="color:#34d399;">Healthy</span></div>
-                </div>
-            </div>
-        `;
+        // SECTION 2: WORKER MEMORY ALLOCATION BAR GRAPH CHART
+        if (workers.length > 0) {
+            const maxMem = Math.max(...workers.map(w => w.memory_mb || 1), 1);
+            html += `
+                <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; margin-top: 10px;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0 0 14px 0;">📊 Grafik Alokasi Memori RAM Per-Worker (MB)</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+            `;
 
-        html += '</div>'; // end grid
+            workers.forEach(w => {
+                const memPct = Math.round(((w.memory_mb || 0) / maxMem) * 100);
+                const barColor = w.name.includes('redis') ? '#34d399' : w.name.includes('wa') ? '#a78bfa' : w.name.includes('web') ? '#fbbf24' : '#60a5fa';
+                html += `
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                            <span style="color: #fff; font-weight: 600;">${w.name} <span style="color: var(--text-muted); font-size: 11px;">(#${w.pm_id})</span></span>
+                            <span style="color: #a78bfa; font-family: monospace; font-weight: 600;">${w.memory_mb} MB</span>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.06); height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="width: ${memPct}%; background: ${barColor}; height: 100%; border-radius: 4px; transition: width 0.6s ease;"></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+        }
 
         // SECTION 2: PM2 PROCESSES HEALTH MATRIX TABLE
         html += `
