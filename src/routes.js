@@ -898,6 +898,7 @@ function handleServerHealth(req, res, parsedUrl) {
     const isLocal = !p || presetId === 'local';
     const ip = isLocal ? '127.0.0.1' : p.vpsIp;
     const user = isLocal ? '' : (p.vpsUser || 'asepsuryadi');
+    const sudoPass = isLocal ? '' : (p.vpsSudoPass || '1');
     const keyChoice = isLocal ? '' : (p.sshKeyChoice || 'nginxonly.pem');
     const keyPath = isLocal ? '' : (keyChoice === 'custom' ? p.vpsKeyPath : path.join(__dirname, '..', keyChoice));
 
