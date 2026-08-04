@@ -14,29 +14,31 @@ if %errorlevel% neq 0 (
     exit
 )
 
-:: Hapus file sementara .installer_url jika sudah ada dari sesi sebelumnya
-if exist .installer_url del .installer_url
+:: Hapus file sementara active_url.txt jika ada
+if exist active_url.txt del active_url.txt
 
-:: Buat script VBS sementara untuk menjalankan node secara tersembunyi (hidden window)
-echo Set WshShell = CreateObject("WScript.Shell") > .launch.vbs
-echo WshShell.Run "node installer.js", 0, false >> .launch.vbs
+:: Matikan proses node lama yang berjalan pada port 8080-8085 jika ada
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8080 :8081 :8082 :8083 :8084 :8085"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
 
-:: Jalankan script VBS
-wscript .launch.vbs
+:: Jalankan installer.js di latar belakang
+start /B node installer.js >nul 2>&1
 
-:: Tunggu 2 detik untuk memastikan server mulai mendeteksi port
-timeout /t 2 /nobreak >nul
+:: Tunggu 2 detik untuk memastikan server siap
+ping 127.0.0.1 -n 3 >nul
 
-:: Buka browser secara otomatis ke port default atau port dinamis jika terdeteksi dari logs
-if exist .installer_url (
-    set /p INSTALLER_URL=<.installer_url
+:: Buka browser secara otomatis ke URL server yang aktif
+if exist active_url.txt (
+    set /p INSTALLER_URL=<active_url.txt
 ) else (
     set INSTALLER_URL=http://localhost:8080
 )
 
+echo Membuka %INSTALLER_URL% di browser...
 start %INSTALLER_URL%
 
 :: Hapus file VBS launcher sementara
-del .launch.vbs
+if exist .launch.vbs del .launch.vbs
 
 exit

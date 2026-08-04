@@ -112,6 +112,11 @@ function handleRequest(req, res) {
         return;
     }
 
+    if (pathname === '/api/fix-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
+        handleFixTunnels(req, res, parsedUrl);
+        return;
+    }
+
     if (pathname === '/api/stream-install' && req.method === 'GET') {
         handleStreamInstall(req, res, installParams);
         return;
@@ -447,6 +452,99 @@ function handleWatchdogStatus(req, res, parsedUrl) {
 
     // Kirim script via stdin
     proc.stdin.write(checkScript);
+    proc.stdin.end();
+}
+
+function handleFixTunnels(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const p = presets.find(item => item.id === presetId);
+
+    if (!p) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+        return;
+    }
+
+    const ip = p.vpsIp;
+    const user = p.vpsUser || 'asepsuryadi';
+    const sudoPass = p.vpsSudoPass || '1';
+    const keyChoice = p.sshKeyChoice || 'nginxonly.pem';
+    const keyPath = keyChoice === 'custom'
+        ? p.vpsKeyPath
+        : path.join(__dirname, '..', keyChoice);
+
+    if (!fs.existsSync(keyPath)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: `SSH Key file '${keyChoice}' tidak ditemukan.` }));
+        return;
+    }
+
+    const safeKeyPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'tunnel-fix-key-safe.pem');
+    try {
+        fs.copyFileSync(keyPath, safeKeyPath);
+    } catch (e) {}
+
+    const scriptText = [
+        'WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oE "et-[a-zA-Z0-9_-]+" || true)',
+        'echo "PASS=' + sudoPass + '"',
+        'if [ -d "/var/www/project-absenta/tunnels" ]; then echo "' + sudoPass + '" | sudo -S chmod 600 /var/www/project-absenta/tunnels/*.conf 2>/dev/null || true; fi',
+        'if [ -d "/etc/wireguard" ]; then echo "' + sudoPass + '" | sudo -S chmod 600 /etc/wireguard/*.conf 2>/dev/null || true; fi',
+        'if command -v ufw >/dev/null 2>&1; then',
+        '  echo "' + sudoPass + '" | sudo -S ufw allow 443/tcp 2>/dev/null || true',
+        '  echo "' + sudoPass + '" | sudo -S ufw allow 80/tcp 2>/dev/null || true',
+        '  echo "' + sudoPass + '" | sudo -S ufw allow 3001/tcp 2>/dev/null || true',
+        '  echo "' + sudoPass + '" | sudo -S ufw allow 51820/udp 2>/dev/null || true',
+        'fi',
+        'echo "FIX_COMPLETE=1"',
+        'echo "WG_IFACES=$WG_IFACES"'
+    ].join('\n') + '\n';
+
+    const sshArgs = [
+        '-i', safeKeyPath,
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'ConnectTimeout=10',
+        '-o', 'BatchMode=yes',
+        `${user}@${ip}`,
+        'bash'
+    ];
+
+    const proc = spawn('ssh', sshArgs, { windowsHide: true });
+    let stdout = '';
+    let responded = false;
+
+    const timer = setTimeout(() => {
+        if (!responded) {
+            responded = true;
+            proc.kill();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: `Timeout perbaikan ke ${ip}` }));
+        }
+    }, 18000);
+
+    proc.stdout.on('data', d => { stdout += d.toString(); });
+
+    proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (responded) return;
+        responded = true;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: code === 0,
+            message: code === 0 ? 'Izin file (chmod 600) & Firewall UFW berhasil diperbaiki!' : 'Perbaikan gagal.',
+            output: stdout
+        }));
+    });
+
+    proc.on('error', err => {
+        clearTimeout(timer);
+        if (responded) return;
+        responded = true;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: `SSH error: ${err.message}` }));
+    });
+
+    proc.stdin.write(scriptText);
     proc.stdin.end();
 }
 

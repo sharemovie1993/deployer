@@ -293,6 +293,7 @@ while ($true) {
     Write-Host "   8) Perluas Partisi Disk Linux VM/VPS (Remote)"
     Write-Host "   9) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
     Write-Host "  12) Kernel & System Tuning Produksi Absenta (Remote)"
+    Write-Host "  13) 🔧 Perbaikan & Pembersihan Terowongan Easy Tunnel (Remote)" -ForegroundColor Yellow
     Write-Host ""
     Write-Host " 🚨 [EMERGENCY & CLEANUP]" -ForegroundColor Cyan
     Write-Host "   10) Kill Semua Proses Node.js (Emergency)"
@@ -301,7 +302,7 @@ while ($true) {
     Write-Host " 🚪 [EXIT]" -ForegroundColor Cyan
     Write-Host "   0) Keluar"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [0-12]"
+    $choice = Read-Host "Pilih opsi [0-13]"
 
     switch ($choice) {
         "1" {
@@ -958,6 +959,20 @@ while ($true) {
                 }
             } else {
                 Write-Host "Script easy-tuning.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
+                Wait-Key
+            }
+        }
+        "13" {
+            $tunnelFixScript = Join-Path $PSScriptRoot "easy-tunnel-fix.ps1"
+            if (Test-Path $tunnelFixScript) {
+                try {
+                    & $tunnelFixScript
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-tunnel-fix: $_" -ForegroundColor Red
+                    Wait-Key
+                }
+            } else {
+                Write-Host "Script easy-tunnel-fix.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }

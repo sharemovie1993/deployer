@@ -1,0 +1,12 @@
+[
+  {
+    "name": "10.10.10.99",
+    "vpsIp": "10.10.10.99",
+    "vpsUser": "asepsuryadi",
+    "project": "absenta",
+    "sshKeyChoice": "nginxonly.pem",
+    "vpsSudoPass": "1",
+    "vpsKeyPath": "",
+    "id": "preset-1785418089536"
+  }
+]
