@@ -1,5 +1,17 @@
-# easy-setup-ssh.ps1 - Skrip Registrasi SSH Key Jarak Jauh
-# Berfungsi mendaftarkan public key nginxonly.pem ke VPS target agar bisa login tanpa password
+[CmdletBinding()]
+param (
+    [Parameter(Mandatory = $false)]
+    [string]$TargetIP = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$TargetUser = "asepsuryadi",
+
+    [Parameter(Mandatory = $false)]
+    [string]$Password = "",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$Silent = $false
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -16,7 +28,7 @@ function Show-Log {
 
 function Show-Header {
     param ($Title)
-    Clear-Host
+    if (-not $Silent) { Clear-Host }
     Write-Host "==========================================================" -ForegroundColor Cyan
     Write-Host "      $Title" -ForegroundColor Yellow -Bold
     Write-Host "==========================================================" -ForegroundColor Cyan
@@ -27,13 +39,14 @@ Write-Host "Script ini akan mendaftarkan public key dari nginxonly.pem ke VPS ta
 Write-Host "Agar Anda dapat melakukan deployment remote tanpa mengetik password terus-menerus." -ForegroundColor Green
 Write-Host "----------------------------------------------------------"
 
-$TARGET_IP = (Read-Host "Masukkan IP VPS Target (Contoh: 10.10.10.163)").Trim()
-$TARGET_USER = "asepsuryadi"
+if ([string]::IsNullOrWhiteSpace($TargetIP)) {
+    $TargetIP = (Read-Host "Masukkan IP VPS Target (Contoh: 10.10.10.163)").Trim()
+}
 
-if ([string]::IsNullOrWhiteSpace($TARGET_IP)) {
+if ([string]::IsNullOrWhiteSpace($TargetIP)) {
     Write-Host "Error: IP Target tidak boleh kosong!" -ForegroundColor Red
     Stop-Transcript
-    exit
+    exit 1
 }
 
 $KEY_FILE = Join-Path $PSScriptRoot "nginxonly.pem"

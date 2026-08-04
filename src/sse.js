@@ -241,8 +241,71 @@ function handleStreamClusterInstall(req, res, parsedUrl) {
     });
 }
 
+function handleStreamSetupSsh(req, res, parsedUrl) {
+    const targetIp = parsedUrl.searchParams.get('targetIp') || '';
+    const targetUser = parsedUrl.searchParams.get('targetUser') || 'asepsuryadi';
+    const password = parsedUrl.searchParams.get('password') || '';
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    const psArgs = [
+        '-ExecutionPolicy', 'Bypass',
+        '-File', path.join(ROOT_DIR, 'easy-setup-ssh.ps1'),
+        '-Silent',
+        '-TargetIP', targetIp,
+        '-TargetUser', targetUser,
+        '-Password', password
+    ];
+
+    const logMsg = `[SETUP_SSH] Memulai Registrasi SSH Key ke VPS: ${targetUser}@${targetIp}...\n\n`;
+    res.write(`data: ${logMsg.replace(/\n/g, '\ndata: ')}\n\n`);
+
+    const heartbeat = setInterval(() => {
+        res.write(': heartbeat\n\n');
+    }, 10000);
+
+    const psProcess = spawn('powershell.exe', psArgs);
+
+    psProcess.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    psProcess.stderr.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: [ERROR] ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    psProcess.on('close', (code) => {
+        clearInterval(heartbeat);
+        if (code === 0) {
+            res.write(`data: [INSTALL_COMPLETE]\n\n`);
+        } else {
+            res.write(`data: [INSTALL_FAILED] dengan exit code: ${code}\n\n`);
+        }
+        res.end();
+    });
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+    });
+}
+
 module.exports = {
     handleStreamQuickUpdate,
     handleStreamInstall,
-    handleStreamClusterInstall
+    handleStreamClusterInstall,
+    handleStreamSetupSsh
 };

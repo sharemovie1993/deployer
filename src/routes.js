@@ -4,7 +4,7 @@ const http = require('http');
 const https = require('https');
 const { spawn, exec } = require('child_process');
 const { getPresets, savePresets } = require('./preset-store');
-const { handleStreamQuickUpdate, handleStreamInstall, handleStreamClusterInstall } = require('./sse');
+const { handleStreamQuickUpdate, handleStreamInstall, handleStreamClusterInstall, handleStreamSetupSsh } = require('./sse');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
@@ -99,6 +99,11 @@ function handleRequest(req, res) {
 
     if (pathname === '/api/stream-cluster-install' && req.method === 'GET') {
         handleStreamClusterInstall(req, res, parsedUrl);
+        return;
+    }
+
+    if (pathname === '/api/stream-setup-ssh' && req.method === 'GET') {
+        handleStreamSetupSsh(req, res, parsedUrl);
         return;
     }
 
