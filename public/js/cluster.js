@@ -84,3 +84,52 @@ function runClusterDeployment() {
         clusterEventSource.close();
     };
 }
+
+async function testClusterConnectivity() {
+    const apiNodes = document.getElementById('cluster-api-nodes').value.trim();
+    const waNode = document.getElementById('cluster-wa-node').value.trim();
+    const loadBalancerNode = document.getElementById('cluster-lb-node').value.trim();
+    const dbNode = document.getElementById('cluster-db-node').value.trim();
+    const targetUser = document.getElementById('cluster-vps-user').value.trim() || 'asepsuryadi';
+    const keyPath = document.getElementById('cluster-key-path').value.trim() || 'nginxonly.pem';
+
+    const testBtn = document.getElementById('btn-test-cluster-nodes');
+    const termOutput = document.getElementById('cluster-terminal-output');
+
+    if (testBtn) testBtn.disabled = true;
+    termOutput.innerHTML = '';
+
+    const divHeader = document.createElement('div');
+    divHeader.className = 'term-line';
+    divHeader.style.color = '#38bdf8';
+    divHeader.style.fontWeight = 'bold';
+    divHeader.textContent = '🔍 MEMERIKSA KONEKTIVITAS SELURUH NODE CLUSTER VIA SSH...';
+    termOutput.appendChild(divHeader);
+
+    try {
+        const res = await fetch('/api/test-cluster-nodes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiNodes, waNode, loadBalancerNode, dbNode, targetUser, keyPath })
+        });
+        const data = await res.json();
+        if (data.success && data.nodes) {
+            data.nodes.forEach(node => {
+                const div = document.createElement('div');
+                div.className = 'term-line';
+                div.style.color = node.status === 'online' ? '#4ade80' : '#f87171';
+                div.textContent = `[${node.role}] (${node.ip}) ──► ${node.message}`;
+                termOutput.appendChild(div);
+            });
+        }
+    } catch (err) {
+        const div = document.createElement('div');
+        div.className = 'term-line';
+        div.style.color = '#f87171';
+        div.textContent = '❌ Gagal melakukan tes koneksi: ' + err.message;
+        termOutput.appendChild(div);
+    } finally {
+        if (testBtn) testBtn.disabled = false;
+        termOutput.scrollTop = termOutput.scrollHeight;
+    }
+}

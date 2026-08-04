@@ -169,6 +169,24 @@ function handleRequest(req, res) {
         return;
     }
 
+    if (pathname === '/api/test-cluster-nodes' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                testClusterNodes(data, (results) => {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, nodes: results }));
+                });
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: 'Invalid JSON' }));
+            }
+        });
+        return;
+    }
+
     // 404 Not Found
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('404 Not Found');
@@ -235,6 +253,39 @@ function runSshTest(ip, user, keyPath, callback) {
         } else {
             callback(true, `Koneksi SSH SUKSES ke ${user}@${ip}! Server siap dipasang.`);
         }
+    });
+}
+
+function testClusterNodes(data, callback) {
+    const apiNodes = (data.apiNodes || '10.10.10.99').split(',').map(s => s.trim()).filter(Boolean);
+    const waNode = data.waNode || '10.10.10.99';
+    const lbNode = data.loadBalancerNode || '10.10.10.99';
+    const dbNode = data.dbNode || '10.10.10.99';
+    const user = data.targetUser || 'asepsuryadi';
+    const keyPath = data.keyPath || path.join(__dirname, '..', 'nginxonly.pem');
+
+    const uniqueNodes = [];
+    apiNodes.forEach((ip, idx) => uniqueNodes.push({ role: `API Worker Node ${idx + 1}`, ip }));
+    uniqueNodes.push({ role: 'Singleton WA Daemon Node', ip: waNode });
+    uniqueNodes.push({ role: 'Edge Router / Load Balancer Node', ip: lbNode });
+    uniqueNodes.push({ role: 'DB & Redis Node', ip: dbNode });
+
+    const results = [];
+    let completed = 0;
+
+    uniqueNodes.forEach((node) => {
+        const sshCmd = `ssh -i "${keyPath}" -o StrictHostKeyChecking=no -o ConnectTimeout=4 ${user}@${node.ip} "echo SSH_OK"`;
+        exec(sshCmd, (err, stdout) => {
+            if (err || !stdout.includes('SSH_OK')) {
+                results.push({ role: node.role, ip: node.ip, status: 'offline', message: `❌ SSH Gagal / Timeout ke ${user}@${node.ip}` });
+            } else {
+                results.push({ role: node.role, ip: node.ip, status: 'online', message: `🟢 TERHUBUNG (SSH Port 22 OK)` });
+            }
+            completed++;
+            if (completed === uniqueNodes.length) {
+                callback(results);
+            }
+        });
     });
 }
 
