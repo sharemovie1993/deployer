@@ -198,7 +198,7 @@ function refreshHealthMatrixUI() {
                     statusDot = '🟡';
                     barColor = '#fbbf24';
                 } else {
-                    barColor = w.name.includes('redis') ? '#34d399' : w.name.includes('wa') ? '#a78bfa' : w.name.includes('web') ? '#fbbf24' : '#60a5fa';
+                    barColor = '#34d399';
                 }
 
                 html += `
