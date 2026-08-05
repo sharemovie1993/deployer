@@ -911,6 +911,8 @@ function handleServerHealth(req, res, parsedUrl) {
         'free -m 2>/dev/null || true',
         'echo "=== DISK_INFO ==="',
         'df -h / 2>/dev/null || true',
+        'echo "=== CPU_INFO ==="',
+        'top -bn1 2>/dev/null | grep "Cpu(s)" || true',
         'echo "=== BACKEND_HTTP ==="',
         'curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 http://127.0.0.1:3003/ || echo "000"',
         'echo ""',
@@ -995,6 +997,15 @@ function handleServerHealth(req, res, parsedUrl) {
             diskSummary = { usage_pct: diskMatch[1] };
         }
 
+        let totalCpuPct = 0;
+        const cpuMatch = stdout.match(/%Cpu\(s\):\s*([\d\.,]+)\s+us,\s*([\d\.,]+)\s+sy.*?([\d\.,]+)\s+id/);
+        if (cpuMatch) {
+            const idle = parseFloat(cpuMatch[3].replace(',', '.'));
+            totalCpuPct = Math.max(0, Math.round((100 - idle) * 10) / 10);
+        } else if (pm2Processes.length > 0) {
+            totalCpuPct = Math.round(pm2Processes.reduce((acc, p) => acc + (p.cpu_percent || 0), 0) * 10) / 10;
+        }
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: true,
@@ -1007,6 +1018,9 @@ function handleServerHealth(req, res, parsedUrl) {
             pm2_workers: pm2Processes,
             ram: ramSummary,
             disk: diskSummary,
+            cpu: {
+                usage_pct: totalCpuPct
+            },
             raw_output: stdout
         }));
     });
