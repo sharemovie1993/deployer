@@ -38,6 +38,46 @@ function populateHealthPresetDropdown(callback) {
     }
 }
 
+let healthAutoRefreshInterval = null;
+let isHealthAutoRefreshEnabled = true;
+
+function startHealthAutoRefresh() {
+    stopHealthAutoRefresh();
+    if (isHealthAutoRefreshEnabled) {
+        healthAutoRefreshInterval = setInterval(() => {
+            const healthContainer = document.getElementById('health-view-container');
+            if (healthContainer && healthContainer.style.display !== 'none') {
+                refreshHealthMatrixUI(true); // true = silent refresh without flashing loader
+            } else {
+                stopHealthAutoRefresh();
+            }
+        }, 10000);
+    }
+}
+
+function stopHealthAutoRefresh() {
+    if (healthAutoRefreshInterval) {
+        clearInterval(healthAutoRefreshInterval);
+        healthAutoRefreshInterval = null;
+    }
+}
+
+function toggleHealthAutoRefresh() {
+    isHealthAutoRefreshEnabled = !isHealthAutoRefreshEnabled;
+    const btn = document.getElementById('health-auto-refresh-toggle-btn');
+    if (btn) {
+        btn.innerHTML = isHealthAutoRefreshEnabled ? '🟢 Auto-Refresh (Live 10s)' : '⏸️ Auto-Refresh (Paused)';
+        btn.style.borderColor = isHealthAutoRefreshEnabled ? 'rgba(52,211,153,0.4)' : 'rgba(239,68,68,0.4)';
+        btn.style.color = isHealthAutoRefreshEnabled ? '#34d399' : '#f87171';
+    }
+    if (isHealthAutoRefreshEnabled) {
+        startHealthAutoRefresh();
+        refreshHealthMatrixUI();
+    } else {
+        stopHealthAutoRefresh();
+    }
+}
+
 function renderSvgDonut(percent, color, size = 95, strokeWidth = 9, label = '', sublabel = '') {
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
@@ -59,19 +99,23 @@ function renderSvgDonut(percent, color, size = 95, strokeWidth = 9, label = '', 
     `;
 }
 
-function refreshHealthMatrixUI() {
+function refreshHealthMatrixUI(isSilent = false) {
     const select = document.getElementById('health-target-preset');
     const display = document.getElementById('health-matrix-display');
     if (!select || !display) return;
 
     const presetId = select.value;
-    display.innerHTML = '<div style="color: #6ee7b7; font-family: monospace; text-align: center; padding: 30px;">⏳ Memindai kesehatan Caddy, PM2 workers, dan sistem...</div>';
+    if (!isSilent) {
+        display.innerHTML = '<div style="color: #6ee7b7; font-family: monospace; text-align: center; padding: 30px;">⏳ Memindai kesehatan Caddy, PM2 workers, dan sistem...</div>';
+    }
 
     fetch('/api/server-health?id=' + encodeURIComponent(presetId))
     .then(r => r.json())
     .then(res => {
         if (!res.success) {
-            display.innerHTML = `<div style="color: #f87171; text-align: center; padding: 30px;">❌ Gagal memuat diagnosa health: ${res.message}</div>`;
+            if (!isSilent) {
+                display.innerHTML = `<div style="color: #f87171; text-align: center; padding: 30px;">❌ Gagal memuat diagnosa health: ${res.message}</div>`;
+            }
             return;
         }
 

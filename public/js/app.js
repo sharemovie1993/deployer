@@ -15,6 +15,7 @@ function switchAppMode(mode) {
     if (!wizardContainer || !presetContainer) return;
 
     if (mode === 'preset') {
+        if (typeof stopHealthAutoRefresh === 'function') stopHealthAutoRefresh();
         wizardContainer.style.display = 'none';
         presetContainer.style.display = 'flex';
         if (clusterContainer) clusterContainer.style.display = 'none';
@@ -29,6 +30,7 @@ function switchAppMode(mode) {
             loadPresets();
         }
     } else if (mode === 'cluster') {
+        if (typeof stopHealthAutoRefresh === 'function') stopHealthAutoRefresh();
         wizardContainer.style.display = 'none';
         presetContainer.style.display = 'none';
         if (clusterContainer) clusterContainer.style.display = 'flex';
@@ -40,6 +42,7 @@ function switchAppMode(mode) {
         logsBtn?.classList.remove('active');
         healthBtn?.classList.remove('active');
     } else if (mode === 'logs') {
+        if (typeof stopHealthAutoRefresh === 'function') stopHealthAutoRefresh();
         wizardContainer.style.display = 'none';
         presetContainer.style.display = 'none';
         if (clusterContainer) clusterContainer.style.display = 'none';
@@ -70,7 +73,11 @@ function switchAppMode(mode) {
         if (typeof refreshHealthMatrixUI === 'function') {
             refreshHealthMatrixUI();
         }
+        if (typeof startHealthAutoRefresh === 'function') {
+            startHealthAutoRefresh();
+        }
     } else {
+        if (typeof stopHealthAutoRefresh === 'function') stopHealthAutoRefresh();
         wizardContainer.style.display = 'flex';
         presetContainer.style.display = 'none';
         if (clusterContainer) clusterContainer.style.display = 'none';
