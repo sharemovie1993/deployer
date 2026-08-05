@@ -912,7 +912,7 @@ function handleServerHealth(req, res, parsedUrl) {
         'echo "=== DISK_INFO ==="',
         'df -h / 2>/dev/null || true',
         'echo "=== CPU_INFO ==="',
-        'top -bn1 2>/dev/null | grep "Cpu(s)" || true',
+        'top -bn2 -d0.3 2>/dev/null | grep "Cpu(s)" | tail -1 || true',
         'echo "=== BACKEND_HTTP ==="',
         'curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 http://127.0.0.1:3003/ || echo "000"',
         'echo ""',

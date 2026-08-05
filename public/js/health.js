@@ -78,21 +78,23 @@ function toggleHealthAutoRefresh() {
     }
 }
 
-function renderSvgDonut(percent, color, size = 95, strokeWidth = 9, label = '', sublabel = '') {
+function renderSvgDonut(percent, color, size = 95, strokeWidth = 9, label = '', sublabel = '', domId = '') {
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference;
+    const wrapId = domId ? `id="${domId}"` : '';
+    const subId = domId ? `id="${domId}-sub"` : '';
 
     return `
-        <div style="position: relative; width: ${size}px; height: ${size}px; margin: 0 auto;">
+        <div ${wrapId} style="position: relative; width: ${size}px; height: ${size}px; margin: 0 auto;">
             <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform: rotate(-90deg);">
                 <circle cx="${size/2}" cy="${size/2}" r="${radius}" stroke="rgba(255,255,255,0.06)" stroke-width="${strokeWidth}" fill="transparent" />
-                <circle cx="${size/2}" cy="${size/2}" r="${radius}" stroke="${color}" stroke-width="${strokeWidth}" fill="transparent"
+                <circle class="donut-ring" cx="${size/2}" cy="${size/2}" r="${radius}" stroke="${color}" stroke-width="${strokeWidth}" fill="transparent"
                     stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round" style="transition: stroke-dashoffset 0.8s ease;" />
             </svg>
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-                <div style="font-size: 15px; font-weight: 800; color: #fff; line-height: 1.1;">${percent}%</div>
-                ${label ? `<div style="font-size: 9px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">${label}</div>` : ''}
+                <div class="donut-pct" style="font-size: 15px; font-weight: 800; color: #fff; line-height: 1.1;">${percent}%</div>
+                ${label ? `<div ${subId} style="font-size: 9px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">${label}</div>` : ''}
                 ${sublabel ? `<div style="font-size: 8px; color: rgba(255,255,255,0.5);">${sublabel}</div>` : ''}
             </div>
         </div>
@@ -103,6 +105,16 @@ function refreshHealthMatrixUI(isSilent = false) {
     const select = document.getElementById('health-target-preset');
     const display = document.getElementById('health-matrix-display');
     if (!select || !display) return;
+
+    // If already rendered and this is a silent auto-refresh, use seamless DOM patch
+    if (isSilent && display.getAttribute('data-health-rendered') === '1') {
+        const presetId = select.value;
+        fetch('/api/server-health?id=' + encodeURIComponent(presetId))
+        .then(r => r.json())
+        .then(res => { if (res.success) applySeamlessHealthUpdate(res); })
+        .catch(() => {});
+        return;
+    }
 
     const presetId = select.value;
     if (!isSilent) {
@@ -144,7 +156,7 @@ function refreshHealthMatrixUI(isSilent = false) {
         html += `
             <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
                 <div style="font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 8px;">⚙️ Worker Services</div>
-                ${renderSvgDonut(workerHealthPct, workerColor, 95, 9, `${onlineWorkersCount}/${workers.length} Online`)}
+                ${renderSvgDonut(workerHealthPct, workerColor, 95, 9, `${onlineWorkersCount}/${workers.length} Online`, '', 'donut-worker')}
                 <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">
                     Worker PM2 Daemon
                 </div>
@@ -156,7 +168,7 @@ function refreshHealthMatrixUI(isSilent = false) {
         html += `
             <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
                 <div style="font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 8px;">⚡ Total CPU Load</div>
-                ${renderSvgDonut(cpuPct, cpuColor, 95, 9, `${cpuPct}% CPU`, 'Processor')}
+                ${renderSvgDonut(cpuPct, cpuColor, 95, 9, `${cpuPct}% CPU`, 'Processor', 'donut-cpu')}
                 <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">
                     Beban System
                 </div>
@@ -168,7 +180,7 @@ function refreshHealthMatrixUI(isSilent = false) {
         html += `
             <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
                 <div style="font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 8px;">💾 RAM Memory</div>
-                ${renderSvgDonut(ramPct, ramColor, 95, 9, `${ram.used_mb || 0} MB`, `Bebas: ${ram.free_mb || 0} MB`)}
+                ${renderSvgDonut(ramPct, ramColor, 95, 9, `${ram.used_mb || 0} MB`, `Bebas: ${ram.free_mb || 0} MB`, 'donut-ram')}
                 <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">
                     Total: ${ram.total_mb || 0} MB
                 </div>
@@ -180,7 +192,7 @@ function refreshHealthMatrixUI(isSilent = false) {
         html += `
             <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
                 <div style="font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 8px;">💽 Disk Root</div>
-                ${renderSvgDonut(diskPct, diskColor, 95, 9, `${diskPct}% Terpakai`, 'Partisi Root')}
+                ${renderSvgDonut(diskPct, diskColor, 95, 9, `${diskPct}% Terpakai`, 'Partisi Root', 'donut-disk')}
                 <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">
                     Status: <span style="color:#34d399; font-weight: 600;">Healthy</span>
                 </div>
@@ -249,14 +261,14 @@ function refreshHealthMatrixUI(isSilent = false) {
                     <div>
                         <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
                             <span style="color: #fff; font-weight: 600;">${w.name} <span style="color: var(--text-muted); font-size: 11px;">(#${w.pm_id})</span></span>
-                            <span style="font-family: monospace; font-weight: 600;">
+                            <span id="bar-lbl-${w.pm_id}" style="font-family: monospace; font-weight: 600;">
                                 <span style="color: #fff;">${memMb} MB</span> 
                                 <span style="color: var(--text-muted); font-weight: 400; font-size: 11px;">(${sysRamPct}%)</span>
                                 &nbsp;${statusDot}
                             </span>
                         </div>
                         <div style="background: rgba(255,255,255,0.06); height: 8px; border-radius: 4px; overflow: hidden;">
-                            <div style="width: ${barWidthPct}%; background: ${barColor}; height: 100%; border-radius: 4px; transition: width 0.6s ease;"></div>
+                            <div id="bar-${w.pm_id}" style="width: ${barWidthPct}%; background: ${barColor}; height: 100%; border-radius: 4px; transition: width 0.6s ease;"></div>
                         </div>
                     </div>
                 `;
@@ -332,10 +344,10 @@ function refreshHealthMatrixUI(isSilent = false) {
                         <td style="padding: 12px 10px; font-weight: 600; color: #fff;">${w.name}</td>
                         <td style="padding: 12px 10px; color: var(--text-muted); font-family: monospace;">#${w.pm_id}</td>
                         <td style="padding: 12px 10px;">${statusBadge}</td>
-                        <td style="padding: 12px 10px; font-family: monospace;">${w.cpu_percent}%</td>
-                        <td style="padding: 12px 10px; font-family: monospace; color: #a78bfa;">${w.memory_mb} MB</td>
+                        <td id="td-cpu-${w.pm_id}" style="padding: 12px 10px; font-family: monospace;">${w.cpu_percent}%</td>
+                        <td id="td-mem-${w.pm_id}" style="padding: 12px 10px; font-family: monospace; color: #a78bfa;">${w.memory_mb} MB</td>
                         <td style="padding: 12px 10px; font-family: monospace; color: ${w.restarts > 5 ? '#f87171' : 'inherit'};">${w.restarts}x</td>
-                        <td style="padding: 12px 10px; color: var(--text-muted);">${uptimeStr}</td>
+                        <td id="td-uptime-${w.pm_id}" style="padding: 12px 10px; color: var(--text-muted);">${uptimeStr}</td>
                         <td style="padding: 12px 10px; text-align: right;">
                             <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="restartServiceUI('${w.name}')">🔄 Restart</button>
                         </td>
@@ -353,9 +365,78 @@ function refreshHealthMatrixUI(isSilent = false) {
         html += '</div>';
 
         display.innerHTML = html;
+        display.setAttribute('data-health-rendered', '1');
     })
     .catch(err => {
-        display.innerHTML = `<div style="color: #f87171; text-align: center; padding: 30px;">❌ Error koneksi: ${err.message}</div>`;
+        if (!isSilent) {
+            display.innerHTML = `<div style="color: #f87171; text-align: center; padding: 30px;">❌ Error koneksi: ${err.message}</div>`;
+        }
+    });
+}
+
+// Seamless in-place DOM patch for silent auto-refresh (no DOM replace = no flicker)
+function applySeamlessHealthUpdate(res) {
+    const caddy = res.caddy || {};
+    const workers = res.pm2_workers || [];
+    const ram = res.ram || {};
+    const disk = res.disk || {};
+    const cpu = res.cpu || {};
+
+    const onlineWorkersCount = workers.filter(w => w.status === 'online').length;
+    const workerHealthPct = workers.length > 0 ? Math.round((onlineWorkersCount / workers.length) * 100) : 100;
+    const ramPct = ram.total_mb > 0 ? Math.round((ram.used_mb / ram.total_mb) * 100) : 0;
+    const diskPct = parseInt(disk.usage_pct || '0', 10);
+    const cpuPct = Math.min(100, Math.max(0, cpu.usage_pct || 0));
+
+    function patchDonut(id, percent) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const circle = el.querySelector('circle.donut-ring');
+        const label = el.querySelector('.donut-pct');
+        if (circle) {
+            const r = parseFloat(circle.getAttribute('r'));
+            const circumference = 2 * Math.PI * r;
+            const offset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+        }
+        if (label) label.textContent = percent + '%';
+    }
+
+    patchDonut('donut-worker', workerHealthPct);
+    patchDonut('donut-cpu', cpuPct);
+    patchDonut('donut-ram', ramPct);
+    patchDonut('donut-disk', diskPct);
+
+    const cpuSub = document.getElementById('donut-cpu-sub');
+    if (cpuSub) cpuSub.textContent = cpuPct + '% CPU';
+    const ramSub = document.getElementById('donut-ram-sub');
+    if (ramSub) ramSub.textContent = (ram.used_mb || 0) + ' MB';
+
+    workers.forEach(w => {
+        const barEl = document.getElementById(`bar-${w.pm_id}`);
+        const labelEl = document.getElementById(`bar-lbl-${w.pm_id}`);
+        const totalRamMb = ram.total_mb > 0 ? ram.total_mb : 11921;
+        const maxScaleMb = 1500;
+        const memMb = w.memory_mb || 0;
+        const barWidthPct = Math.min(100, Math.round((memMb / maxScaleMb) * 100));
+        const sysRamPct = (Math.round((memMb / totalRamMb) * 1000) / 10).toFixed(1);
+        if (barEl) barEl.style.width = barWidthPct + '%';
+        if (labelEl) labelEl.innerHTML = `<span style="color:#fff;">${memMb} MB</span> <span style="color:var(--text-muted);font-weight:400;font-size:11px;">(${sysRamPct}%)</span>`;
+
+        const cpuEl = document.getElementById(`td-cpu-${w.pm_id}`);
+        if (cpuEl) cpuEl.textContent = (w.cpu_percent || 0) + '%';
+        const memEl = document.getElementById(`td-mem-${w.pm_id}`);
+        if (memEl) memEl.textContent = (w.memory_mb || 0) + ' MB';
+        const uptimeEl = document.getElementById(`td-uptime-${w.pm_id}`);
+        if (uptimeEl) {
+            const sec = w.uptime_sec || 0;
+            let uptimeStr = '-';
+            if (sec < 60) uptimeStr = `${sec} detik`;
+            else if (sec < 3600) uptimeStr = `${Math.floor(sec/60)} mnt ${sec%60} dtk`;
+            else if (sec < 86400) uptimeStr = `${Math.floor(sec/3600)} jam ${Math.floor((sec%3600)/60)} mnt`;
+            else uptimeStr = `${Math.floor(sec/86400)} hari ${Math.floor((sec%86400)/3600)} jam`;
+            uptimeEl.textContent = uptimeStr;
+        }
     });
 }
 
