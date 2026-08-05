@@ -38,7 +38,7 @@ function populateHealthPresetDropdown(callback) {
     }
 }
 
-function renderSvgDonut(percent, color, size = 130, strokeWidth = 12, label = '', sublabel = '') {
+function renderSvgDonut(percent, color, size = 95, strokeWidth = 9, label = '', sublabel = '') {
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference;
@@ -51,9 +51,9 @@ function renderSvgDonut(percent, color, size = 130, strokeWidth = 12, label = ''
                     stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round" style="transition: stroke-dashoffset 0.8s ease;" />
             </svg>
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-                <div style="font-size: 20px; font-weight: 800; color: #fff; line-height: 1.1;">${percent}%</div>
-                ${label ? `<div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 4px;">${label}</div>` : ''}
-                ${sublabel ? `<div style="font-size: 10px; color: rgba(255,255,255,0.5);">${sublabel}</div>` : ''}
+                <div style="font-size: 15px; font-weight: 800; color: #fff; line-height: 1.1;">${percent}%</div>
+                ${label ? `<div style="font-size: 9px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">${label}</div>` : ''}
+                ${sublabel ? `<div style="font-size: 8px; color: rgba(255,255,255,0.5);">${sublabel}</div>` : ''}
             </div>
         </div>
     `;
@@ -92,16 +92,16 @@ function refreshHealthMatrixUI() {
         const diskPct = parseInt(disk.usage_pct || '0', 10);
         const cpuPct = Math.min(100, Math.max(0, cpu.usage_pct || 0));
 
-        // SECTION 1: VISUAL DONUT & PIE CHARTS GRID
-        html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">';
+        // SECTION 1: VISUAL DONUT & PIE CHARTS MINI GRID (1 ROW 5 COLUMNS)
+        html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">';
 
         // 1. Worker Health Donut Chart
         const workerColor = workerHealthPct === 100 ? '#34d399' : workerHealthPct > 70 ? '#fbbf24' : '#f87171';
         html += `
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
-                <div style="font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px;">⚙️ Worker Services</div>
-                ${renderSvgDonut(workerHealthPct, workerColor, 130, 12, `${onlineWorkersCount}/${workers.length} Online`)}
-                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 12px;">
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 8px;">⚙️ Worker Services</div>
+                ${renderSvgDonut(workerHealthPct, workerColor, 95, 9, `${onlineWorkersCount}/${workers.length} Online`)}
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">
                     Worker PM2 Daemon
                 </div>
             </div>
@@ -110,11 +110,11 @@ function refreshHealthMatrixUI() {
         // 2. Total CPU Usage Donut Chart
         const cpuColor = cpuPct < 60 ? '#f59e0b' : cpuPct < 85 ? '#fbbf24' : '#f87171';
         html += `
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
-                <div style="font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px;">⚡ Total CPU Load</div>
-                ${renderSvgDonut(cpuPct, cpuColor, 130, 12, `${cpuPct}% CPU`, 'Penggunaan Processor')}
-                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 12px;">
-                    Beban Processor Server
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 8px;">⚡ Total CPU Load</div>
+                ${renderSvgDonut(cpuPct, cpuColor, 95, 9, `${cpuPct}% CPU`, 'Processor')}
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">
+                    Beban System
                 </div>
             </div>
         `;
@@ -122,10 +122,10 @@ function refreshHealthMatrixUI() {
         // 3. RAM Memory Donut Chart
         const ramColor = ramPct < 70 ? '#60a5fa' : ramPct < 90 ? '#fbbf24' : '#f87171';
         html += `
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
-                <div style="font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px;">💾 RAM Memory Usage</div>
-                ${renderSvgDonut(ramPct, ramColor, 130, 12, `${ram.used_mb || 0} MB`, `Bebas: ${ram.free_mb || 0} MB`)}
-                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 12px;">
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 8px;">💾 RAM Memory</div>
+                ${renderSvgDonut(ramPct, ramColor, 95, 9, `${ram.used_mb || 0} MB`, `Bebas: ${ram.free_mb || 0} MB`)}
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">
                     Total: ${ram.total_mb || 0} MB
                 </div>
             </div>
@@ -134,30 +134,30 @@ function refreshHealthMatrixUI() {
         // 4. Disk Storage Donut Chart
         const diskColor = diskPct < 75 ? '#a78bfa' : diskPct < 90 ? '#fbbf24' : '#f87171';
         html += `
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
-                <div style="font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px;">💽 Disk Storage (Root)</div>
-                ${renderSvgDonut(diskPct, diskColor, 130, 12, `${diskPct}% Terpakai`, 'Partisi Root /')}
-                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 12px;">
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="font-weight: 700; font-size: 12.5px; color: #fff; margin-bottom: 8px;">💽 Disk Root</div>
+                ${renderSvgDonut(diskPct, diskColor, 95, 9, `${diskPct}% Terpakai`, 'Partisi Root')}
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">
                     Status: <span style="color:#34d399; font-weight: 600;">Healthy</span>
                 </div>
             </div>
         `;
 
         // 5. Reverse Proxy Caddy Control Card
-        const caddyBadge = caddy.active ? '<span class="badge badge-success">● RUNNING</span>' : '<span class="badge badge-error">🔴 DOWN</span>';
+        const caddyBadge = caddy.active ? '<span class="badge badge-success" style="font-size:10px; padding: 2px 6px;">● RUNNING</span>' : '<span class="badge badge-error" style="font-size:10px; padding: 2px 6px;">🔴 DOWN</span>';
         html += `
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div style="font-weight: 700; font-size: 14px; color: #fff;">🛡️ Reverse Proxy Caddy</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-weight: 700; font-size: 12.5px; color: #fff;">🛡️ Proxy Caddy</div>
                         ${caddyBadge}
                     </div>
-                    <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
-                        <div>Port Listener: ${caddy.ports_bound ? '<span style="color:#34d399;">✅ Port 80 & 443 (Aktif)</span>' : '<span style="color:#fbbf24;">⚠️ Caddy Listening</span>'}</div>
-                        <div>Health API Backend: ${res.backend_http_code === '200' ? '<span style="color:#34d399;">HTTP 200 OK</span>' : `<span style="color:#fbbf24;">Code ${res.backend_http_code}</span>`}</div>
+                    <div style="font-size: 10.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px;">
+                        <div>Listener: ${caddy.ports_bound ? '<span style="color:#34d399;">✅ 80 & 443</span>' : '<span style="color:#fbbf24;">⚠️ Active</span>'}</div>
+                        <div>Health API: ${res.backend_http_code === '200' ? '<span style="color:#34d399;">HTTP 200</span>' : `<span style="color:#fbbf24;">Code ${res.backend_http_code}</span>`}</div>
                     </div>
                 </div>
-                <button class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 8px 12px; font-size: 11.5px; border-color: rgba(52,211,153,0.4); color: #34d399;" onclick="restartServiceUI('caddy')">🔄 Restart Caddy</button>
+                <button class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 5px 8px; font-size: 10.5px; border-color: rgba(52,211,153,0.4); color: #34d399;" onclick="restartServiceUI('caddy')">🔄 Restart Caddy</button>
             </div>
         `;
 
