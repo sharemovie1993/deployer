@@ -205,6 +205,16 @@ function refreshHealthMatrixUI(isSilent = false) {
 
         // 5. Reverse Proxy Caddy Control Card
         const caddyBadge = caddy.active ? '<span class="badge badge-success" style="font-size:10px; padding: 2px 6px;">● RUNNING</span>' : '<span class="badge badge-error" style="font-size:10px; padding: 2px 6px;">🔴 DOWN</span>';
+        // Backend HTTP code: 2xx/3xx/401/403 = Online, 000 = Offline, 5xx = Error
+        const _bhc = res.backend_http_code || '000';
+        const _bhcNum = parseInt(_bhc, 10);
+        let backendStatusHtml;
+        if (_bhc === '200') backendStatusHtml = '<span style="color:#34d399;font-weight:600;">✅ HTTP 200 OK</span>';
+        else if (_bhcNum === 401 || _bhcNum === 403) backendStatusHtml = '<span style="color:#34d399;">✅ HTTP ' + _bhc + ' (Online)</span>';
+        else if (_bhcNum >= 200 && _bhcNum < 400) backendStatusHtml = '<span style="color:#34d399;">✅ HTTP ' + _bhc + '</span>';
+        else if (_bhc === '000') backendStatusHtml = '<span style="color:#f87171;">❌ Tidak Terjangkau</span>';
+        else if (_bhcNum >= 500) backendStatusHtml = '<span style="color:#f87171;">🔴 HTTP ' + _bhc + ' (Error)</span>';
+        else backendStatusHtml = '<span style="color:#fbbf24;">⚠️ HTTP ' + _bhc + '</span>';
         html += `
             <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 10px; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
@@ -214,7 +224,7 @@ function refreshHealthMatrixUI(isSilent = false) {
                     </div>
                     <div style="font-size: 10.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px;">
                         <div>Listener: ${caddy.ports_bound ? '<span style="color:#34d399;">✅ 80 & 443</span>' : '<span style="color:#fbbf24;">⚠️ Active</span>'}</div>
-                        <div>Health API: ${res.backend_http_code === '200' ? '<span style="color:#34d399;">HTTP 200</span>' : `<span style="color:#fbbf24;">Code ${res.backend_http_code}</span>`}</div>
+                        <div>Backend: ${backendStatusHtml}</div>
                     </div>
                 </div>
                 <button class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 5px 8px; font-size: 10.5px; border-color: rgba(52,211,153,0.4); color: #34d399;" onclick="restartServiceUI('caddy')">🔄 Restart Caddy</button>
