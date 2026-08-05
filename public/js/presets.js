@@ -1,5 +1,9 @@
 let globalPresets = [];
 
+// State aktif: preset server yang terakhir diakses di Multi-Preset
+// Digunakan oleh Health Monitor dan Log Monitor untuk default ke server ini
+window.activePresetId = null;
+
 function loadPresets() {
     fetch('/api/presets')
     .then(res => res.json())
@@ -188,6 +192,9 @@ function runQuickUpdatePreset(presetId) {
     const p = globalPresets.find(item => item.id === presetId);
     if (!p) return;
 
+    // Simpan preset aktif untuk sinkronisasi ke Health Monitor & Log Monitor
+    window.activePresetId = presetId;
+
     // Tutup watchdog panel jika terbuka
     const wdPanel = document.getElementById('watchdog-panel-' + presetId);
     if (wdPanel) wdPanel.style.display = 'none';
@@ -286,6 +293,7 @@ function runQuickUpdatePreset(presetId) {
 }
 
 function checkWatchdogStatus(presetId) {
+    window.activePresetId = presetId;
     const panel = document.getElementById('watchdog-panel-' + presetId);
     const content = document.getElementById('watchdog-content-' + presetId);
     const btn = document.getElementById('watchdog-btn-' + presetId);
@@ -411,6 +419,7 @@ function fixTunnelPreset(presetId) {
 }
 
 function auditTunnelPreset(presetId) {
+    window.activePresetId = presetId;
     const btn = document.getElementById('audit-btn-' + presetId);
     const content = document.getElementById('watchdog-content-' + presetId);
     const panel = document.getElementById('watchdog-panel-' + presetId);
@@ -512,14 +521,14 @@ function cleanGhostTunnelsPreset(presetId) {
 }
 
 function openHealthMatrixForPreset(presetId) {
+    window.activePresetId = presetId;
     if (typeof switchAppMode === 'function') {
         switchAppMode('health');
     }
-    const select = document.getElementById('health-target-preset');
-    if (select) {
-        select.value = presetId;
-    }
-    if (typeof refreshHealthMatrixUI === 'function') {
-        refreshHealthMatrixUI();
-    }
+    // Tunggu dropdown ter-render lalu set value
+    setTimeout(() => {
+        const select = document.getElementById('health-target-preset');
+        if (select) select.value = presetId;
+        if (typeof refreshHealthMatrixUI === 'function') refreshHealthMatrixUI();
+    }, 80);
 }

@@ -54,7 +54,13 @@ function switchAppMode(mode) {
         logsBtn?.classList.add('active');
         healthBtn?.classList.remove('active');
         if (typeof populateLogTargetPresets === 'function') {
-            populateLogTargetPresets();
+            populateLogTargetPresets(() => {
+                // Pastikan server aktif terpilih, bukan Windows lokal
+                if (window.activePresetId) {
+                    const sel = document.getElementById('log-target-preset');
+                    if (sel) sel.value = window.activePresetId;
+                }
+            });
         }
     } else if (mode === 'health') {
         wizardContainer.style.display = 'none';
@@ -68,13 +74,15 @@ function switchAppMode(mode) {
         logsBtn?.classList.remove('active');
         healthBtn?.classList.add('active');
         if (typeof populateHealthPresetDropdown === 'function') {
-            populateHealthPresetDropdown();
-        }
-        if (typeof refreshHealthMatrixUI === 'function') {
-            refreshHealthMatrixUI();
-        }
-        if (typeof startHealthAutoRefresh === 'function') {
-            startHealthAutoRefresh();
+            populateHealthPresetDropdown(() => {
+                // Pastikan server aktif terpilih, bukan Windows lokal
+                if (window.activePresetId) {
+                    const sel = document.getElementById('health-target-preset');
+                    if (sel) sel.value = window.activePresetId;
+                }
+                if (typeof refreshHealthMatrixUI === 'function') refreshHealthMatrixUI();
+                if (typeof startHealthAutoRefresh === 'function') startHealthAutoRefresh();
+            });
         }
     } else {
         if (typeof stopHealthAutoRefresh === 'function') stopHealthAutoRefresh();

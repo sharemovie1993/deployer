@@ -5,7 +5,10 @@ function populateHealthPresetDropdown(callback) {
     if (!select) return;
 
     const renderSelectOptions = (presets) => {
-        const currentValue = select.value;
+        // Prioritaskan: server yang sudah terpilih > server aktif dari Multi-Preset > lokal
+        const currentValue = select.value && select.value !== 'local' ? select.value
+                           : (window.activePresetId || null);
+
         let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
         if (Array.isArray(presets) && presets.length > 0) {
             presets.forEach(p => {
@@ -15,6 +18,7 @@ function populateHealthPresetDropdown(callback) {
             });
         }
         select.innerHTML = html;
+        // Set ke server aktif jika ada, jika tidak gunakan nilai sebelumnya
         if (currentValue) select.value = currentValue;
         if (typeof callback === 'function') callback();
     };
