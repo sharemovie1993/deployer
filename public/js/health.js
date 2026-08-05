@@ -163,26 +163,25 @@ function refreshHealthMatrixUI() {
 
         html += '</div>'; // end top grid
 
-        // SECTION 2: WORKER MEMORY ALLOCATION BAR GRAPH CHART
+          // SECTION 2: WORKER MEMORY ALLOCATION BAR GRAPH CHART
         if (workers.length > 0) {
             const totalRamMb = ram.total_mb > 0 ? ram.total_mb : 11921;
-            // Benchmark max scale: 1500 MB (Standard Node.js Process Recommended Heap Limit)
             const maxScaleMb = Math.max(1500, Math.max(...workers.map(w => w.memory_mb || 0)));
 
             html += `
                 <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; margin-top: 10px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
                         <div>
-                            <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;">📊 Grafik Alokasi RAM Worker vs Pembanding Batas Aman Server</h3>
-                            <p style="font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0 0;">Skala diukur terhadap Batas Aman Process (${maxScaleMb} MB) & Total RAM Server (${totalRamMb} MB)</p>
+                            <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;">📊 Alokasi Memori RAM Worker</h3>
+                            <p style="font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0 0;">Skala Batas Aman Process: ${maxScaleMb} MB | Total RAM Server: ${totalRamMb} MB</p>
                         </div>
                         <div style="font-size: 11px; display: flex; gap: 12px; flex-wrap: wrap;">
-                            <span style="color: #34d399;">🟢 Normal (&lt;500 MB)</span>
-                            <span style="color: #fbbf24;">🟡 Perhatian (500-1000 MB)</span>
-                            <span style="color: #f87171;">🔴 Memori Leak (&gt;1000 MB)</span>
+                            <span style="color: #34d399;">🟢 Normal (&lt;500MB)</span>
+                            <span style="color: #fbbf24;">🟡 Warning (&gt;500MB)</span>
+                            <span style="color: #f87171;">🔴 High (&gt;1000MB)</span>
                         </div>
                     </div>
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
             `;
 
             workers.forEach(w => {
@@ -190,13 +189,13 @@ function refreshHealthMatrixUI() {
                 const barWidthPct = Math.min(100, Math.round((memMb / maxScaleMb) * 100));
                 const sysRamPct = (Math.round((memMb / totalRamMb) * 1000) / 10).toFixed(1);
 
-                let statusBadge = '<span style="color: #34d399; font-weight: 600; font-size: 11px;">🟢 Normal</span>';
+                let statusDot = '🟢';
                 let barColor = '#34d399';
                 if (memMb > 1000) {
-                    statusBadge = '<span style="color: #f87171; font-weight: 600; font-size: 11px;">🔴 Tinggi (Batas Risk)</span>';
+                    statusDot = '🔴';
                     barColor = '#f87171';
                 } else if (memMb > 500) {
-                    statusBadge = '<span style="color: #fbbf24; font-weight: 600; font-size: 11px;">🟡 Perhatian</span>';
+                    statusDot = '🟡';
                     barColor = '#fbbf24';
                 } else {
                     barColor = w.name.includes('redis') ? '#34d399' : w.name.includes('wa') ? '#a78bfa' : w.name.includes('web') ? '#fbbf24' : '#60a5fa';
@@ -204,16 +203,16 @@ function refreshHealthMatrixUI() {
 
                 html += `
                     <div>
-                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; flex-wrap: wrap;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
                             <span style="color: #fff; font-weight: 600;">${w.name} <span style="color: var(--text-muted); font-size: 11px;">(#${w.pm_id})</span></span>
-                            <span style="font-family: monospace;">
-                                <strong style="color: #fff;">${memMb} MB</strong> 
-                                <span style="color: var(--text-muted); font-size: 11px;">(${sysRamPct}% dari Total ${totalRamMb} MB RAM Server)</span>
-                                &nbsp;${statusBadge}
+                            <span style="font-family: monospace; font-weight: 600;">
+                                <span style="color: #fff;">${memMb} MB</span> 
+                                <span style="color: var(--text-muted); font-weight: 400; font-size: 11px;">(${sysRamPct}%)</span>
+                                &nbsp;${statusDot}
                             </span>
                         </div>
-                        <div style="background: rgba(255,255,255,0.06); height: 10px; border-radius: 5px; overflow: hidden; position: relative;">
-                            <div style="width: ${barWidthPct}%; background: ${barColor}; height: 100%; border-radius: 5px; transition: width 0.6s ease;"></div>
+                        <div style="background: rgba(255,255,255,0.06); height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="width: ${barWidthPct}%; background: ${barColor}; height: 100%; border-radius: 4px; transition: width 0.6s ease;"></div>
                         </div>
                     </div>
                 `;
