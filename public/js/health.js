@@ -368,6 +368,7 @@ function refreshHealthMatrixUI(isSilent = false) {
                         <td style="padding: 12px 10px; font-family: monospace; color: ${w.restarts > 5 ? '#f87171' : 'inherit'};">${w.restarts}x</td>
                         <td id="td-uptime-${w.pm_id}" style="padding: 12px 10px; color: var(--text-muted);">${uptimeStr}</td>
                         <td style="padding: 12px 10px; text-align: right; white-space: nowrap;">
+                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; margin-right: 4px; border-color: rgba(167,139,250,0.4); color: #a78bfa;" onclick="openPM2LogFromHealthUI('${w.name}', '${w.pm_id}')">📜 Log</button>
                             <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;" onclick="restartServiceUI('${w.name}')">🔄 Restart</button>
                             <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; border-color: rgba(248,113,113,0.4); color: #f87171;" onclick="restartServiceUI('delete:${w.name}')">🗑️ Delete</button>
                         </td>
@@ -392,6 +393,55 @@ function refreshHealthMatrixUI(isSilent = false) {
             display.innerHTML = `<div style="color: #f87171; text-align: center; padding: 30px;">❌ Error koneksi: ${err.message}</div>`;
         }
     });
+}
+
+function openPM2LogFromHealthUI(workerName, pmId) {
+    const healthSelect = document.getElementById('health-target-preset');
+    const presetId = healthSelect ? healthSelect.value : (window.activePresetId || 'local');
+
+    // 1. Pindah tampilan ke Tab Monitor Log PM2 (View 4)
+    if (typeof switchAppMode === 'function') {
+        switchAppMode('logs');
+    }
+
+    // 2. Isi dropdown target server di Monitor Log
+    if (typeof populateLogTargetPresets === 'function') {
+        populateLogTargetPresets(() => {
+            const logPresetSelect = document.getElementById('log-target-preset');
+            if (logPresetSelect) {
+                logPresetSelect.value = presetId;
+            }
+
+            // 3. Set dropdown target aplikasi untuk worker ini
+            const logAppSelect = document.getElementById('log-target-app');
+            if (logAppSelect) {
+                let optionFound = false;
+                for (let i = 0; i < logAppSelect.options.length; i++) {
+                    if (logAppSelect.options[i].value === workerName) {
+                        optionFound = true;
+                        break;
+                    }
+                }
+
+                if (!optionFound) {
+                    const opt = document.createElement('option');
+                    opt.value = workerName;
+                    opt.textContent = `📦 ${workerName} (#${pmId})`;
+                    logAppSelect.appendChild(opt);
+                }
+
+                logAppSelect.value = workerName;
+                if (typeof toggleCustomLogAppInput === 'function') {
+                    toggleCustomLogAppInput();
+                }
+            }
+
+            // 4. Langsung jalankan stream log real-time untuk worker tersebut!
+            if (typeof startPm2LogStreamUI === 'function') {
+                startPm2LogStreamUI(presetId, workerName);
+            }
+        });
+    }
 }
 
 // Seamless in-place DOM patch for silent auto-refresh (no DOM replace = no flicker)
