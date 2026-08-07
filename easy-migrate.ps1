@@ -1,4 +1,4 @@
-# easy-migrate.ps1 - Skrip Eksekusi Migrasi VPS (Old to New)
+﻿# easy-migrate.ps1 - Skrip Eksekusi Migrasi VPS (Old to New)
 # Otomatis Mem-backup, Provisioning, dan Me-restore Ekosistem Absenta.id
 
 $ErrorActionPreference = "Stop"

@@ -1,4 +1,4 @@
-# Centralized Deployment Manager (Global Deployer)
+﻿# Centralized Deployment Manager (Global Deployer)
 # Untuk Windows PowerShell
 # Berfungsi memanggil skrip deploy internal masing-masing proyek
 

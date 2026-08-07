@@ -1,4 +1,4 @@
-# easy-tuning.ps1 - Skrip Remote Tuning Linux Produksi Absenta
+﻿# easy-tuning.ps1 - Skrip Remote Tuning Linux Produksi Absenta
 # Berfungsi melakukan tuning kernel sysctl, limit file, Docker, & waktu secara remote via SSH
 
 $ErrorActionPreference = "Stop"

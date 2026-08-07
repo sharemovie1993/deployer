@@ -1,4 +1,4 @@
-# easy-deploy.ps1 - Skrip Deploy Universal Remote (VPS Linux)
+﻿# easy-deploy.ps1 - Skrip Deploy Universal Remote (VPS Linux)
 # Dapat men-deploy berbagai proyek web secara remote via SSH
 # Fitur: Auto dpkg lock clearance, WireGuard, PM2, Caddy, dll
 

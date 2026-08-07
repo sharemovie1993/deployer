@@ -1,4 +1,4 @@
-# easy-swap.ps1 - Skrip Konfigurasi SWAP Linux VPS Jarak Jauh
+﻿# easy-swap.ps1 - Skrip Konfigurasi SWAP Linux VPS Jarak Jauh
 # Berfungsi mengaktifkan 4GB SWAP Space secara remote via SSH
 
 $ErrorActionPreference = "Stop"

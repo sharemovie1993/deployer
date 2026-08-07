@@ -1,4 +1,4 @@
-# deploy-general-remote.ps1 - Kerangka Skrip Deploy Proyek Umum (VPS Linux)
+﻿# deploy-general-remote.ps1 - Kerangka Skrip Deploy Proyek Umum (VPS Linux)
 # Berfungsi sebagai template/skeleton deployer proyek standar (POS, Yatim, gform, dll.)
 
 $ErrorActionPreference = "Stop"

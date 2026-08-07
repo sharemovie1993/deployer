@@ -1,4 +1,4 @@
-# easy-update-config.ps1 - Skrip Cepat Update Konfigurasi Terowongan/Lisensi Remote
+﻿# easy-update-config.ps1 - Skrip Cepat Update Konfigurasi Terowongan/Lisensi Remote
 # Mengupdate LICENSE_SERVER_URL dan EASY_TUNNEL_BASE_DOMAIN di VPS tanpa perlu build ulang
 
 $ErrorActionPreference = "Stop"

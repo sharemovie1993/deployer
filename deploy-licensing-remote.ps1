@@ -1,4 +1,4 @@
-# deploy-licensing-remote.ps1 - Skrip Deploy Server Lisensi Terisolasi (VPS Linux)
+﻿# deploy-licensing-remote.ps1 - Skrip Deploy Server Lisensi Terisolasi (VPS Linux)
 # Hanya untuk men-deploy Server Lisensi (Licensing Server) secara remote via SSH
 
 $ErrorActionPreference = "Stop"

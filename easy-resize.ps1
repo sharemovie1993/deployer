@@ -1,4 +1,4 @@
-# easy-resize.ps1 - Skrip Pelebaran Partisi Disk Linux VPS Jarak Jauh
+﻿# easy-resize.ps1 - Skrip Pelebaran Partisi Disk Linux VPS Jarak Jauh
 # Berfungsi melebarkan partisi root (/) secara remote via SSH
 
 $ErrorActionPreference = "Stop"

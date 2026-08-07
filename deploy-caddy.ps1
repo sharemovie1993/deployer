@@ -1,4 +1,4 @@
-# deploy-caddy.ps1
+﻿# deploy-caddy.ps1
 # Script to install and configure Caddy Server on VPS, replacing Nginx
 
 $ErrorActionPreference = "Stop"

@@ -1,4 +1,4 @@
-# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
+﻿# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
 # Melakukan git pull, build backend/frontend, prisma sync, dan restart PM2 di VPS
 
 param(
