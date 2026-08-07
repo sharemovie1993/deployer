@@ -465,19 +465,24 @@ function restartServiceUI(serviceName) {
     if (!select) return;
     const presetId = select.value;
 
-    if (!confirm(`Apakah Anda yakin ingin melakukan restart layanan '${serviceName}' pada server ini?`)) return;
+    let actionLabel = `melakukan restart layanan '${serviceName}'`;
+    if (serviceName === 'stop_all') actionLabel = 'MENGHENTIKAN (STOP) seluruh worker PM2';
+    else if (serviceName === 'delete_all') actionLabel = 'MENGHAPUS (DELETE) seluruh worker PM2 untuk pembersihan ID menggantung';
+    else if (serviceName === 'reset_all') actionLabel = 'RESET TOTAL seluruh daemon PM2';
+
+    if (!confirm(`Apakah Anda yakin ingin ${actionLabel} pada server ini?`)) return;
 
     const display = document.getElementById('health-matrix-display');
-    if (display) display.innerHTML = `<div style="color: #fbbf24; font-family: monospace; text-align: center; padding: 30px;">⏳ Melakukan restart layanan '${serviceName}'...</div>`;
+    if (display) display.innerHTML = `<div style="color: #fbbf24; font-family: monospace; text-align: center; padding: 30px;">⏳ Melakukan eksekusi '${serviceName}' pada server VPS...</div>`;
 
     fetch('/api/restart-service?id=' + encodeURIComponent(presetId) + '&service=' + encodeURIComponent(serviceName))
     .then(r => r.json())
     .then(res => {
         if (res.success) {
-            alert(`✅ ${res.message}`);
+            alert(`✅ ${res.message || 'Aksi PM2 berhasil dijalankan!'}`);
             refreshHealthMatrixUI();
         } else {
-            alert(`❌ Gagal restart: ${res.message}`);
+            alert(`❌ Gagal: ${res.message}`);
             refreshHealthMatrixUI();
         }
     })
