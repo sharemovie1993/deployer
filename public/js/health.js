@@ -302,7 +302,12 @@ function refreshHealthMatrixUI(isSilent = false) {
                         <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0;">⚙️ Matrix PM2 Worker Processes (${workers.length} Layanan)</h3>
                         <p style="font-size: 12px; color: var(--text-muted); margin: 4px 0 0 0;">Status kesehatan real-time seluruh worker backend/frontend PM2</p>
                     </div>
-                    <button class="btn btn-secondary" style="padding: 8px 16px; font-size: 12px; border-color: rgba(167,139,250,0.4); color: #a78bfa;" onclick="restartServiceUI('all')">⚡ Restart Semua Worker PM2</button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px; border-color: rgba(167,139,250,0.4); color: #a78bfa;" onclick="restartServiceUI('all')">⚡ Restart Semua PM2</button>
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px; border-color: rgba(251,191,36,0.4); color: #fbbf24;" onclick="restartServiceUI('stop_all')">⏹️ Stop Semua PM2</button>
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px; border-color: rgba(248,113,113,0.4); color: #f87171;" onclick="restartServiceUI('delete_all')">🗑️ Delete Semua PM2</button>
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px; border-color: rgba(52,211,153,0.4); color: #34d399;" onclick="restartServiceUI('reset_all')">🧹 Reset Total PM2</button>
+                    </div>
                 </div>
         `;
 
@@ -362,8 +367,9 @@ function refreshHealthMatrixUI(isSilent = false) {
                         <td id="td-mem-${w.pm_id}" style="padding: 12px 10px; font-family: monospace; color: #a78bfa;">${w.memory_mb} MB</td>
                         <td style="padding: 12px 10px; font-family: monospace; color: ${w.restarts > 5 ? '#f87171' : 'inherit'};">${w.restarts}x</td>
                         <td id="td-uptime-${w.pm_id}" style="padding: 12px 10px; color: var(--text-muted);">${uptimeStr}</td>
-                        <td style="padding: 12px 10px; text-align: right;">
-                            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="restartServiceUI('${w.name}')">🔄 Restart</button>
+                        <td style="padding: 12px 10px; text-align: right; white-space: nowrap;">
+                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;" onclick="restartServiceUI('${w.name}')">🔄 Restart</button>
+                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; border-color: rgba(248,113,113,0.4); color: #f87171;" onclick="restartServiceUI('delete:${w.name}')">🗑️ Delete</button>
                         </td>
                     </tr>
                 `;

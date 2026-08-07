@@ -1053,6 +1053,18 @@ function handleRestartService(req, res, parsedUrl) {
     let restartCmd = '';
     if (serviceName === 'caddy') {
         restartCmd = `echo "${sudoPass}" | sudo -S systemctl restart caddy`;
+    } else if (serviceName === 'stop_all') {
+        restartCmd = `pm2 stop all && pm2 save`;
+    } else if (serviceName === 'delete_all') {
+        restartCmd = `pm2 delete all && pm2 save`;
+    } else if (serviceName === 'reset_all') {
+        restartCmd = `pm2 stop all && pm2 delete all && pm2 kill && pm2 save`;
+    } else if (serviceName.startsWith('delete:')) {
+        const targetName = serviceName.replace('delete:', '').trim();
+        restartCmd = `pm2 delete "${targetName}" && pm2 save`;
+    } else if (serviceName.startsWith('stop:')) {
+        const targetName = serviceName.replace('stop:', '').trim();
+        restartCmd = `pm2 stop "${targetName}" && pm2 save`;
     } else if (serviceName === 'all') {
         restartCmd = `pm2 restart all && pm2 save`;
     } else {
@@ -1061,7 +1073,14 @@ function handleRestartService(req, res, parsedUrl) {
 
     let proc;
     if (isLocal && process.platform === 'win32') {
-        const psCmd = serviceName === 'caddy' ? `Restart-Service -Name caddy -ErrorAction SilentlyContinue` : `pm2 restart ${serviceName}`;
+        let psCmd = `pm2 restart ${serviceName}`;
+        if (serviceName === 'caddy') psCmd = `Restart-Service -Name caddy -ErrorAction SilentlyContinue`;
+        else if (serviceName === 'stop_all') psCmd = `pm2 stop all`;
+        else if (serviceName === 'delete_all') psCmd = `pm2 delete all`;
+        else if (serviceName === 'reset_all') psCmd = `pm2 stop all; pm2 delete all; pm2 kill`;
+        else if (serviceName.startsWith('delete:')) psCmd = `pm2 delete "${serviceName.replace('delete:', '')}"`;
+        else if (serviceName.startsWith('stop:')) psCmd = `pm2 stop "${serviceName.replace('stop:', '')}"`;
+
         proc = spawn('powershell.exe', ['-NoProfile', '-Command', psCmd], { windowsHide: true });
     } else {
         const safeKeyPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'restart-key-safe.pem');

@@ -281,7 +281,10 @@
             <div id="quick-update-console-section" style="display: none; margin-top: 30px; border-top: 1px solid var(--glass-border); padding-top: 25px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 id="quick-update-target-title" style="font-size: 16px; color: #a78bfa; font-weight: 600;">⚡ Sedang Melakukan Quick Update...</h3>
-                    <span id="quick-update-status-badge" class="badge badge-purple">Memproses...</span>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="quick-update-timer" style="font-family: 'Fira Code', monospace; font-size: 13px; font-weight: 700; color: #6ee7b7; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 8px; display: none;">⏱️ 0s</span>
+                        <span id="quick-update-status-badge" class="badge badge-purple">Memproses...</span>
+                    </div>
                 </div>
                 
                 <div class="progress-bar-container">

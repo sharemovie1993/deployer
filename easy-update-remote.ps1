@@ -144,9 +144,57 @@ fi
 echo "Menghentikan Caddy sementara..."
 echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
 
+OLD_COMMIT=`$(git rev-parse HEAD 2>/dev/null)
+
 echo "Menarik kode terbaru dari branch main..."
 git fetch origin main
+
+CHANGED_FILES=""
+if [ -n "`$OLD_COMMIT" ]; then
+    CHANGED_FILES=`$(git diff --name-only `$OLD_COMMIT origin/main 2>/dev/null)
+fi
+
 git reset --hard origin/main
+
+# Tentukan komponen yang perlu di-build berdasarkan file yang berubah
+DO_BUILD_BACKEND=true
+DO_BUILD_FRONTEND=true
+DO_NPM_INSTALL_BACKEND=true
+DO_NPM_INSTALL_FRONTEND=true
+DO_DB_SEED=true
+
+if [ -n "`$OLD_COMMIT" ] && [ -n "`$CHANGED_FILES" ]; then
+    HAS_BACKEND=`$(echo "`$CHANGED_FILES" | grep -E '^absenta_backend/' || echo "")
+    HAS_FRONTEND=`$(echo "`$CHANGED_FILES" | grep -E '^absenta_frontend/' || echo "")
+    HAS_DB_SCHEMA=`$(echo "`$CHANGED_FILES" | grep -E '^absenta_backend/(prisma/|src/database/seeds/)' || echo "")
+    HAS_BACKEND_PKG=`$(echo "`$CHANGED_FILES" | grep -E '^absenta_backend/package' || echo "")
+    HAS_FRONTEND_PKG=`$(echo "`$CHANGED_FILES" | grep -E '^absenta_frontend/package' || echo "")
+
+    if [ -n "`$HAS_BACKEND" ] && [ -z "`$HAS_FRONTEND" ]; then
+        echo "⚡ SMART BUILD: Perubahan HANYA pada Backend. Melewati build Frontend!"
+        DO_BUILD_FRONTEND=false
+    elif [ -z "`$HAS_BACKEND" ] && [ -n "`$HAS_FRONTEND" ]; then
+        echo "⚡ SMART BUILD: Perubahan HANYA pada Frontend. Melewati build Backend!"
+        DO_BUILD_BACKEND=false
+    elif [ -z "`$HAS_BACKEND" ] && [ -z "`$HAS_FRONTEND" ]; then
+        echo "⚡ SMART BUILD: Tidak ada perubahan kode pada Backend & Frontend."
+        DO_BUILD_BACKEND=false
+        DO_BUILD_FRONTEND=false
+    fi
+
+    if [ -z "`$HAS_DB_SCHEMA" ]; then
+        echo "⏩ SMART SEED: Skema DB & Seeder tidak berubah. Melewati db push & seed!"
+        DO_DB_SEED=false
+    fi
+
+    if [ -z "`$HAS_BACKEND_PKG" ]; then
+        DO_NPM_INSTALL_BACKEND=false
+    fi
+
+    if [ -z "`$HAS_FRONTEND_PKG" ]; then
+        DO_NPM_INSTALL_FRONTEND=false
+    fi
+fi
 
 # Ensure MinIO S3 Storage Server is installed & running
 if [ -f /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh ]; then
@@ -190,23 +238,50 @@ if [ -f absenta_backend/.env ]; then
 fi
 
 # 1. Update Backend
-echo "Memproses Backend..."
-cd absenta_backend
-npm install
-npx prisma generate
-npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal."
-npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
-npm run build
+if [ "`$DO_BUILD_BACKEND" = true ]; then
+    echo "Memproses & Mem-build Backend..."
+    cd absenta_backend
+    if [ "`$DO_NPM_INSTALL_BACKEND" = true ]; then
+        echo "📦 Memperbarui npm packages backend..."
+        npm install
+    else
+        echo "⏩ SMART INSTALL: Melewati npm install Backend (package.json tidak berubah)."
+    fi
+    
+    npx prisma generate
+
+    if [ "`$DO_DB_SEED" = true ]; then
+        echo "🌱 Memperbarui database schema & seeding..."
+        npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal."
+        npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
+    else
+        echo "⏩ SMART SEED: Melewati db push & seed (skema DB & seeder tidak berubah)."
+    fi
+
+    npm run build
+    cd ..
+else
+    echo "⏩ SMART BUILD: Melewati build Backend (Tidak ada perubahan)."
+fi
 
 # 2. Update Frontend
-echo "Memproses Frontend..."
-cd ../absenta_frontend
-npm install
-npm run build
+if [ "`$DO_BUILD_FRONTEND" = true ]; then
+    echo "Memproses & Mem-build Frontend..."
+    cd absenta_frontend
+    if [ "`$DO_NPM_INSTALL_FRONTEND" = true ]; then
+        echo "📦 Memperbarui npm packages frontend..."
+        npm install
+    else
+        echo "⏩ SMART INSTALL: Melewati npm install Frontend (package.json tidak berubah)."
+    fi
+    npm run build
+    cd ..
+else
+    echo "⏩ SMART BUILD: Melewati build Frontend (Tidak ada perubahan)."
+fi
 
 # 3. Reload PM2
 echo "Memuat ulang layanan PM2..."
-cd ..
 pm2 start absenta_backend/ecosystem.config.js || pm2 reload absenta_backend/ecosystem.config.js || pm2 start ecosystem.config.js || pm2 reload ecosystem.config.js || pm2 reload all
 pm2 save
 
