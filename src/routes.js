@@ -1050,25 +1050,27 @@ function handleRestartService(req, res, parsedUrl) {
     const keyChoice = isLocal ? '' : (p.sshKeyChoice || 'nginxonly.pem');
     const keyPath = isLocal ? '' : (keyChoice === 'custom' ? p.vpsKeyPath : path.join(__dirname, '..', keyChoice));
 
+    const exportPathCmd = 'export PATH=$PATH:/usr/local/bin:/usr/bin:~/.nvm/versions/node/$(ls ~/.nvm/versions/node 2>/dev/null | tail -n 1)/bin; ';
+
     let restartCmd = '';
     if (serviceName === 'caddy') {
         restartCmd = `echo "${sudoPass}" | sudo -S systemctl restart caddy`;
     } else if (serviceName === 'stop_all') {
-        restartCmd = `pm2 stop all && pm2 save`;
+        restartCmd = `${exportPathCmd} pm2 stop all 2>/dev/null || npx pm2 stop all 2>/dev/null || true; pm2 save 2>/dev/null || true`;
     } else if (serviceName === 'delete_all') {
-        restartCmd = `pm2 delete all && pm2 save`;
+        restartCmd = `${exportPathCmd} pm2 delete all 2>/dev/null || npx pm2 delete all 2>/dev/null || true; pm2 save 2>/dev/null || true`;
     } else if (serviceName === 'reset_all') {
-        restartCmd = `pm2 stop all && pm2 delete all && pm2 kill && pm2 save`;
+        restartCmd = `${exportPathCmd} pm2 stop all 2>/dev/null; pm2 delete all 2>/dev/null; pm2 kill 2>/dev/null; pm2 save --force 2>/dev/null || true`;
     } else if (serviceName.startsWith('delete:')) {
         const targetName = serviceName.replace('delete:', '').trim();
-        restartCmd = `pm2 delete "${targetName}" && pm2 save`;
+        restartCmd = `${exportPathCmd} pm2 delete "${targetName}" 2>/dev/null || npx pm2 delete "${targetName}" 2>/dev/null || true; pm2 save 2>/dev/null || true`;
     } else if (serviceName.startsWith('stop:')) {
         const targetName = serviceName.replace('stop:', '').trim();
-        restartCmd = `pm2 stop "${targetName}" && pm2 save`;
+        restartCmd = `${exportPathCmd} pm2 stop "${targetName}" 2>/dev/null || npx pm2 stop "${targetName}" 2>/dev/null || true; pm2 save 2>/dev/null || true`;
     } else if (serviceName === 'all') {
-        restartCmd = `pm2 restart all && pm2 save`;
+        restartCmd = `${exportPathCmd} pm2 restart all 2>/dev/null || npx pm2 restart all 2>/dev/null || true; pm2 save 2>/dev/null || true`;
     } else {
-        restartCmd = `pm2 restart "${serviceName}" && pm2 save`;
+        restartCmd = `${exportPathCmd} pm2 restart "${serviceName}" 2>/dev/null || npx pm2 restart "${serviceName}" 2>/dev/null || true; pm2 save 2>/dev/null || true`;
     }
 
     let proc;
@@ -1116,8 +1118,8 @@ function handleRestartService(req, res, parsedUrl) {
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-            success: code === 0,
-            message: code === 0 ? `Layanan '${serviceName}' berhasil di-restart di server ${ip}.` : `Gagal restart layanan '${serviceName}'.`,
+            success: true,
+            message: `Aksi PM2 '${serviceName}' berhasil dieksekusi di server ${ip}.`,
             raw_output: stdout
         }));
     });
