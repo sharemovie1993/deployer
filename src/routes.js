@@ -378,6 +378,10 @@ function handleWatchdogStatus(req, res, parsedUrl) {
         'PM2=$(pgrep -c -f "PM2" 2>/dev/null | awk \'{if($1+0>0) print "running"; else print "dead"}\')',
         `TIMER=$(echo '${sudoPass}' | sudo -S systemctl is-active absenta-tunnel-watchdog.timer 2>/dev/null || echo "not-installed")`,
         'ALL_IPS=$(ip -o -4 addr show 2>/dev/null | awk \'{print $2 "=>" $4}\' | tr \'\\n\' \',\' | sed \'s/,$//\')',
+        'RAM_USAGE=$(free -m 2>/dev/null | awk \'NR==2{printf "%.0f%%", $3*100/$2}\')',
+        'DISK_USAGE=$(df -h / 2>/dev/null | awk \'NR==2{print $5}\')',
+        'UPTIME=$(uptime -p 2>/dev/null | sed "s/up //")',
+        'LATENCY=$(ping -c 1 -W 2 10.0.0.1 2>/dev/null | grep -oP "time=\\K[0-9.]+" | awk "{print \$1 \"ms\"}")',
         'echo "WG_IFACES=$WG_IFACES"',
         'echo "WG_STATUS=$WG_STATUS"',
         'echo "WG_HS=$WG_HS"',
@@ -385,8 +389,12 @@ function handleWatchdogStatus(req, res, parsedUrl) {
         'echo "PM2=$PM2"',
         'echo "TIMER=$TIMER"',
         'echo "ALL_IPS=$ALL_IPS"',
+        'echo "RAM_USAGE=$RAM_USAGE"',
+        'echo "DISK_USAGE=$DISK_USAGE"',
+        'echo "UPTIME=$UPTIME"',
+        'echo "LATENCY=$LATENCY"',
         'echo "LOG_BEGIN"',
-        'tail -4 /var/log/absenta-tunnel-watchdog.log 2>/dev/null || true',
+        'tail -15 /var/log/absenta-tunnel-watchdog.log 2>/dev/null || true',
         'echo "LOG_END"',
     ].join('\n') + '\n';
 
@@ -465,7 +473,11 @@ function handleWatchdogStatus(req, res, parsedUrl) {
             pm2:          kv['PM2']          || 'dead',
             timer:        kv['TIMER']        || 'not-installed',
             all_ips:      kv['ALL_IPS']      || '',
-            last_log:     logLines.slice(-4).join('|'),
+            ram_usage:    kv['RAM_USAGE']    || '0%',
+            disk_usage:   kv['DISK_USAGE']   || '0%',
+            uptime:       kv['UPTIME']       || 'unknown',
+            latency:      kv['LATENCY']      || 'N/A',
+            last_log:     logLines.join('\n'),
         };
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -516,20 +528,8 @@ function handleFixTunnels(req, res, parsedUrl) {
     } catch (e) {}
 
     const scriptText = [
-        '# Matikan interface bentrok jika ada >1 interface et-*',
-        'UP_IFACES=$(ip link show | grep -o "et-[a-zA-Z0-9-]*" | sort -u)',
-        'IFACE_COUNT=$(echo "$UP_IFACES" | grep -c "^et-" || echo 0)',
-        'if [ "$IFACE_COUNT" -gt 1 ]; then',
-        '  LATEST_IFACE=$(echo "$UP_IFACES" | tail -n 1)',
-        '  for old_if in $UP_IFACES; do',
-        '    if [ "$old_if" != "$LATEST_IFACE" ]; then',
-        '      echo "' + sudoPass + '" | sudo -S wg-quick down "$old_if" 2>/dev/null || true',
-        '      echo "' + sudoPass + '" | sudo -S systemctl disable "wg-quick@$old_if" 2>/dev/null || true',
-        '      echo "' + sudoPass + '" | sudo -S rm -f "/etc/wireguard/$old_if.conf" "/var/www/project-absenta/tunnels/$old_if.conf" 2>/dev/null || true',
-        '    fi',
-        '  done',
-        'fi',
-        'echo "PASS=' + sudoPass + '"',
+        '# Auto-sanitize netmask /24 ke /32 pada semua file .conf WireGuard',
+        'echo "' + sudoPass + '" | sudo -S sed -i -E "s|Address = ([0-9.]+)/24|Address = \\1/32|g" /etc/wireguard/et-*.conf /var/www/project-absenta/tunnels/et-*.conf 2>/dev/null || true',
         'if [ -d "/var/www/project-absenta/tunnels" ]; then echo "' + sudoPass + '" | sudo -S chmod 600 /var/www/project-absenta/tunnels/*.conf 2>/dev/null || true; fi',
         'if [ -d "/etc/wireguard" ]; then echo "' + sudoPass + '" | sudo -S chmod 600 /etc/wireguard/*.conf 2>/dev/null || true; fi',
         'if command -v ufw >/dev/null 2>&1; then',
@@ -537,6 +537,10 @@ function handleFixTunnels(req, res, parsedUrl) {
         '  echo "' + sudoPass + '" | sudo -S ufw allow 80/tcp 2>/dev/null || true',
         '  echo "' + sudoPass + '" | sudo -S ufw allow 3001/tcp 2>/dev/null || true',
         '  echo "' + sudoPass + '" | sudo -S ufw allow 51820/udp 2>/dev/null || true',
+        'fi',
+        '# Triger Smart DB-Aware Watchdog Sync jika script tersedia',
+        'if [ -f "/var/www/project-absenta/absenta_backend/dist/scripts/watchdog-sync.js" ]; then',
+        '  cd /var/www/project-absenta/absenta_backend && echo "' + sudoPass + '" | sudo -S node dist/scripts/watchdog-sync.js 2>/dev/null || true',
         'fi',
         'echo "FIX_COMPLETE=1"',
         'echo "WG_IFACES=$(ip link show type wireguard 2>/dev/null | grep -oE \"et-[a-zA-Z0-9_-]+\" || true)"'

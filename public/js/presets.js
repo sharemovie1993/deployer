@@ -430,12 +430,22 @@ function checkWatchdogStatus(presetId) {
             }).join('')
             : '<div style="font-size:11px;color:var(--text-muted);">Tidak ada IP terdeteksi</div>';
 
+        const ram = d.ram_usage || '0%';
+        const disk = d.disk_usage || '0%';
+        const uptime = d.uptime || '0m';
+        const latency = d.latency || 'N/A';
+
         content.innerHTML =
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
                 '<div>' + dot(wgOk) + 'WireGuard: ' + badge(wgOk, 'UP', 'DOWN') + '</div>' +
                 '<div>' + dot(caddyOk) + 'Caddy: ' + badge(caddyOk, 'active', 'mati') + '</div>' +
                 '<div>' + dot(pm2Ok) + 'PM2: ' + badge(pm2Ok, 'running', 'mati') + '</div>' +
                 '<div>' + dot(timerOk) + 'Watchdog: ' + badge(timerOk, 'aktif', 'belum pasang') + '</div>' +
+            '</div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:10px;font-size:11px;background:rgba(0,0,0,0.2);padding:6px 10px;border-radius:6px;justify-content:space-between;">' +
+                '<span style="color:#a78bfa;">🧠 RAM: <strong>' + ram + '</strong></span>' +
+                '<span style="color:#38bdf8;">💾 Disk: <strong>' + disk + '</strong></span>' +
+                '<span style="color:#6ee7b7;">⏱️ Latency: <strong>' + latency + '</strong></span>' +
             '</div>' +
             '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.05);margin-bottom:10px;">' +
                 '<div style="font-size:11px;font-weight:700;color:#38bdf8;margin-bottom:6px;display:flex;justify-content:space-between;">' +
@@ -444,9 +454,13 @@ function checkWatchdogStatus(presetId) {
                 '</div>' +
                 ipList +
             '</div>' +
-            '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.05);">' +
+            '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.05);margin-bottom:10px;">' +
                 '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">📋 Log Watchdog Terakhir:</div>' +
                 logs +
+            '</div>' +
+            '<div style="display:flex;gap:6px;margin-top:8px;">' +
+                '<button onclick="fixTunnelPreset(\'' + presetId + '\')" class="btn btn-secondary btn-sm" style="flex:1;font-size:11px;">🔧 Auto-Fix /32 Netmask</button>' +
+                '<button onclick="auditTunnelPreset(\'' + presetId + '\')" class="btn btn-primary btn-sm" style="flex:1;font-size:11px;">🌐 Audit Lisensi</button>' +
             '</div>';
     })
     .catch(err => {
