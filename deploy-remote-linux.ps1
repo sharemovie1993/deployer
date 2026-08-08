@@ -813,12 +813,21 @@ if [ "$IS_ABSENTA" = "True" ]; then
             fi
         fi
 
-        echo "`$CADDY_HOSTS {" > /tmp/Caddyfile
+        echo "http://`$CADDY_HOSTS {" > /tmp/Caddyfile
         echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
         echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
         echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
         echo "    encode gzip zstd" >> /tmp/Caddyfile
-        if [ ! -z "$CF_TOKEN" ]; then
+        echo "}" >> /tmp/Caddyfile
+        echo "" >> /tmp/Caddyfile
+        echo "https://`$CADDY_HOSTS {" >> /tmp/Caddyfile
+        echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
+        echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
+        echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
+        echo "    encode gzip zstd" >> /tmp/Caddyfile
+        if [ -f /etc/caddy/ssl/cert.pem ]; then
+            echo "    tls /etc/caddy/ssl/cert.pem /etc/caddy/ssl/key.pem" >> /tmp/Caddyfile
+        elif [ ! -z "$CF_TOKEN" ]; then
             echo "    tls {" >> /tmp/Caddyfile
             echo "        dns cloudflare $CF_TOKEN" >> /tmp/Caddyfile
             echo "    }" >> /tmp/Caddyfile
