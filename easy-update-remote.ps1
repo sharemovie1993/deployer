@@ -696,11 +696,11 @@ if ($IS_SERVER_LISENSI -and $BUILD_MODE -eq "local") {
         # ------------------------------------------------------------------
         Show-Log "[5/5] Upload dist/ & public/ ke VPS ($NEW_IP)..." "Yellow"
         # Pastikan kepemilikan folder di VPS milik $NEW_USER sebelum SCP
-        $chownCmd = "if [ -n '$SUDO_PASS' ]; then echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /var/www/licensing-server 2>/dev/null || true; else sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/licensing-server 2>/dev/null || true; fi"
+        $chownCmd = "if [ -n '$SUDO_PASS' ]; then echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR 2>/dev/null || true; else sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR 2>/dev/null || true; fi"
         & ssh -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "${NEW_USER}@${NEW_IP}" $chownCmd
 
         # SCP recursively upload dist and public folders
-        & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "$LOCAL_PUBLIC" "${NEW_USER}@${NEW_IP}:/var/www/licensing-server/"
+        & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "$LOCAL_PUBLIC" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/"
         if ($LASTEXITCODE -ne 0) { throw "SCP upload dist/ & public/ ke VPS gagal." }
         Show-Log "✅ Upload dist/ & public/ ke VPS selesai." "Green"
 
@@ -711,7 +711,7 @@ if ($IS_SERVER_LISENSI -and $BUILD_MODE -eq "local") {
         $remoteScript = @"
 set -e
 echo "==== Local Build Mode: Finalisasi di VPS ===="
-cd /var/www/licensing-server
+cd /var/www/$TARGET_SUBDIR
 
 # ─── Helper sudo (sama seperti remote build) ───────────────────────────────
 SUDO_PASS_VAL='$SUDO_PASS'
@@ -723,8 +723,8 @@ run_sudo() {
     fi
 }
 
-# Pastikan izin folder /var/www/licensing-server milik user
-run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/licensing-server
+# Pastikan izin folder /var/www/$TARGET_SUBDIR milik user
+run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
 
 echo "Menghentikan Caddy sementara..."
 run_sudo systemctl stop caddy

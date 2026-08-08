@@ -19,6 +19,76 @@ function loadPresets() {
     .catch(err => console.error('Gagal memuat preset:', err));
 }
 
+function testConnection(presetId) {
+    const p = globalPresets.find(item => item.id === presetId);
+    if (!p) return;
+
+    const btn = document.getElementById('conn-btn-' + presetId);
+    const panel = document.getElementById('conn-panel-' + presetId);
+    const content = document.getElementById('conn-content-' + presetId);
+    if (!btn || !panel || !content) return;
+
+    // Toggle — klik lagi saat sudah terbuka tutup panel
+    if (panel.style.display === 'block' && !btn.disabled) {
+        panel.style.display = 'none';
+        btn.innerHTML = '🔌 Uji Koneksi';
+        return;
+    }
+
+    panel.style.display = 'block';
+    content.innerHTML = '<span style="color:#6ee7b7;font-family:monospace;">⏳ Menghubungkan via SSH ke ' + p.vpsIp + '...</span>';
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Menguji...';
+
+    fetch('/api/test-connection?id=' + encodeURIComponent(presetId))
+        .then(r => r.json())
+        .then(res => {
+            btn.disabled = false;
+            if (!res.success) {
+                btn.innerHTML = '❌ Gagal';
+                btn.style.color = '#f87171';
+                btn.style.borderColor = 'rgba(239,68,68,0.4)';
+                content.innerHTML =
+                    '<div style="color:#f87171;font-weight:600;">❌ ' + (res.offline ? 'VPS Offline / Tidak Terjangkau' : 'Koneksi Gagal') + '</div>' +
+                    '<div style="color:var(--text-muted);margin-top:4px;font-size:11px;font-family:monospace;">' + (res.message || '') + '</div>';
+                setTimeout(() => { btn.innerHTML = '🔌 Uji Koneksi'; btn.style.color=''; btn.style.borderColor=''; }, 4000);
+                return;
+            }
+
+            btn.innerHTML = '✅ ' + res.latency_ms + 'ms';
+            btn.style.color = '#34d399';
+            btn.style.borderColor = 'rgba(52,211,153,0.5)';
+            btn.style.background = 'rgba(52,211,153,0.12)';
+
+            const latColor = res.latency_ms < 100 ? '#34d399' : res.latency_ms < 300 ? '#fbbf24' : '#f87171';
+            const caddyOk = res.caddy === 'active';
+            const pm2Lines = res.pm2 && res.pm2 !== 'N/A'
+                ? res.pm2.split(',').filter(Boolean).map(s => {
+                    const [name, status] = s.split(':');
+                    const ok = status === 'online';
+                    return '<span style="display:inline-block;margin-right:8px;color:' + (ok ? '#34d399' : '#f87171') + ';">' +
+                        (ok ? '●' : '○') + ' ' + (name || s) + '</span>';
+                }).join('') : '<span style="color:var(--text-muted);">N/A</span>';
+
+            content.innerHTML =
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:11.5px;">' +
+                    '<div>⚡ Latency: <strong style="color:' + latColor + ';">' + res.latency_ms + ' ms</strong></div>' +
+                    '<div>⏱️ Uptime: <strong style="color:#6ee7b7;">' + res.uptime + '</strong></div>' +
+                    '<div>🧠 RAM: <strong style="color:#a78bfa;">' + res.ram + '</strong></div>' +
+                    '<div>💾 Disk: <strong style="color:#38bdf8;">' + res.disk + '</strong></div>' +
+                    '<div>🌐 Caddy: <strong style="color:' + (caddyOk ? '#34d399' : '#f87171') + ';">' + (caddyOk ? 'active ✅' : res.caddy + ' ⚠️') + '</strong></div>' +
+                '</div>' +
+                '<div style="margin-top:8px;font-size:11px;">📦 PM2: ' + pm2Lines + '</div>';
+
+            setTimeout(() => { btn.innerHTML = '🔌 Uji Koneksi'; btn.style.color=''; btn.style.borderColor=''; btn.style.background=''; }, 8000);
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = '🔌 Uji Koneksi';
+            content.innerHTML = '<div style="color:#f87171;">❌ Error: ' + err.message + '</div>';
+        });
+}
+
 function renderPresetsGrid(presets) {
     const grid = document.getElementById('presets-grid-container');
     if (!grid) return;
@@ -40,7 +110,10 @@ function renderPresetsGrid(presets) {
         html += '<div class="preset-card" id="pcard-' + safeId + '">' +
             '<div>' +
                 '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">' +
-                    '<span class="badge ' + projBadgeClass + '">' + projName + '</span>' +
+                    '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                        '<span class="badge ' + projBadgeClass + '">' + projName + '</span>' +
+                        (p.project === 'licensing' ? '<span class="badge" style="background:rgba(' + (p.buildMode === 'local' ? '52,211,153' : '59,130,246') + ',0.12);color:' + (p.buildMode === 'local' ? '#34d399' : '#60a5fa') + ';border:1px solid rgba(' + (p.buildMode === 'local' ? '52,211,153' : '59,130,246') + ',0.3);font-size:10px;">' + (p.buildMode === 'local' ? '🖥️ Local Build' : '☁️ Remote Build') + '</span>' : '') +
+                    '</div>' +
                     '<div style="display: flex; gap: 6px;">' +
                         '<button class="btn-action-inline" style="padding: 5px 10px; font-size: 11px;" onclick="openPresetModal(\'' + safeId + '\')">✏️ Edit</button>' +
                         '<button class="btn-action-inline" style="padding: 5px 10px; font-size: 11px; border-color: rgba(239,68,68,0.5); color: #f87171; background: rgba(239,68,68,0.12);" onclick="deletePreset(\'' + safeId + '\')">🗑️ Hapus</button>' +
@@ -59,10 +132,14 @@ function renderPresetsGrid(presets) {
                     '<div style="font-weight: 700; color: #a78bfa; margin-bottom: 10px; font-size: 13px;">🛡️ Status Watchdog</div>' +
                     '<div id="watchdog-content-' + safeId + '" style="color: var(--text-muted);">Mengambil data...</div>' +
                 '</div>' +
+                '<div id="conn-panel-' + safeId + '" style="display:none; margin-top: 10px; background: rgba(10,30,20,0.7); border: 1px solid rgba(52,211,153,0.25); border-radius: 10px; padding: 12px; font-size: 12px;">' +
+                    '<div id="conn-content-' + safeId + '" style="color: var(--text-muted);">Menghubungkan...</div>' +
+                '</div>' +
             '</div>' +
             '<div style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 16px; display: flex; flex-direction: column; gap: 8px;">' +
                 '<button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 14px; font-weight: 700;" onclick="runQuickUpdatePreset(\'' + safeId + '\')">⚡ Quick Update Sekarang</button>' +
                 '<div style="display: flex; gap: 6px; flex-wrap: wrap;">' +
+                    '<button id="conn-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(52,211,153,0.4); color: #34d399; background: rgba(52,211,153,0.08);" onclick="testConnection(\'' + safeId + '\')">🔌 Uji Koneksi</button>' +
                     '<button id="watchdog-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px;" onclick="checkWatchdogStatus(\'' + safeId + '\')">🛡️ Status Watchdog</button>' +
                     '<button id="audit-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(52,211,153,0.4); color: #34d399; background: rgba(52,211,153,0.08);" onclick="auditTunnelPreset(\'' + safeId + '\')">🌐 Audit Lisensi</button>' +
                     '<button id="tunnel-fix-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(251,191,36,0.4); color: #fbbf24; background: rgba(251,191,36,0.08);" onclick="fixTunnelPreset(\'' + safeId + '\')">🔧 Perbaiki Tunnel</button>' +
@@ -99,8 +176,10 @@ function openPresetModal(presetId) {
             inputUser.value = p.vpsUser || 'asepsuryadi';
             selectProj.value = p.project || 'absenta';
             selectKey.value = p.sshKeyChoice || 'nginxonly.pem';
-            inputSudo.value = p.vpsSudoPass || '1';
+            inputSudo.value = p.vpsSudoPass || '';
             inputCustomKey.value = p.vpsKeyPath || '';
+            const selBuildMode = document.getElementById('preset-modal-buildmode');
+            if (selBuildMode) selBuildMode.value = p.buildMode || 'remote';
         }
     } else {
         title.innerText = '➕ Tambah Preset Server';
@@ -110,11 +189,14 @@ function openPresetModal(presetId) {
         inputUser.value = 'asepsuryadi';
         selectProj.value = 'absenta';
         selectKey.value = 'nginxonly.pem';
-        inputSudo.value = '1';
+        inputSudo.value = '';
         inputCustomKey.value = '';
+        const selBuildMode = document.getElementById('preset-modal-buildmode');
+        if (selBuildMode) selBuildMode.value = 'remote';
     }
 
     togglePresetCustomKey();
+    toggleBuildModeField();
     backdrop.style.display = 'flex';
 }
 
@@ -129,6 +211,56 @@ function togglePresetCustomKey() {
     if (customGroup) {
         customGroup.style.display = keyChoice === 'custom' ? 'block' : 'none';
     }
+    // Clear custom key path when switching away from custom
+    if (keyChoice !== 'custom') {
+        const customKeyInput = document.getElementById('preset-modal-customkey');
+        if (customKeyInput) customKeyInput.value = '';
+    }
+}
+
+function toggleBuildModeField() {
+    const buildModeGroup = document.getElementById('preset-buildmode-group');
+    if (buildModeGroup) {
+        buildModeGroup.style.display = 'block';
+    }
+}
+
+function browseSSHKeyFile() {
+    const btn = document.getElementById('browse-key-btn');
+    const input = document.getElementById('preset-modal-customkey');
+    if (!btn || !input) return;
+
+    // Visual feedback — loading state
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '⏳ Membuka...';
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+
+    fetch('/api/browse-file?filter=pem&title=Pilih%20SSH%20Key%20File%20(.pem)')
+        .then(r => r.json())
+        .then(res => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            btn.style.opacity = '1';
+
+            if (res.success && res.path) {
+                input.value = res.path;
+                input.style.color = 'var(--text-main)';
+                // Flash green to indicate success
+                input.style.border = '1px solid rgba(52,211,153,0.6)';
+                setTimeout(() => { input.style.border = ''; }, 2000);
+            } else if (res.success && !res.path) {
+                // User cancelled — no-op
+            } else {
+                alert('Gagal membuka dialog file: ' + (res.message || 'Error tidak diketahui'));
+            }
+        })
+        .catch(err => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            alert('Error koneksi saat membuka file picker: ' + err.message);
+        });
 }
 
 function savePresetSubmit() {
@@ -140,6 +272,8 @@ function savePresetSubmit() {
     const sshKeyChoice = document.getElementById('preset-modal-keychoice').value;
     const vpsSudoPass = document.getElementById('preset-modal-sudopass').value;
     const customKey = document.getElementById('preset-modal-customkey').value;
+    const buildModeEl = document.getElementById('preset-modal-buildmode');
+    const buildMode = buildModeEl ? buildModeEl.value : 'remote';
 
     if (!vpsIp) {
         alert('Alamat IP VPS Target wajib diisi!');
@@ -153,8 +287,9 @@ function savePresetSubmit() {
         vpsUser: vpsUser || 'asepsuryadi',
         project,
         sshKeyChoice,
-        vpsSudoPass: vpsSudoPass || '1',
-        vpsKeyPath: sshKeyChoice === 'custom' ? customKey : ''
+        vpsSudoPass: vpsSudoPass || '',
+        vpsKeyPath: sshKeyChoice === 'custom' ? customKey : '',
+        buildMode: buildMode || 'local'
     };
 
     fetch('/api/presets', {
@@ -331,7 +466,31 @@ function runQuickUpdatePreset(presetId) {
         consoleContainer.appendChild(span);
         consoleContainer.scrollTop = consoleContainer.scrollHeight;
 
-        if (line.includes('Backend') || line.includes('Memproses Backend')) {
+        if (line.includes('Local Build Mode') || line.includes('[1/5]') || line.includes('Git pull')) {
+            progressBar.style.width = '10%';
+            percentText.innerHTML = '10%';
+            statusText.innerHTML = 'Git pull kode terbaru di lokal...';
+        } else if (line.includes('[2/5]') || line.includes('npm install lokal')) {
+            progressBar.style.width = '25%';
+            percentText.innerHTML = '25%';
+            statusText.innerHTML = 'npm install lokal...';
+        } else if (line.includes('[3/5]') || line.includes('Prisma generate lokal')) {
+            progressBar.style.width = '40%';
+            percentText.innerHTML = '40%';
+            statusText.innerHTML = 'Prisma generate lokal...';
+        } else if (line.includes('[4/5]') || line.includes('Kompilasi TypeScript lokal')) {
+            progressBar.style.width = '55%';
+            percentText.innerHTML = '55%';
+            statusText.innerHTML = '🔨 Kompilasi TypeScript di PC lokal...';
+        } else if (line.includes('[5/5]') || line.includes('Upload dist/')) {
+            progressBar.style.width = '72%';
+            percentText.innerHTML = '72%';
+            statusText.innerHTML = '📤 Upload dist/ ke VPS via SCP...';
+        } else if (line.includes('Finalisasi di VPS') || line.includes('npm install (production')) {
+            progressBar.style.width = '85%';
+            percentText.innerHTML = '85%';
+            statusText.innerHTML = 'Finalisasi ringan di VPS...';
+        } else if (line.includes('Backend') || line.includes('Memproses Backend')) {
             progressBar.style.width = '35%';
             percentText.innerHTML = '35%';
             statusText.innerHTML = 'Memproses & Kompilasi Backend...';
