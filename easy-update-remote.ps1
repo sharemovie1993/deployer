@@ -308,42 +308,65 @@ log() {
 }
 
 check_wireguard() {
-  # Multi-Tunnel Coexistence: Bebaskan seluruh interface et-* berjalan bersamaan
-  # Auto-sanitize legacy /24 netmask -> /32 host mask untuk mencegah bentrok rute kernel
+  # Multi-Tunnel Coexistence: Auto-sanitize legacy /24 netmask -> /32 host mask
   sed -i 's/Address = \(10\.[0-9]\+\.[0-9]\+\.[0-9]\+\)\/24/Address = \1\/32/g' /etc/wireguard/et-*.conf 2>/dev/null || true
   sed -i 's/AllowedIPs = 10\.0\.0\.0\/24/AllowedIPs = 10.0.0.1\/32/g' /etc/wireguard/et-*.conf 2>/dev/null || true
+
+  # Smart DB-Aware Query via Node.js CLI Script
+  DB_STATUS_JSON=""
+  if [ -f "/var/www/project-absenta/absenta_backend/dist/scripts/watchdog-sync.js" ]; then
+    DB_STATUS_JSON=`$(cd /var/www/project-absenta/absenta_backend && export PATH=`$PATH:/home/asepsuryadi/.nvm/versions/node/`$(ls /home/asepsuryadi/.nvm/versions/node 2>/dev/null | tail -n 1)/bin; node dist/scripts/watchdog-sync.js 2>/dev/null || echo "")
+  fi
 
   CONF_FILES=`$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
   for cfile in `$CONF_FILES; do
     [ -f "`$cfile" ] || continue
     bname=`$(basename "`$cfile")
     iface="`${bname%.conf}"
-    
+    slug="`${iface#et-}"
+
     if [ "`$cfile" != "/etc/wireguard/`$bname" ]; then
       cp -f "`$cfile" "/etc/wireguard/`$bname" 2>/dev/null || true
       chmod 600 "/etc/wireguard/`$bname" 2>/dev/null || true
     fi
-    
-    systemctl is-enabled "wg-quick@`$iface" &>/dev/null || systemctl enable "wg-quick@`$iface" 2>/dev/null || true
 
-    if ! ip link show "`$iface" 2>/dev/null | grep -q "UP"; then
-      log "⚠️  WireGuard `$iface DOWN - mencoba restore..."
-      wg-quick up "`$iface" 2>/dev/null || systemctl restart "wg-quick@`$iface" 2>/dev/null || true
-      sleep 3
+    # Cek apakah status di DB sengaja 'inactive' / 'expired'
+    IS_INACTIVE=0
+    if [ -n "`$DB_STATUS_JSON" ]; then
+      if echo "`$DB_STATUS_JSON" | grep -q "\"`$slug\":\"inactive\"" || echo "`$DB_STATUS_JSON" | grep -q "\"`$slug\":\"expired\""; then
+        IS_INACTIVE=1
+      fi
+    fi
+
+    if [ "`$IS_INACTIVE" -eq 1 ]; then
+      # User sengaja menonaktifkan di UI -> Pastikan interface DOWN di kernel Linux
       if ip link show "`$iface" 2>/dev/null | grep -q "UP"; then
-        log "✅ WireGuard `$iface UP kembali"
-      else
-        log "❌ WireGuard `$iface gagal UP"
+        log "⏸️ User menonaktifkan `$iface di DB -> Mematikan interface Linux Kernel..."
+        wg-quick down "`$iface" 2>/dev/null || true
+        systemctl disable "wg-quick@`$iface" 2>/dev/null || true
       fi
     else
-      LAST_HS=`$(wg show "`$iface" latest-handshakes 2>/dev/null | awk '{print `$2}' | head -1)
-      if [ -n "`$LAST_HS" ] && [ "`$LAST_HS" != "0" ]; then
-        DIFF=`$(( `$(date +%s) - LAST_HS ))
-        if [ "`$DIFF" -gt "`$STALE_HANDSHAKE_SECS" ]; then
-          log "⚠️  WireGuard `$iface stale handshake (`${DIFF}s) - trigger reconnect..."
-          ping -c 3 -W 5 "`$ET_PEER_IP" &>/dev/null || true
-          sleep 5
-          log "🔄 Reconnect WireGuard `$iface dilakukan"
+      # User mengaktifkan di DB -> Pastikan interface UP dan auto-recover jika terputus
+      systemctl is-enabled "wg-quick@`$iface" &>/dev/null || systemctl enable "wg-quick@`$iface" 2>/dev/null || true
+      if ! ip link show "`$iface" 2>/dev/null | grep -q "UP"; then
+        log "⚠️  WireGuard `$iface DOWN - mencoba restore..."
+        wg-quick up "`$iface" 2>/dev/null || systemctl restart "wg-quick@`$iface" 2>/dev/null || true
+        sleep 3
+        if ip link show "`$iface" 2>/dev/null | grep -q "UP"; then
+          log "✅ WireGuard `$iface UP kembali"
+        else
+          log "❌ WireGuard `$iface gagal UP"
+        fi
+      else
+        LAST_HS=`$(wg show "`$iface" latest-handshakes 2>/dev/null | awk '{print `$2}' | head -1)
+        if [ -n "`$LAST_HS" ] && [ "`$LAST_HS" != "0" ]; then
+          DIFF=`$(( `$(date +%s) - LAST_HS ))
+          if [ "`$DIFF" -gt "`$STALE_HANDSHAKE_SECS" ]; then
+            log "⚠️  WireGuard `$iface stale `${DIFF}s - reconnect..."
+            ping -c 3 -W 5 "`$ET_PEER_IP" &>/dev/null || true
+            sleep 5
+            log "🔄 WireGuard reconnect"
+          fi
         fi
       fi
     fi
