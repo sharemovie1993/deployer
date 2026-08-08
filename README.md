@@ -9,7 +9,8 @@ Proyek pertama yang terdaftar secara bawaan adalah **Project Yatim (Mustahiq Car
 2. **Setup Port Dinamis**: Memandu konfigurasi port Frontend & Backend secara terisolasi.
 3. **Inisialisasi Database & Build Otomatis**: Mengotomatiskan instalasi package npm, migrasi SQLite (Prisma), dan build static assets React (Vite).
 4. **Manajemen Proses PM2**: Mendaftarkan, menghentikan, dan memuat ulang proses server di background secara otomatis.
-5. **Konfigurasi Reverse Proxy Nginx**: Menyediakan pembuatan konfigurasi virtual host Nginx untuk menyatukan akses port di Linux.
+6. **Otomasi Firewall Isolasi 3-Zona WireGuard**: Menginjeksi secara otomatis aturan `iptables` isolasi 3-zona (Admin Deployer `10.0.0.2/29`, Absenta On-Premise `10.0.0.X/32`, Standalone Retail `10.0.1.X/32`) pada berkas `/etc/wireguard/wg0.conf` saat men-deploy Server Lisensi baru.
+7. **Perbaikan Multi-Tunnel & Sanitasi Netmask `/32`**: Menyediakan alat otomatisasi (`easy-tunnel-fix.ps1` & `easy-migrate.ps1`) untuk memicu sanitasi netmask `/32` dan memulihkan multiple tunnel (`et-*`) secara simultan di 1 server sekolah.
 
 ---
 

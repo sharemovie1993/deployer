@@ -1,4 +1,4 @@
-﻿# deploy-licensing-remote.ps1 - Skrip Deploy Server Lisensi Terisolasi (VPS Linux)
+# deploy-licensing-remote.ps1 - Skrip Deploy Server Lisensi Terisolasi (VPS Linux)
 # Hanya untuk men-deploy Server Lisensi (Licensing Server) secara remote via SSH
 
 $ErrorActionPreference = "Stop"
@@ -428,8 +428,8 @@ if ! echo '$SUDO_PASS' | sudo -S test -f /etc/wireguard/privatekey; then
     echo "SaveConfig = true" >> wg0.conf
     echo "ListenPort = 51820" >> wg0.conf
     echo "PrivateKey = `$PRV_KEY" >> wg0.conf
-    echo "PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
-    echo "PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
+    echo "PostUp = iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -A FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
+    echo "PostDown = iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -D FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
 
     echo '$SUDO_PASS' | sudo -S cp privatekey publickey wg0.conf /etc/wireguard/
     echo '$SUDO_PASS' | sudo -S chmod 600 /etc/wireguard/privatekey /etc/wireguard/wg0.conf
