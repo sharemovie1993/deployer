@@ -7,6 +7,8 @@ param(
     [string]$KeyPath,
     [string]$SudoPass,
     [string]$Project = "absenta",
+    [string]$BuildMode = "remote",          # "remote" = build di VPS | "local" = build lokal lalu SCP ke VPS
+    [string]$LocalProjectPath = "",          # Path lokal Project-Server-Lisensi (auto-detect jika kosong)
     [switch]$Silent
 )
 
@@ -43,8 +45,9 @@ if ($Silent) {
     $NEW_KEY_SOURCE = $KeyPath
     if ([string]::IsNullOrWhiteSpace($NEW_KEY_SOURCE)) { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "nginxonly.pem" }
     $SUDO_PASS = $SudoPass
-    if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "1" }
+    # Sudo password bersifat opsional — jika kosong, perintah sudo tidak akan disertakan password
     $projChoice = if ($Project -eq "licensing" -or $Project -eq "2") { "2" } else { "1" }
+    $BUILD_MODE = if ($BuildMode -eq "local") { "local" } else { "remote" }
 } else {
     $NEW_IP = (Read-Host "Masukkan IP VPS Target [10.10.10.163]").Trim()
     if ([string]::IsNullOrWhiteSpace($NEW_IP)) { $NEW_IP = "10.10.10.163" }
@@ -59,8 +62,9 @@ if ($Silent) {
     elseif ($newKeyChoice -eq "2") { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "ls-key.pem" }
     else { $NEW_KEY_SOURCE = Read-Host "Masukkan path absolut file .pem" }
 
-    $SUDO_PASS = (Read-Host "Masukkan password sudo VPS Anda [g1g1G1NGSUL*!2]").Trim()
-    if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "g1g1G1NGSUL*!2" }
+    $SUDO_PASS = (Read-Host "Masukkan password sudo VPS Anda (kosongkan jika passwordless sudo)").Trim()
+    # Sudo password opsional - kosongkan jika server sudah dikonfigurasi NOPASSWD
+    $BUILD_MODE = "remote"
 }
 
 if (-not (Test-Path $NEW_KEY_SOURCE)) {
@@ -99,6 +103,25 @@ if ($projChoice -eq "2") {
 } else {
     $TARGET_SUBDIR = "project-absenta"
     $IS_ABSENTA = $true
+}
+
+# ---------------------------------------------------------
+# PEMILIHAN MODE BUILD (khusus Server Lisensi)
+# ---------------------------------------------------------
+if ($IS_SERVER_LISENSI -and -not $Silent) {
+    Show-Header "Pilih Mode Build - Server Lisensi"
+    Write-Host "" 
+    Write-Host " [remote] Build di VPS  - VPS yang compile TypeScript (cocok untuk VPS spek standar)" -ForegroundColor Cyan
+    Write-Host " [local]  Build di Lokal - Kompilasi di PC ini lalu upload dist/ ke VPS (cocok untuk VPS spek kecil)" -ForegroundColor Green
+    Write-Host ""
+    $buildChoice = (Read-Host "Pilih mode build [remote/local]").Trim().ToLower()
+    if ($buildChoice -eq "local" -or $buildChoice -eq "l") {
+        $BUILD_MODE = "local"
+    } else {
+        $BUILD_MODE = "remote"
+    }
+    Write-Host ""
+    Write-Host "Mode build dipilih: $($BUILD_MODE.ToUpper())" -ForegroundColor Yellow
 }
 
 function Run-RemoteScript {
@@ -461,7 +484,7 @@ echo '$SUDO_PASS' | sudo -S systemctl start caddy
 echo '$SUDO_PASS' | sudo -S systemctl enable caddy
 
 echo "============================================="
-echo "   QUICK UPDATE ABSENTA VPS SELESAI SAKSES!  "
+echo "   QUICK UPDATE ABSENTA VPS SELESAI SUKSES!  "
 echo "============================================="
 "@
 } else {
@@ -470,46 +493,290 @@ set -e
 echo "==== Memulai Update Cepat Server Lisensi ===="
 cd /var/www/$TARGET_SUBDIR
 
+# ─── Helper: jalankan sudo dengan atau tanpa password ─────────────────────────
+# Aman untuk NOPASSWD server maupun server yang pakai password
+SUDO_PASS_VAL='$SUDO_PASS'
+run_sudo() {
+    if [ -n "`$SUDO_PASS_VAL" ]; then
+        echo "`$SUDO_PASS_VAL" | sudo -S "`$@" 2>/dev/null || sudo "`$@" 2>/dev/null || true
+    else
+        sudo "`$@" 2>/dev/null || true
+    fi
+}
+
+# Pastikan kepemilikan folder milik user agar git, npm, scp tidak EACCES
+run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
+
 # Stop Caddy terlebih dahulu agar tidak serve versi lama saat proses update
 echo "Menghentikan Caddy sementara..."
-echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
+run_sudo systemctl stop caddy
 
-echo "Menarik kode terbaru dari branch main..."
-git fetch origin main
-git reset --hard origin/main
+OLD_COMMIT=`$(git rev-parse HEAD 2>/dev/null || echo "")
 
-echo "Menginstal dependensi..."
-npm install
+echo "Menarik kode terbaru dari branch master..."
+git fetch origin master
+git reset --hard origin/master
 
-echo "Memuat ulang layanan PM2..."
-pm2 reload ecosystem.config.js || pm2 restart ecosystem.config.js
-pm2 save
+# ─── Smart Build: Tentukan komponen yang perlu diproses ───────────────────────
+DO_NPM_INSTALL=true
+DO_BUILD=true
+DO_PRISMA_PUSH=true
+CHANGED_FILES=""
 
-# Pastikan PM2 terdaftar di systemd startup (agar tetap jalan setelah reboot)
-echo "Memastikan PM2 startup systemd terdaftar..."
-echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || \
-echo '$SUDO_PASS' | sudo -S env PATH=\${PATH}:/usr/local/bin pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || true
-pm2 save
+if [ -n "`$OLD_COMMIT" ]; then
+    CHANGED_FILES=`$(git diff --name-only `$OLD_COMMIT origin/master 2>/dev/null || echo "")
+fi
 
-# Jalankan kembali Caddy setelah update selesai
+if [ -n "`$OLD_COMMIT" ] && [ -n "`$CHANGED_FILES" ]; then
+    HAS_PKG=`$(echo "`$CHANGED_FILES" | grep -E '^package\.json|^package-lock\.json' || echo "")
+    HAS_SRC=`$(echo "`$CHANGED_FILES" | grep -E '^src/' || echo "")
+    HAS_PRISMA=`$(echo "`$CHANGED_FILES" | grep -E '^prisma/' || echo "")
+
+    if [ -z "`$HAS_PKG" ]; then
+        echo "⚡ SMART INSTALL: package.json tidak berubah. Melewati npm install!"
+        DO_NPM_INSTALL=false
+    fi
+
+    if [ -z "`$HAS_SRC" ] && [ -z "`$HAS_PRISMA" ]; then
+        echo "⚡ SMART BUILD: Tidak ada perubahan pada src/ & prisma/. Melewati build!"
+        DO_BUILD=false
+        DO_PRISMA_PUSH=false
+    fi
+
+    if [ -z "`$HAS_PRISMA" ]; then
+        echo "⏩ SMART PRISMA: Schema prisma tidak berubah. Melewati prisma db push!"
+        DO_PRISMA_PUSH=false
+    fi
+fi
+
+# 1. npm install (jika diperlukan)
+if [ "`$DO_NPM_INSTALL" = true ]; then
+    echo "📦 Memperbarui npm packages..."
+    npm install --production=false
+else
+    echo "⏩ SMART INSTALL: Melewati npm install (package.json tidak berubah)."
+fi
+
+# 2. Prisma generate & db push (jika schema berubah)
+# prisma generate selalu dijalankan — ringan dan pastikan Prisma Client sinkron
+npx prisma generate
+if [ "`$DO_PRISMA_PUSH" = true ]; then
+    echo "🗄️ Melakukan prisma db push (schema update ke database produksi)..."
+    npx prisma db push --accept-data-loss || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
+else
+    echo "⏩ SMART PRISMA: Melewati prisma db push (schema tidak berubah)."
+fi
+
+# 3. Build TypeScript -> dist/
+if [ "`$DO_BUILD" = true ]; then
+    echo "🔨 Kompilasi TypeScript (npm run build)..."
+    npm run build
+    echo "✅ Build selesai. Entry point: dist/server.js"
+else
+    echo "⏩ SMART BUILD: Melewati build TypeScript (tidak ada perubahan src/)."
+fi
+
+# 4. Reload PM2 — beberapa fallback agar tidak crash
+echo "Memuat ulang layanan PM2 Server Lisensi..."
+pm2 reload ecosystem.config.js \
+    || pm2 restart ecosystem.config.js \
+    || pm2 start ecosystem.config.js \
+    || pm2 reload all \
+    || echo "⚠️ PM2 reload gagal - periksa proses PM2 secara manual"
+pm2 save || true
+
+# Simpan status PM2 terbaru
+pm2 save || true
+
+
+# 5. Jalankan kembali Caddy (non-fatal — Caddy mungkin tidak terpakai di semua setup)
 echo "Menjalankan kembali Caddy..."
-echo '$SUDO_PASS' | sudo -S systemctl start caddy
-echo '$SUDO_PASS' | sudo -S systemctl enable caddy
+run_sudo systemctl start caddy
+run_sudo systemctl enable caddy
 
 echo "============================================="
-echo "   QUICK UPDATE LISENSI VPS SELESAI SAKSES!  "
+echo "   QUICK UPDATE LISENSI VPS SELESAI SUKSES!  "
 echo "============================================="
 "@
 }
 
-try {
-    Run-RemoteScript -ScriptContent $updateScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
-    Show-Log "Quick Update berhasil dijalankan di VPS remote!" "Green"
-} catch {
-    Show-Log "Error saat menjalankan Quick Update remote: $_" "Red"
-} finally {
-    Remove-Item -Path $SAFE_NEW_KEY -Force -ErrorAction SilentlyContinue
-    Stop-Transcript
+# =============================================================================
+# MODE: LOCAL BUILD + SCP (khusus Server Lisensi, VPS spek kecil)
+# =============================================================================
+if ($IS_SERVER_LISENSI -and $BUILD_MODE -eq "local") {
+
+    # Auto-detect path project lokal
+    $LOCAL_PROJECT = $LocalProjectPath
+    if ([string]::IsNullOrWhiteSpace($LOCAL_PROJECT)) {
+        # Asumsi struktur: deployer/ dan Project-Server-Lisensi/ berada di folder yang sama
+        $LOCAL_PROJECT = Join-Path (Split-Path $PSScriptRoot -Parent) "Project-Server-Lisensi"
+    }
+
+    if (-not (Test-Path $LOCAL_PROJECT)) {
+        Write-Host "[ERROR] Path project lokal tidak ditemukan: $LOCAL_PROJECT" -ForegroundColor Red
+        Write-Host "Gunakan parameter -LocalProjectPath untuk menentukan path yang benar." -ForegroundColor Yellow
+        Remove-Item -Path $SAFE_NEW_KEY -Force -ErrorAction SilentlyContinue
+        Stop-Transcript
+        exit 1
+    }
+
+    Show-Header "Local Build Mode - Kompilasi di PC Lokal"
+    Show-Log "Path project lokal: $LOCAL_PROJECT" "Cyan"
+
+    try {
+        # ------------------------------------------------------------------
+        # STEP 1: Git pull lokal
+        # ------------------------------------------------------------------
+        Show-Log "[1/5] Git pull kode terbaru di lokal..." "Yellow"
+        # PENTING: Sementara set ErrorActionPreference = Continue agar stderr git
+        # ("From https://...") tidak di-treat sebagai terminating error oleh PS Stop mode
+        $savedPref = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & git -C $LOCAL_PROJECT fetch origin master --quiet 2>$null
+        $fetchCode = $LASTEXITCODE
+        & git -C $LOCAL_PROJECT reset --hard origin/master
+        $resetCode = $LASTEXITCODE
+        $ErrorActionPreference = $savedPref
+        if ($fetchCode -ne 0) { throw "Git fetch lokal gagal (exit $fetchCode)." }
+        if ($resetCode -ne 0) { throw "Git reset --hard lokal gagal (exit $resetCode)." }
+        Show-Log "✅ Git pull lokal selesai." "Green"
+
+
+
+        # ------------------------------------------------------------------
+        # STEP 2: npm install lokal (jika perlu)
+        # ------------------------------------------------------------------
+        Show-Log "[2/5] npm install lokal..." "Yellow"
+        $savedPrefNpm = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & npm install --prefix $LOCAL_PROJECT --production=false
+        $npmCode = $LASTEXITCODE
+        $ErrorActionPreference = $savedPrefNpm
+        if ($npmCode -ne 0) { throw "npm install lokal gagal (exit $npmCode)." }
+        Show-Log "✅ npm install lokal selesai." "Green"
+
+        # ------------------------------------------------------------------
+        # STEP 3: prisma generate lokal (gunakan binary lokal, BUKAN npx global)
+        # ------------------------------------------------------------------
+        Show-Log "[3/5] Prisma generate lokal..." "Yellow"
+        # PENTING: Gunakan binary prisma dari node_modules project sendiri (Prisma 5.x)
+        # npx akan download versi terbaru (7.x) yang TIDAK kompatibel dengan schema lama
+        $savedPref2 = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $prismaBin = Join-Path $LOCAL_PROJECT "node_modules\.bin\prisma.cmd"
+        if (Test-Path $prismaBin) {
+            & $prismaBin generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
+        } else {
+            # Fallback: jalankan via npm exec (menggunakan versi di package.json)
+            & npm exec --prefix $LOCAL_PROJECT -- prisma generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
+        }
+        $prismaCode = $LASTEXITCODE
+        $ErrorActionPreference = $savedPref2
+        if ($prismaCode -ne 0) { throw "Prisma generate lokal gagal (exit $prismaCode)." }
+        Show-Log "✅ Prisma generate lokal selesai." "Green"
+
+        # ------------------------------------------------------------------
+        # STEP 4: TypeScript build lokal (tsc → dist/)
+        # ------------------------------------------------------------------
+        Show-Log "[4/5] Kompilasi TypeScript lokal (npm run build)..." "Yellow"
+        $savedPrefBuild = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & npm run --prefix $LOCAL_PROJECT build
+        $buildCode = $LASTEXITCODE
+        $ErrorActionPreference = $savedPrefBuild
+        if ($buildCode -ne 0) { throw "npm run build lokal gagal (exit $buildCode). Periksa error TypeScript di atas." }
+        $LOCAL_DIST = Join-Path $LOCAL_PROJECT "dist"
+        $LOCAL_PUBLIC = Join-Path $LOCAL_PROJECT "public"
+        if (-not (Test-Path $LOCAL_DIST)) { throw "Folder dist/ tidak ditemukan setelah build: $LOCAL_DIST" }
+        if (-not (Test-Path $LOCAL_PUBLIC)) { throw "Folder public/ tidak ditemukan setelah build: $LOCAL_PUBLIC" }
+        Show-Log "✅ Build TypeScript & Frontend React lokal selesai. Folder dist/ & public/ siap di-upload." "Green"
+
+        # ------------------------------------------------------------------
+        # STEP 5: SCP dist/ & public/ ke VPS
+        # ------------------------------------------------------------------
+        Show-Log "[5/5] Upload dist/ & public/ ke VPS ($NEW_IP)..." "Yellow"
+        # Pastikan kepemilikan folder di VPS milik $NEW_USER sebelum SCP
+        $chownCmd = "if [ -n '$SUDO_PASS' ]; then echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /var/www/licensing-server 2>/dev/null || true; else sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/licensing-server 2>/dev/null || true; fi"
+        & ssh -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "${NEW_USER}@${NEW_IP}" $chownCmd
+
+        # SCP recursively upload dist and public folders
+        & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "$LOCAL_PUBLIC" "${NEW_USER}@${NEW_IP}:/var/www/licensing-server/"
+        if ($LASTEXITCODE -ne 0) { throw "SCP upload dist/ & public/ ke VPS gagal." }
+        Show-Log "✅ Upload dist/ & public/ ke VPS selesai." "Green"
+
+        # ------------------------------------------------------------------
+        # STEP REMOTE: Finalisasi ringan di VPS (npm install, prisma, pm2 reload)
+        # ------------------------------------------------------------------
+        Show-Log "Menjalankan finalisasi di VPS..." "Yellow"
+        $remoteScript = @"
+set -e
+echo "==== Local Build Mode: Finalisasi di VPS ===="
+cd /var/www/licensing-server
+
+# ─── Helper sudo (sama seperti remote build) ───────────────────────────────
+SUDO_PASS_VAL='$SUDO_PASS'
+run_sudo() {
+    if [ -n "`$SUDO_PASS_VAL" ]; then
+        echo "`$SUDO_PASS_VAL" | sudo -S "`$@" 2>/dev/null || sudo "`$@" 2>/dev/null || true
+    else
+        sudo "`$@" 2>/dev/null || true
+    fi
+}
+
+# Pastikan izin folder /var/www/licensing-server milik user
+run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/licensing-server
+
+echo "Menghentikan Caddy sementara..."
+run_sudo systemctl stop caddy
+
+echo "📦 npm install (production only - tanpa build)..."
+npm install --production=false
+
+echo "🔄 Prisma generate (untuk Linux platform)..."
+npx prisma generate
+
+echo "🗄️ Prisma db push (sinkronisasi schema ke database produksi)..."
+npx prisma db push --accept-data-loss || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
+
+echo "🔁 Reload PM2 Server Lisensi..."
+pm2 reload ecosystem.config.js || pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js || pm2 reload all
+pm2 save || true
+
+# Simpan status PM2 terbaru
+pm2 save || true
+
+echo "Menjalankan kembali Caddy..."
+run_sudo systemctl start caddy
+run_sudo systemctl enable caddy
+
+echo "================================================"
+echo " LOCAL BUILD + SCP UPDATE SELESAI SUKSES! 🚀   "
+echo "================================================"
+"@
+        Run-RemoteScript -ScriptContent $remoteScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
+        Show-Log "✅ Quick Update (Local Build Mode) berhasil!" "Green"
+
+
+    } catch {
+        Show-Log "❌ Error pada Local Build Mode: $_" "Red"
+    } finally {
+        Remove-Item -Path $SAFE_NEW_KEY -Force -ErrorAction SilentlyContinue
+        Stop-Transcript
+    }
+
+} else {
+    # =============================================================================
+    # MODE: REMOTE BUILD (default — build terjadi di VPS)
+    # =============================================================================
+    try {
+        Run-RemoteScript -ScriptContent $updateScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
+        Show-Log "Quick Update berhasil dijalankan di VPS remote!" "Green"
+    } catch {
+        Show-Log "Error saat menjalankan Quick Update remote: $_" "Red"
+    } finally {
+        Remove-Item -Path $SAFE_NEW_KEY -Force -ErrorAction SilentlyContinue
+        Stop-Transcript
+    }
 }
 
 if (-not $Silent) {
