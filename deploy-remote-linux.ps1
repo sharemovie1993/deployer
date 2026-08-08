@@ -943,6 +943,10 @@ log() {
   echo "[`$(date '+%Y-%m-%d %H:%M:%S')] `$1" >> "`$LOG_FILE"
 }
 check_wireguard() {
+  # Multi-Tunnel Coexistence: Auto-sanitize legacy /24 netmask -> /32 host mask
+  sed -i 's/Address = \(10\.[0-9]\+\.[0-9]\+\.[0-9]\+\)\/24/Address = \1\/32/g' /etc/wireguard/et-*.conf 2>/dev/null || true
+  sed -i 's/AllowedIPs = 10\.0\.0\.0\/24/AllowedIPs = 10.0.0.1\/32/g' /etc/wireguard/et-*.conf 2>/dev/null || true
+
   CONF_FILES=`$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
   for cfile in `$CONF_FILES; do
     [ -f "`$cfile" ] || continue

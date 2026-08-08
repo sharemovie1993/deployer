@@ -1,4 +1,4 @@
-﻿# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
+# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
 # Melakukan git pull, build backend/frontend, prisma sync, dan restart PM2 di VPS
 
 param(
@@ -308,20 +308,10 @@ log() {
 }
 
 check_wireguard() {
-  # Single-Interface Conflict Protection: Jika ada >1 interface et-* yang UP, matikan & disable yang lama
-  UP_IFACES=`$(ip link show | grep -o 'et-[a-zA-Z0-9-]*' | sort -u)
-  IFACE_COUNT=`$(echo "`$UP_IFACES" | grep -c '^et-' || echo 0)
-  if [ "`$IFACE_COUNT" -gt 1 ]; then
-    log "⚠️ Terdeteksi `$IFACE_COUNT interface WireGuard aktif bersamaan. Membersihkan interface lama..."
-    LAST_IFACE=`$(echo "`$UP_IFACES" | tail -n 1)
-    for old_if in `$UP_IFACES; do
-      if [ "`$old_if" != "`$LAST_IFACE" ]; then
-        log "🧹 Mematikan & disable interface bentrok: `$old_if"
-        wg-quick down "`$old_if" 2>/dev/null || true
-        systemctl disable "wg-quick@`$old_if" 2>/dev/null || true
-      fi
-    done
-  fi
+  # Multi-Tunnel Coexistence: Bebaskan seluruh interface et-* berjalan bersamaan
+  # Auto-sanitize legacy /24 netmask -> /32 host mask untuk mencegah bentrok rute kernel
+  sed -i 's/Address = \(10\.[0-9]\+\.[0-9]\+\.[0-9]\+\)\/24/Address = \1\/32/g' /etc/wireguard/et-*.conf 2>/dev/null || true
+  sed -i 's/AllowedIPs = 10\.0\.0\.0\/24/AllowedIPs = 10.0.0.1\/32/g' /etc/wireguard/et-*.conf 2>/dev/null || true
 
   CONF_FILES=`$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
   for cfile in `$CONF_FILES; do
