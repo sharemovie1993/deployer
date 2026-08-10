@@ -659,45 +659,84 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
             if ($resetCode -ne 0) { throw "Git reset --hard lokal gagal (exit $resetCode)." }
             Show-Log "✅ Git pull lokal selesai." "Green"
 
-            # ------------------------------------------------------------------
-            # STEP 2: npm install lokal (jika perlu)
-            # ------------------------------------------------------------------
-            Show-Log "[2/5] npm install lokal..." "Yellow"
-            $savedPrefNpm = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            & npm install --prefix $LOCAL_PROJECT --production=false
-            $npmCode = $LASTEXITCODE
-            $ErrorActionPreference = $savedPrefNpm
-            if ($npmCode -ne 0) { throw "npm install lokal gagal (exit $npmCode)." }
-            Show-Log "✅ npm install lokal selesai." "Green"
+            if ($IS_ABSENTA) {
+                $LOCAL_BACKEND = Join-Path $LOCAL_PROJECT "absenta_backend"
+                $LOCAL_FRONTEND = Join-Path $LOCAL_PROJECT "absenta_frontend"
 
-            # ------------------------------------------------------------------
-            # STEP 3: prisma generate lokal
-            # ------------------------------------------------------------------
-            Show-Log "[3/5] Prisma generate lokal..." "Yellow"
-            $savedPref2 = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            $prismaBin = Join-Path $LOCAL_PROJECT "node_modules\.bin\prisma.cmd"
-            if (Test-Path $prismaBin) {
-                & $prismaBin generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
+                # ------------------------------------------------------------------
+                # STEP 2: npm install lokal
+                # ------------------------------------------------------------------
+                Show-Log "[2/5] npm install lokal (absenta_backend & absenta_frontend)..." "Yellow"
+                $savedPrefNpm = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & npm install --prefix $LOCAL_BACKEND --production=false
+                & npm install --prefix $LOCAL_FRONTEND --production=false
+                $ErrorActionPreference = $savedPrefNpm
+
+                # ------------------------------------------------------------------
+                # STEP 3: prisma generate lokal
+                # ------------------------------------------------------------------
+                Show-Log "[3/5] Prisma generate lokal (absenta_backend)..." "Yellow"
+                $savedPref2 = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                $prismaBin = Join-Path $LOCAL_BACKEND "node_modules\.bin\prisma.cmd"
+                if (Test-Path $prismaBin) {
+                    & $prismaBin generate --schema="$LOCAL_BACKEND\prisma\schema.prisma"
+                } else {
+                    & npm exec --prefix $LOCAL_BACKEND -- prisma generate --schema="$LOCAL_BACKEND\prisma\schema.prisma"
+                }
+                $ErrorActionPreference = $savedPref2
+
+                # ------------------------------------------------------------------
+                # STEP 4: Build Backend & Frontend
+                # ------------------------------------------------------------------
+                Show-Log "[4/5] Kompilasi Backend & Frontend lokal (npm run build)..." "Yellow"
+                $savedPrefBuild = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & npm run --prefix $LOCAL_BACKEND build
+                $bCode = $LASTEXITCODE
+                & npm run --prefix $LOCAL_FRONTEND build
+                $fCode = $LASTEXITCODE
+                $ErrorActionPreference = $savedPrefBuild
+                if ($bCode -ne 0 -or $fCode -ne 0) { throw "npm run build lokal (Backend/Frontend) gagal." }
             } else {
-                & npm exec --prefix $LOCAL_PROJECT -- prisma generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
-            }
-            $prismaCode = $LASTEXITCODE
-            $ErrorActionPreference = $savedPref2
-            if ($prismaCode -ne 0) { throw "Prisma generate lokal gagal (exit $prismaCode)." }
-            Show-Log "✅ Prisma generate lokal selesai." "Green"
+                # ------------------------------------------------------------------
+                # STEP 2: npm install lokal (Server Lisensi)
+                # ------------------------------------------------------------------
+                Show-Log "[2/5] npm install lokal..." "Yellow"
+                $savedPrefNpm = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & npm install --prefix $LOCAL_PROJECT --production=false
+                $npmCode = $LASTEXITCODE
+                $ErrorActionPreference = $savedPrefNpm
+                if ($npmCode -ne 0) { throw "npm install lokal gagal (exit $npmCode)." }
 
-            # ------------------------------------------------------------------
-            # STEP 4: TypeScript build lokal (tsc → dist/)
-            # ------------------------------------------------------------------
-            Show-Log "[4/5] Kompilasi TypeScript lokal (npm run build)..." "Yellow"
-            $savedPrefBuild = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            & npm run --prefix $LOCAL_PROJECT build
-            $buildCode = $LASTEXITCODE
-            $ErrorActionPreference = $savedPrefBuild
-            if ($buildCode -ne 0) { throw "npm run build lokal gagal (exit $buildCode). Periksa error TypeScript di atas." }
+                # ------------------------------------------------------------------
+                # STEP 3: prisma generate lokal
+                # ------------------------------------------------------------------
+                Show-Log "[3/5] Prisma generate lokal..." "Yellow"
+                $savedPref2 = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                $prismaBin = Join-Path $LOCAL_PROJECT "node_modules\.bin\prisma.cmd"
+                if (Test-Path $prismaBin) {
+                    & $prismaBin generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
+                } else {
+                    & npm exec --prefix $LOCAL_PROJECT -- prisma generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
+                }
+                $prismaCode = $LASTEXITCODE
+                $ErrorActionPreference = $savedPref2
+
+                # ------------------------------------------------------------------
+                # STEP 4: TypeScript build lokal
+                # ------------------------------------------------------------------
+                Show-Log "[4/5] Kompilasi TypeScript lokal (npm run build)..." "Yellow"
+                $savedPrefBuild = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & npm run --prefix $LOCAL_PROJECT build
+                $buildCode = $LASTEXITCODE
+                $ErrorActionPreference = $savedPrefBuild
+                if ($buildCode -ne 0) { throw "npm run build lokal gagal (exit $buildCode)." }
+            }
             Show-Log "✅ Build TypeScript & Frontend React lokal selesai." "Green"
         }
 

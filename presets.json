@@ -4,7 +4,7 @@
     "vpsIp": "10.10.10.99",
     "vpsUser": "asepsuryadi",
     "project": "absenta",
-    "buildMode": "skip",
+    "buildMode": "local",
     "sshKeyChoice": "nginxonly.pem",
     "vpsSudoPass": "1",
     "vpsKeyPath": "",
