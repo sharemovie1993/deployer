@@ -699,6 +699,13 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
                 Show-Log "[4/5] Kompilasi Backend & Frontend lokal (npm run build)..." "Yellow"
                 $savedPrefBuild = $ErrorActionPreference
                 $ErrorActionPreference = 'Continue'
+
+                # Hapus .tsbuildinfo agar TypeScript tidak skip recompile file yang berubah
+                $tsBuildInfo = Join-Path $LOCAL_BACKEND "absenta_backend.tsbuildinfo"
+                $tsBuildInfo2 = Join-Path $LOCAL_BACKEND ".tsbuildinfo"
+                if (Test-Path $tsBuildInfo)  { Remove-Item $tsBuildInfo  -Force; Show-Log "🗑️ Cleared .tsbuildinfo (backend)" "DarkGray" }
+                if (Test-Path $tsBuildInfo2) { Remove-Item $tsBuildInfo2 -Force; Show-Log "🗑️ Cleared .tsbuildinfo (root)" "DarkGray" }
+
                 $env:ENABLE_OBFUSCATE = if ($Obfuscate -eq "Y" -or $Obfuscate -eq "true" -or $Obfuscate -eq "1") { "Y" } else { "N" }
                 & npm run --prefix $LOCAL_BACKEND build
                 $bCode = $LASTEXITCODE
