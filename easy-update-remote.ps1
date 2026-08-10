@@ -1,4 +1,4 @@
-﻿# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
+# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
 # Melakukan git pull, build backend/frontend, prisma sync, dan restart PM2 di VPS
 
 param(
@@ -748,15 +748,21 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
         $remoteScript = @"
 set -e
 echo "==== Local Build Mode: Finalisasi di VPS ===="
-cd /var/www/$TARGET_SUBDIR
+
+# Pindah ke folder backend jika ini Project Absenta monorepo
+if [ -d "/var/www/$TARGET_SUBDIR/absenta_backend" ]; then
+    cd /var/www/$TARGET_SUBDIR/absenta_backend
+else
+    cd /var/www/$TARGET_SUBDIR
+fi
 
 # ─── Helper sudo (sama seperti remote build) ───────────────────────────────
 SUDO_PASS_VAL='$SUDO_PASS'
 run_sudo() {
-    if [ -n "`$SUDO_PASS_VAL" ]; then
-        echo "`$SUDO_PASS_VAL" | sudo -S "`$@" 2>/dev/null || sudo "`$@" 2>/dev/null || true
+    if [ -n "$SUDO_PASS_VAL" ]; then
+        echo "$SUDO_PASS_VAL" | sudo -S "$@" 2>/dev/null || sudo "$@" 2>/dev/null || true
     else
-        sudo "`$@" 2>/dev/null || true
+        sudo "$@" 2>/dev/null || true
     fi
 }
 
@@ -766,18 +772,25 @@ run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
 echo "Menghentikan Caddy sementara..."
 run_sudo systemctl stop caddy
 
-echo "📦 npm install (production only - tanpa build)..."
-npm install --production=false
+if [ -f "package.json" ]; then
+    echo "📦 npm install (production only - tanpa build)..."
+    npm install --production=false
+fi
 
-echo "🔄 Prisma generate (untuk Linux platform)..."
-npx prisma generate
+if [ -f "prisma/schema.prisma" ]; then
+    echo "🔄 Prisma generate (untuk Linux platform)..."
+    npx prisma generate
 
-echo "🗄️ Prisma db push (sinkronisasi schema ke database produksi)..."
-npx prisma db push --accept-data-loss || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
+    echo "🗄️ Prisma db push (sinkronisasi schema ke database produksi)..."
+    npx prisma db push --accept-data-loss || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
+fi
 
-echo "🔁 Reload PM2 Server Lisensi..."
-pm2 reload ecosystem.config.js || pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js || pm2 reload all
-pm2 save || true
+echo "🔁 Reload PM2 Aplikasi..."
+if [ -f "ecosystem.config.js" ]; then
+    pm2 reload ecosystem.config.js || pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js || pm2 reload all
+else
+    pm2 reload all || true
+fi
 
 # Simpan status PM2 terbaru
 pm2 save || true
