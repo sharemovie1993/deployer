@@ -679,11 +679,15 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
                 Show-Log "[3/5] Prisma generate lokal (absenta_backend)..." "Yellow"
                 $savedPref2 = $ErrorActionPreference
                 $ErrorActionPreference = 'Continue'
-                $prismaBin = Join-Path $LOCAL_BACKEND "node_modules\.bin\prisma.cmd"
-                if (Test-Path $prismaBin) {
-                    & $prismaBin generate --schema="$LOCAL_BACKEND\prisma\schema.prisma"
-                } else {
-                    & npm exec --prefix $LOCAL_BACKEND -- prisma generate --schema="$LOCAL_BACKEND\prisma\schema.prisma"
+                try {
+                    $prismaBin = Join-Path $LOCAL_BACKEND "node_modules\.bin\prisma.cmd"
+                    if (Test-Path $prismaBin) {
+                        & $prismaBin generate --schema="$LOCAL_BACKEND\prisma\schema.prisma"
+                    } else {
+                        & npm exec --prefix $LOCAL_BACKEND -- prisma generate --schema="$LOCAL_BACKEND\prisma\schema.prisma"
+                    }
+                } catch {
+                    Show-Log "⚠️ Prisma generate lokal dilewati (file query_engine sedang digunakan oleh dev server). Prisma Client Linux akan di-generate otomatis di VPS." "Yellow"
                 }
                 $ErrorActionPreference = $savedPref2
 
