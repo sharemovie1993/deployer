@@ -107,12 +107,16 @@ function renderPresetsGrid(presets) {
         const pUser = p.vpsUser || 'asepsuryadi';
         const safeId = p.id;
 
+        const buildBadgeText = p.buildMode === 'skip' ? '🚀 Skip Build' : (p.buildMode === 'local' ? '🖥️ Local Build' : '☁️ Remote Build');
+        const buildBadgeColor = p.buildMode === 'skip' ? '#fbbf24' : (p.buildMode === 'local' ? '#34d399' : '#60a5fa');
+        const buildBadgeRgb = p.buildMode === 'skip' ? '251,191,36' : (p.buildMode === 'local' ? '52,211,153' : '59,130,246');
+
         html += '<div class="preset-card" id="pcard-' + safeId + '">' +
             '<div>' +
                 '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">' +
                     '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
                         '<span class="badge ' + projBadgeClass + '">' + projName + '</span>' +
-                        (p.project === 'licensing' ? '<span class="badge" style="background:rgba(' + (p.buildMode === 'local' ? '52,211,153' : '59,130,246') + ',0.12);color:' + (p.buildMode === 'local' ? '#34d399' : '#60a5fa') + ';border:1px solid rgba(' + (p.buildMode === 'local' ? '52,211,153' : '59,130,246') + ',0.3);font-size:10px;">' + (p.buildMode === 'local' ? '🖥️ Local Build' : '☁️ Remote Build') + '</span>' : '') +
+                        '<span class="badge" style="background:rgba(' + buildBadgeRgb + ',0.12);color:' + buildBadgeColor + ';border:1px solid rgba(' + buildBadgeRgb + ',0.3);font-size:10px;">' + buildBadgeText + '</span>' +
                     '</div>' +
                     '<div style="display: flex; gap: 6px;">' +
                         '<button class="btn-action-inline" style="padding: 5px 10px; font-size: 11px;" onclick="openPresetModal(\'' + safeId + '\')">✏️ Edit</button>' +

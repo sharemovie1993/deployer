@@ -7,8 +7,9 @@ param(
     [string]$KeyPath,
     [string]$SudoPass,
     [string]$Project = "absenta",
-    [string]$BuildMode = "remote",          # "remote" = build di VPS | "local" = build lokal lalu SCP ke VPS
+    [string]$BuildMode = "remote",          # "remote" = build di VPS | "local" = build lokal | "skip" = skip build lokal (upload dist/ eksisting)
     [string]$LocalProjectPath = "",          # Path lokal Project-Server-Lisensi (auto-detect jika kosong)
+    [switch]$SkipBuild,
     [switch]$Silent
 )
 
@@ -38,6 +39,8 @@ function Show-Header {
 
 Show-Header "Persiapan Koneksi VPS Target"
 
+if ($SkipBuild) { $BUILD_MODE = "skip" }
+
 if ($Silent) {
     $NEW_IP = $TargetIP
     if ([string]::IsNullOrWhiteSpace($NEW_IP)) { $NEW_IP = "10.10.10.99" }
@@ -47,7 +50,7 @@ if ($Silent) {
     $SUDO_PASS = $SudoPass
     # Sudo password bersifat opsional — jika kosong, perintah sudo tidak akan disertakan password
     $projChoice = if ($Project -eq "licensing" -or $Project -eq "2") { "2" } else { "1" }
-    $BUILD_MODE = if ($BuildMode -eq "local") { "local" } else { "remote" }
+    $BUILD_MODE = if ($SkipBuild -or $BuildMode -eq "skip") { "skip" } elseif ($BuildMode -eq "local") { "local" } else { "remote" }
 } else {
     $NEW_IP = (Read-Host "Masukkan IP VPS Target [10.10.10.163]").Trim()
     if ([string]::IsNullOrWhiteSpace($NEW_IP)) { $NEW_IP = "10.10.10.163" }
@@ -111,11 +114,14 @@ if ($projChoice -eq "2") {
 if (-not $Silent) {
     Show-Header "Pilih Mode Build"
     Write-Host "" 
-    Write-Host " [remote] Build di VPS   - VPS yang compile TypeScript (cocok untuk VPS RAM >= 4GB)" -ForegroundColor Cyan
-    Write-Host " [local]  Build di Lokal  - Kompilasi di PC ini lalu upload dist/ ke VPS (cocok untuk VPS RAM 1GB/2GB)" -ForegroundColor Green
+    Write-Host " [remote] Build di VPS     - VPS yang compile TypeScript (cocok untuk VPS RAM >= 4GB)" -ForegroundColor Cyan
+    Write-Host " [local]  Build di Lokal    - Kompilasi di PC ini lalu upload dist/ ke VPS (cocok untuk VPS RAM 1GB/2GB)" -ForegroundColor Green
+    Write-Host " [skip]   Skip Build Lokal - Langsung upload folder dist/ eksisting via SCP (Instan 3-5 detik!)" -ForegroundColor Yellow
     Write-Host ""
-    $buildChoice = (Read-Host "Pilih mode build [remote/local]").Trim().ToLower()
-    if ($buildChoice -eq "local" -or $buildChoice -eq "l") {
+    $buildChoice = (Read-Host "Pilih mode build [remote/local/skip]").Trim().ToLower()
+    if ($buildChoice -eq "skip" -or $buildChoice -eq "s") {
+        $BUILD_MODE = "skip"
+    } elseif ($buildChoice -eq "local" -or $buildChoice -eq "l") {
         $BUILD_MODE = "local"
     } else {
         $BUILD_MODE = "remote"
@@ -601,15 +607,18 @@ echo "============================================="
 }
 
 # =============================================================================
-# MODE: LOCAL BUILD + SCP (khusus Server Lisensi, VPS spek kecil)
+# MODE: LOCAL BUILD + SCP / SKIP BUILD (VPS spek kecil atau fast upload)
 # =============================================================================
-if ($IS_SERVER_LISENSI -and $BUILD_MODE -eq "local") {
+if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
 
     # Auto-detect path project lokal
     $LOCAL_PROJECT = $LocalProjectPath
     if ([string]::IsNullOrWhiteSpace($LOCAL_PROJECT)) {
-        # Asumsi struktur: deployer/ dan Project-Server-Lisensi/ berada di folder yang sama
-        $LOCAL_PROJECT = Join-Path (Split-Path $PSScriptRoot -Parent) "Project-Server-Lisensi"
+        if ($IS_SERVER_LISENSI) {
+            $LOCAL_PROJECT = Join-Path (Split-Path $PSScriptRoot -Parent) "Project-Server-Lisensi"
+        } else {
+            $LOCAL_PROJECT = Join-Path (Split-Path $PSScriptRoot -Parent) "Project Absenta"
+        }
     }
 
     if (-not (Test-Path $LOCAL_PROJECT)) {
@@ -620,89 +629,88 @@ if ($IS_SERVER_LISENSI -and $BUILD_MODE -eq "local") {
         exit 1
     }
 
-    Show-Header "Local Build Mode - Kompilasi di PC Lokal"
+    Show-Header "Local Build / SCP Mode ($BUILD_MODE)"
     Show-Log "Path project lokal: $LOCAL_PROJECT" "Cyan"
 
     try {
-        # ------------------------------------------------------------------
-        # STEP 1: Git pull lokal
-        # ------------------------------------------------------------------
-        Show-Log "[1/5] Git pull kode terbaru di lokal..." "Yellow"
-        # PENTING: Sementara set ErrorActionPreference = Continue agar stderr git
-        # ("From https://...") tidak di-treat sebagai terminating error oleh PS Stop mode
-        $savedPref = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        & git -C $LOCAL_PROJECT fetch origin master --quiet 2>$null
-        $fetchCode = $LASTEXITCODE
-        & git -C $LOCAL_PROJECT reset --hard origin/master
-        $resetCode = $LASTEXITCODE
-        $ErrorActionPreference = $savedPref
-        if ($fetchCode -ne 0) { throw "Git fetch lokal gagal (exit $fetchCode)." }
-        if ($resetCode -ne 0) { throw "Git reset --hard lokal gagal (exit $resetCode)." }
-        Show-Log "✅ Git pull lokal selesai." "Green"
-
-
-
-        # ------------------------------------------------------------------
-        # STEP 2: npm install lokal (jika perlu)
-        # ------------------------------------------------------------------
-        Show-Log "[2/5] npm install lokal..." "Yellow"
-        $savedPrefNpm = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        & npm install --prefix $LOCAL_PROJECT --production=false
-        $npmCode = $LASTEXITCODE
-        $ErrorActionPreference = $savedPrefNpm
-        if ($npmCode -ne 0) { throw "npm install lokal gagal (exit $npmCode)." }
-        Show-Log "✅ npm install lokal selesai." "Green"
-
-        # ------------------------------------------------------------------
-        # STEP 3: prisma generate lokal (gunakan binary lokal, BUKAN npx global)
-        # ------------------------------------------------------------------
-        Show-Log "[3/5] Prisma generate lokal..." "Yellow"
-        # PENTING: Gunakan binary prisma dari node_modules project sendiri (Prisma 5.x)
-        # npx akan download versi terbaru (7.x) yang TIDAK kompatibel dengan schema lama
-        $savedPref2 = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        $prismaBin = Join-Path $LOCAL_PROJECT "node_modules\.bin\prisma.cmd"
-        if (Test-Path $prismaBin) {
-            & $prismaBin generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
+        if ($BUILD_MODE -eq "skip") {
+            Show-Log "⚡ [SKIP BUILD] Melewati kompilasi lokal secara manual. Menggunakan folder dist/ eksisting..." "Yellow"
         } else {
-            # Fallback: jalankan via npm exec (menggunakan versi di package.json)
-            & npm exec --prefix $LOCAL_PROJECT -- prisma generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
-        }
-        $prismaCode = $LASTEXITCODE
-        $ErrorActionPreference = $savedPref2
-        if ($prismaCode -ne 0) { throw "Prisma generate lokal gagal (exit $prismaCode)." }
-        Show-Log "✅ Prisma generate lokal selesai." "Green"
+            # ------------------------------------------------------------------
+            # STEP 1: Git pull lokal
+            # ------------------------------------------------------------------
+            Show-Log "[1/5] Git pull kode terbaru di lokal..." "Yellow"
+            $savedPref = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            & git -C $LOCAL_PROJECT fetch origin main --quiet 2>$null
+            $fetchCode = $LASTEXITCODE
+            & git -C $LOCAL_PROJECT reset --hard origin/main
+            $resetCode = $LASTEXITCODE
+            $ErrorActionPreference = $savedPref
+            if ($fetchCode -ne 0) { throw "Git fetch lokal gagal (exit $fetchCode)." }
+            if ($resetCode -ne 0) { throw "Git reset --hard lokal gagal (exit $resetCode)." }
+            Show-Log "✅ Git pull lokal selesai." "Green"
 
-        # ------------------------------------------------------------------
-        # STEP 4: TypeScript build lokal (tsc → dist/)
-        # ------------------------------------------------------------------
-        Show-Log "[4/5] Kompilasi TypeScript lokal (npm run build)..." "Yellow"
-        $savedPrefBuild = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        & npm run --prefix $LOCAL_PROJECT build
-        $buildCode = $LASTEXITCODE
-        $ErrorActionPreference = $savedPrefBuild
-        if ($buildCode -ne 0) { throw "npm run build lokal gagal (exit $buildCode). Periksa error TypeScript di atas." }
+            # ------------------------------------------------------------------
+            # STEP 2: npm install lokal (jika perlu)
+            # ------------------------------------------------------------------
+            Show-Log "[2/5] npm install lokal..." "Yellow"
+            $savedPrefNpm = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            & npm install --prefix $LOCAL_PROJECT --production=false
+            $npmCode = $LASTEXITCODE
+            $ErrorActionPreference = $savedPrefNpm
+            if ($npmCode -ne 0) { throw "npm install lokal gagal (exit $npmCode)." }
+            Show-Log "✅ npm install lokal selesai." "Green"
+
+            # ------------------------------------------------------------------
+            # STEP 3: prisma generate lokal
+            # ------------------------------------------------------------------
+            Show-Log "[3/5] Prisma generate lokal..." "Yellow"
+            $savedPref2 = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            $prismaBin = Join-Path $LOCAL_PROJECT "node_modules\.bin\prisma.cmd"
+            if (Test-Path $prismaBin) {
+                & $prismaBin generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
+            } else {
+                & npm exec --prefix $LOCAL_PROJECT -- prisma generate --schema="$LOCAL_PROJECT\prisma\schema.prisma"
+            }
+            $prismaCode = $LASTEXITCODE
+            $ErrorActionPreference = $savedPref2
+            if ($prismaCode -ne 0) { throw "Prisma generate lokal gagal (exit $prismaCode)." }
+            Show-Log "✅ Prisma generate lokal selesai." "Green"
+
+            # ------------------------------------------------------------------
+            # STEP 4: TypeScript build lokal (tsc → dist/)
+            # ------------------------------------------------------------------
+            Show-Log "[4/5] Kompilasi TypeScript lokal (npm run build)..." "Yellow"
+            $savedPrefBuild = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            & npm run --prefix $LOCAL_PROJECT build
+            $buildCode = $LASTEXITCODE
+            $ErrorActionPreference = $savedPrefBuild
+            if ($buildCode -ne 0) { throw "npm run build lokal gagal (exit $buildCode). Periksa error TypeScript di atas." }
+            Show-Log "✅ Build TypeScript & Frontend React lokal selesai." "Green"
+        }
+
         $LOCAL_DIST = Join-Path $LOCAL_PROJECT "dist"
         $LOCAL_PUBLIC = Join-Path $LOCAL_PROJECT "public"
-        if (-not (Test-Path $LOCAL_DIST)) { throw "Folder dist/ tidak ditemukan setelah build: $LOCAL_DIST" }
-        if (-not (Test-Path $LOCAL_PUBLIC)) { throw "Folder public/ tidak ditemukan setelah build: $LOCAL_PUBLIC" }
-        Show-Log "✅ Build TypeScript & Frontend React lokal selesai. Folder dist/ & public/ siap di-upload." "Green"
+        if (-not (Test-Path $LOCAL_DIST)) { throw "Folder dist/ tidak ditemukan: $LOCAL_DIST. Harap jalankan npm run build manual terlebih dahulu." }
 
         # ------------------------------------------------------------------
         # STEP 5: SCP dist/ & public/ ke VPS
         # ------------------------------------------------------------------
-        Show-Log "[5/5] Upload dist/ & public/ ke VPS ($NEW_IP)..." "Yellow"
-        # Pastikan kepemilikan folder di VPS milik $NEW_USER sebelum SCP
+        Show-Log "[5/5] Upload dist/ ke VPS ($NEW_IP)..." "Yellow"
         $chownCmd = "if [ -n '$SUDO_PASS' ]; then echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR 2>/dev/null || true; else sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR 2>/dev/null || true; fi"
         & ssh -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "${NEW_USER}@${NEW_IP}" $chownCmd
 
-        # SCP recursively upload dist and public folders
-        & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "$LOCAL_PUBLIC" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/"
-        if ($LASTEXITCODE -ne 0) { throw "SCP upload dist/ & public/ ke VPS gagal." }
-        Show-Log "✅ Upload dist/ & public/ ke VPS selesai." "Green"
+        if (Test-Path $LOCAL_PUBLIC) {
+            & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "$LOCAL_PUBLIC" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/"
+        } else {
+            & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/"
+        }
+        if ($LASTEXITCODE -ne 0) { throw "SCP upload dist/ ke VPS gagal." }
+        Show-Log "✅ Upload dist/ ke VPS selesai." "Green"
 
         # ------------------------------------------------------------------
         # STEP REMOTE: Finalisasi ringan di VPS (npm install, prisma, pm2 reload)
