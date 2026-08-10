@@ -693,23 +693,44 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
             Show-Log "✅ Build TypeScript & Frontend React lokal selesai." "Green"
         }
 
-        $LOCAL_DIST = Join-Path $LOCAL_PROJECT "dist"
-        $LOCAL_PUBLIC = Join-Path $LOCAL_PROJECT "public"
-        if (-not (Test-Path $LOCAL_DIST)) { throw "Folder dist/ tidak ditemukan: $LOCAL_DIST. Harap jalankan npm run build manual terlebih dahulu." }
-
         # ------------------------------------------------------------------
-        # STEP 5: SCP dist/ & public/ ke VPS
+        # STEP 5: SCP dist/ ke VPS
         # ------------------------------------------------------------------
         Show-Log "[5/5] Upload dist/ ke VPS ($NEW_IP)..." "Yellow"
         $chownCmd = "if [ -n '$SUDO_PASS' ]; then echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR 2>/dev/null || true; else sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR 2>/dev/null || true; fi"
         & ssh -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "${NEW_USER}@${NEW_IP}" $chownCmd
 
-        if (Test-Path $LOCAL_PUBLIC) {
-            & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "$LOCAL_PUBLIC" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/"
+        if ($IS_ABSENTA) {
+            $LOCAL_BACKEND_DIST = Join-Path $LOCAL_PROJECT "absenta_backend\dist"
+            $LOCAL_FRONTEND_DIST = Join-Path $LOCAL_PROJECT "absenta_frontend\dist"
+
+            if (-not (Test-Path $LOCAL_BACKEND_DIST) -and -not (Test-Path $LOCAL_FRONTEND_DIST)) {
+                throw "Folder dist/ Backend ($LOCAL_BACKEND_DIST) maupun Frontend ($LOCAL_FRONTEND_DIST) tidak ditemukan. Harap jalankan npm run build manual di absenta_backend / absenta_frontend terlebih dahulu."
+            }
+
+            if (Test-Path $LOCAL_BACKEND_DIST) {
+                Show-Log "📦 Uploading absenta_backend/dist..." "Cyan"
+                & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_BACKEND_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/absenta_backend/"
+                if ($LASTEXITCODE -ne 0) { throw "SCP upload absenta_backend/dist ke VPS gagal." }
+            }
+
+            if (Test-Path $LOCAL_FRONTEND_DIST) {
+                Show-Log "📦 Uploading absenta_frontend/dist..." "Cyan"
+                & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_FRONTEND_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/absenta_frontend/"
+                if ($LASTEXITCODE -ne 0) { throw "SCP upload absenta_frontend/dist ke VPS gagal." }
+            }
         } else {
-            & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/"
+            $LOCAL_DIST = Join-Path $LOCAL_PROJECT "dist"
+            $LOCAL_PUBLIC = Join-Path $LOCAL_PROJECT "public"
+            if (-not (Test-Path $LOCAL_DIST)) { throw "Folder dist/ tidak ditemukan: $LOCAL_DIST. Harap jalankan npm run build manual terlebih dahulu." }
+
+            if (Test-Path $LOCAL_PUBLIC) {
+                & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "$LOCAL_PUBLIC" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/"
+            } else {
+                & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/"
+            }
+            if ($LASTEXITCODE -ne 0) { throw "SCP upload dist/ ke VPS gagal." }
         }
-        if ($LASTEXITCODE -ne 0) { throw "SCP upload dist/ ke VPS gagal." }
         Show-Log "✅ Upload dist/ ke VPS selesai." "Green"
 
         # ------------------------------------------------------------------
