@@ -328,7 +328,7 @@
             <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;">
                 <div style="flex: 1; min-width: 220px;">
                     <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Pilih Target Server</label>
-                    <select id="log-target-preset" style="width: 100%; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px;">
+                    <select id="log-target-preset" style="width: 100%; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px;" onchange="onLogTargetPresetChange()">
                         <option value="local">💻 Server Windows Lokal (Localhost)</option>
                         <!-- Populated dynamically via JS -->
                     </select>

@@ -300,6 +300,11 @@ function handleRequest(req, res) {
         return;
     }
 
+    if (pathname === '/api/pm2-list' && (req.method === 'GET' || req.method === 'POST')) {
+        handlePm2List(req, res, parsedUrl);
+        return;
+    }
+
     if (pathname === '/api/restart-service' && (req.method === 'GET' || req.method === 'POST')) {
         handleRestartService(req, res, parsedUrl);
         return;
@@ -1371,6 +1376,76 @@ function handleRestartService(req, res, parsedUrl) {
         proc.stdin.write(restartCmd + '\n');
         proc.stdin.end();
     }
+}
+
+function handlePm2List(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const p = presets.find(item => item.id === presetId);
+
+    if (!p && presetId !== 'local') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+        return;
+    }
+
+    const isLocal = !p || presetId === 'local';
+    const ip = isLocal ? '127.0.0.1' : p.vpsIp;
+    const user = isLocal ? '' : (p.vpsUser || 'asepsuryadi');
+    const keyChoice = isLocal ? '' : (p.sshKeyChoice || 'nginxonly.pem');
+    const keyPath = isLocal ? '' : (keyChoice === 'custom' ? p.vpsKeyPath : path.join(__dirname, '..', keyChoice));
+
+    let proc;
+    if (isLocal && process.platform === 'win32') {
+        proc = spawn('powershell.exe', ['-NoProfile', '-Command', 'pm2 jlist 2>$null'], { windowsHide: true });
+    } else {
+        const safeKeyPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'pm2list-key-safe.pem');
+        try { fs.copyFileSync(keyPath, safeKeyPath); } catch (e) {}
+        const sshArgs = [
+            '-i', safeKeyPath,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile=/dev/null',
+            '-o', 'ConnectTimeout=5',
+            `${user}@${ip}`,
+            'pm2 jlist 2>/dev/null || npx pm2 jlist 2>/dev/null || echo "[]"'
+        ];
+        proc = spawn('ssh.exe', sshArgs, { windowsHide: true });
+    }
+
+    let stdout = '';
+    let responded = false;
+
+    const timer = setTimeout(() => {
+        if (!responded) {
+            responded = true;
+            try { proc.kill(); } catch (e) {}
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'Timeout fetching PM2 list', data: [] }));
+        }
+    }, 6000);
+
+    if (proc.stdout) proc.stdout.on('data', d => stdout += d.toString());
+    proc.on('close', () => {
+        if (responded) return;
+        clearTimeout(timer);
+        responded = true;
+
+        let pm2Processes = [];
+        try {
+            const raw = JSON.parse(stdout.trim());
+            if (Array.isArray(raw)) {
+                pm2Processes = raw.map(p => ({
+                    name: p.name,
+                    pm_id: p.pm_id,
+                    status: p.pm2_env ? p.pm2_env.status : 'unknown',
+                    memory_mb: p.monit ? Math.round((p.monit.memory || 0) / (1024 * 1024)) : 0
+                }));
+            }
+        } catch (e) {}
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, data: pm2Processes }));
+    });
 }
 
 module.exports = {

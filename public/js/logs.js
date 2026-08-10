@@ -1,6 +1,71 @@
 let logEventSource = null;
 let logLineCount = 0;
 
+function populateLogTargetApps(presetId, selectedApp, callback) {
+    const appSelect = document.getElementById('log-target-app');
+    if (!appSelect) return;
+
+    const targetPreset = presetId || document.getElementById('log-target-preset')?.value || 'local';
+    const currentVal = selectedApp || appSelect.value || 'all';
+
+    appSelect.innerHTML = `
+        <option value="all">🌐 SEMUA Aplikasi (Gabungan PM2)</option>
+        <option value="" disabled>⌛ Mengambil daftar PM2 dari server...</option>
+    `;
+
+    fetch(`/api/pm2-list?id=${encodeURIComponent(targetPreset)}`)
+        .then(res => res.json())
+        .then(res => {
+            let html = '<option value="all">🌐 SEMUA Aplikasi (Gabungan PM2)</option>';
+            
+            if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+                res.data.forEach(w => {
+                    const statusIcon = w.status === 'online' ? '🟢' : '🔴';
+                    const memInfo = w.memory_mb ? ` (${w.memory_mb} MB)` : '';
+                    html += `<option value="${w.name}">${statusIcon} ${w.name}${memInfo}</option>`;
+                });
+            } else {
+                html += `
+                    <option value="absenta-backend">⚙️ Backend Absenta (absenta-backend)</option>
+                    <option value="absenta-frontend">🎨 Frontend Absenta (absenta-frontend)</option>
+                `;
+            }
+
+            html += `
+                <option value="caddy">🛡️ Reverse Proxy Caddy</option>
+                <option value="custom">✏️ Nama/ID Aplikasi Kustom...</option>
+            `;
+
+            appSelect.innerHTML = html;
+            if (currentVal && Array.from(appSelect.options).some(o => o.value === currentVal)) {
+                appSelect.value = currentVal;
+            } else {
+                appSelect.value = 'all';
+            }
+            toggleCustomLogAppInput();
+            if (typeof callback === 'function') callback();
+        })
+        .catch(err => {
+            console.error('Gagal mengambil daftar PM2 untuk target aplikasi:', err);
+            appSelect.innerHTML = `
+                <option value="all">🌐 SEMUA Aplikasi (Gabungan PM2)</option>
+                <option value="absenta-backend">⚙️ Backend Absenta (absenta-backend)</option>
+                <option value="absenta-frontend">🎨 Frontend Absenta (absenta-frontend)</option>
+                <option value="caddy">🛡️ Reverse Proxy Caddy</option>
+                <option value="custom">✏️ Nama/ID Aplikasi Kustom...</option>
+            `;
+            if (currentVal) appSelect.value = currentVal;
+            toggleCustomLogAppInput();
+            if (typeof callback === 'function') callback();
+        });
+}
+
+function onLogTargetPresetChange() {
+    const selectPreset = document.getElementById('log-target-preset');
+    const presetId = selectPreset ? selectPreset.value : 'local';
+    populateLogTargetApps(presetId);
+}
+
 function populateLogTargetPresets(callback) {
     const select = document.getElementById('log-target-preset');
     if (!select) return;
@@ -21,7 +86,9 @@ function populateLogTargetPresets(callback) {
         select.innerHTML = html;
         // Set ke server aktif jika ada
         if (currentValue) select.value = currentValue;
-        if (typeof callback === 'function') callback();
+        
+        // Dynamic fetch PM2 app list for selected server preset
+        populateLogTargetApps(select.value, null, callback);
     };
 
     if (typeof globalPresets !== 'undefined' && Array.isArray(globalPresets) && globalPresets.length > 0) {
@@ -185,6 +252,8 @@ function openLogMonitorForPreset(presetId, appName) {
         if (selectPreset) {
             selectPreset.value = presetId;
         }
-        startPm2LogStreamUI(presetId, appName || 'all');
+        populateLogTargetApps(presetId, appName || 'all', () => {
+            startPm2LogStreamUI(presetId, appName || 'all');
+        });
     });
 }
