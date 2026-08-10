@@ -400,13 +400,18 @@ function runQuickUpdatePreset(presetId) {
     statusText.innerHTML = 'Menghubungkan via SSH...';
     consoleContainer.innerHTML = '>> Memulai aliran log Quick Update remote untuk ' + p.vpsIp + '...\n';
 
+    if (window.currentQuickUpdateEventSource) {
+        window.currentQuickUpdateEventSource.close();
+    }
     const eventSource = new EventSource('/api/stream-quick-update?id=' + encodeURIComponent(presetId));
+    window.currentQuickUpdateEventSource = eventSource;
 
     eventSource.onmessage = function(event) {
         const line = event.data;
 
         if (line === '[UPDATE_COMPLETE]') {
             eventSource.close();
+            window.currentQuickUpdateEventSource = null;
             if (window.quickUpdateTimerInterval) {
                 clearInterval(window.quickUpdateTimerInterval);
             }
@@ -778,4 +783,56 @@ function openHealthMatrixForPreset(presetId) {
         if (select) select.value = presetId;
         if (typeof refreshHealthMatrixUI === 'function') refreshHealthMatrixUI();
     }, 80);
+}
+
+function cancelCurrentQuickUpdate() {
+    const presetId = window.activePresetId;
+    if (!confirm('Apakah Anda yakin ingin membatalkan & menghentikan secara paksa proses build / update ini?')) return;
+
+    fetch('/api/quick-update/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: presetId })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (window.currentQuickUpdateEventSource) {
+            window.currentQuickUpdateEventSource.close();
+            window.currentQuickUpdateEventSource = null;
+        }
+        if (window.quickUpdateTimerInterval) {
+            clearInterval(window.quickUpdateTimerInterval);
+        }
+
+        const statusBadge = document.getElementById('quick-update-status-badge');
+        const timerBadge = document.getElementById('quick-update-timer');
+        const statusText = document.getElementById('quick-progress-status');
+        const consoleContainer = document.getElementById('quick-terminal-logs');
+
+        if (statusBadge) {
+            statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+            statusBadge.style.color = '#f87171';
+            statusBadge.innerHTML = '🛑 Dibatalkan';
+        }
+        if (timerBadge) {
+            timerBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+            timerBadge.style.color = '#f87171';
+            timerBadge.innerHTML = '⏱️ Dihentikan';
+        }
+        if (statusText) {
+            statusText.innerHTML = 'Proses dihentikan oleh pengguna. 🛑';
+        }
+
+        if (consoleContainer) {
+            const span = document.createElement('span');
+            span.style.color = 'var(--error)';
+            span.style.fontWeight = 'bold';
+            span.appendChild(document.createTextNode('\n=============================================\n  PROSES DIBATALKAN & DIBERHENTIKAN PAKSA! (Force Stop)\n=============================================\n'));
+            consoleContainer.appendChild(span);
+            consoleContainer.scrollTop = consoleContainer.scrollHeight;
+        }
+    })
+    .catch(err => {
+        alert('Error membatalkan proses: ' + err.message);
+    });
 }

@@ -4,7 +4,7 @@ const http = require('http');
 const https = require('https');
 const { spawn, exec } = require('child_process');
 const { getPresets, savePresets } = require('./preset-store');
-const { handleStreamQuickUpdate, handleStreamInstall, handleStreamClusterInstall, handleStreamSetupSsh, handleStreamPm2Logs } = require('./sse');
+const { handleStreamQuickUpdate, handleStreamInstall, handleStreamClusterInstall, handleStreamSetupSsh, handleStreamPm2Logs, cancelProcess } = require('./sse');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
@@ -89,6 +89,24 @@ function handleRequest(req, res) {
         savePresets(presets);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, data: presets }));
+        return;
+    }
+
+    if (pathname === '/api/quick-update/cancel' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const presetId = data.id || data.presetId;
+                const success = cancelProcess(presetId);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success, message: success ? 'Proses update/build berhasil dihentikan secara paksa.' : 'Tidak ada proses aktif dengan ID tersebut.' }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: e.message }));
+            }
+        });
         return;
     }
 

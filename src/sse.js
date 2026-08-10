@@ -1,8 +1,43 @@
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const { getPresets } = require('./preset-store');
 
 const ROOT_DIR = path.join(__dirname, '..');
+const activeProcesses = new Map();
+
+function cancelProcess(id) {
+    if (!id) {
+        // Kill all active spawned processes if no id specified
+        let stopped = 0;
+        for (const [pId, proc] of activeProcesses.entries()) {
+            try {
+                if (process.platform === 'win32') {
+                    execSync(`taskkill /pid ${proc.pid} /T /F`);
+                } else {
+                    proc.kill('SIGKILL');
+                }
+                stopped++;
+            } catch (e) {}
+            activeProcesses.delete(pId);
+        }
+        return stopped > 0;
+    }
+
+    const proc = activeProcesses.get(id);
+    if (!proc) return false;
+
+    try {
+        if (process.platform === 'win32') {
+            execSync(`taskkill /pid ${proc.pid} /T /F`);
+        } else {
+            proc.kill('SIGKILL');
+        }
+    } catch (e) {
+        console.error('Error canceling process:', e.message);
+    }
+    activeProcesses.delete(id);
+    return true;
+}
 
 function handleStreamQuickUpdate(req, res, parsedUrl) {
     const presetId = parsedUrl.searchParams.get('id');
@@ -21,8 +56,11 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
         return;
     }
 
+    // Cancel any existing running update process for this preset
+    cancelProcess(presetId);
+
     const keyPath = preset.vpsKeyPath || path.join(ROOT_DIR, preset.sshKeyChoice || 'nginxonly.pem');
-    const buildMode = preset.buildMode || 'remote'; // 'remote' atau 'local'
+    const buildMode = preset.buildMode || 'remote'; // 'remote', 'local', atau 'skip'
     const psArgs = [
         '-ExecutionPolicy', 'Bypass',
         '-File', path.join(ROOT_DIR, 'easy-update-remote.ps1'),
@@ -36,9 +74,11 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
     ];
 
     const projectLabel = preset.project === 'licensing' ? 'Server Lisensi' : 'Project Absenta';
-    const buildModeLabel = buildMode === 'local'
-        ? '🖥️ Local Build + SCP ke VPS'
-        : '☁️ Remote Build di VPS';
+    const buildModeLabel = buildMode === 'skip'
+        ? '🚀 Skip Build (Upload dist/ eksisting via SCP)'
+        : buildMode === 'local'
+            ? '🖥️ Local Build + SCP ke VPS'
+            : '☁️ Remote Build di VPS';
     const logMsg = `[QUICK_UPDATE] Memulai Quick Update ke Server Target: ${preset.name} (${preset.vpsIp})\nProyek: ${projectLabel}\nMode Build: ${buildModeLabel}\nCommand: powershell.exe ${psArgs.join(' ')}\n\n`;
     res.write(`data: ${logMsg.replace(/\n/g, '\ndata: ')}\n\n`);
 
@@ -49,6 +89,7 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
     }, 10000);
 
     const psProcess = spawn('powershell.exe', psArgs);
+    activeProcesses.set(presetId, psProcess);
 
     psProcess.stdout.on('data', (data) => {
         const lines = data.toString().split('\n');
@@ -70,6 +111,7 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
 
     psProcess.on('close', (code) => {
         clearInterval(heartbeat);
+        activeProcesses.delete(presetId);
         if (code === 0) {
             res.write(`data: [UPDATE_COMPLETE]\n\n`);
         } else {
@@ -405,5 +447,6 @@ module.exports = {
     handleStreamInstall,
     handleStreamClusterInstall,
     handleStreamSetupSsh,
-    handleStreamPm2Logs
+    handleStreamPm2Logs,
+    cancelProcess
 };
