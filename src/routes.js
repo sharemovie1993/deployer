@@ -92,10 +92,160 @@ function handleRequest(req, res) {
         return;
     }
 
+    if (pathname === '/api/browse-file' && req.method === 'GET') {
+        const filter = parsedUrl.searchParams.get('filter') || 'pem';
+        const title = decodeURIComponent(parsedUrl.searchParams.get('title') || 'Pilih File SSH Key');
+        const deployerDir = path.join(__dirname, '..').replace(/\\/g, '\\\\');
+
+        // Write PS script to temp file to avoid escaping issues
+        const tmpScript = path.join(require('os').tmpdir(), 'agy_browse_file.ps1');
+        const psContent = [
+            'Add-Type -AssemblyName System.Windows.Forms',
+            '$dialog = New-Object System.Windows.Forms.OpenFileDialog',
+            `$dialog.Title = '${title}'`,
+            `$dialog.InitialDirectory = '${deployerDir}'`,
+            `$dialog.Filter = '${filter.toUpperCase()} Files (*.${filter})|*.${filter}|All Files (*.*)|*.*'`,
+            '$dialog.FilterIndex = 1',
+            '$dialog.Multiselect = $false',
+            'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {',
+            '    Write-Output ("RESULT_PATH:" + $dialog.FileName)',
+            '} else {',
+            '    Write-Output "RESULT_PATH:"',
+            '}'
+        ].join('\r\n');
+
+        require('fs').writeFileSync(tmpScript, psContent, 'utf8');
+
+        // -STA is REQUIRED for Windows Forms dialogs to work
+        const ps = spawn('powershell.exe', [
+            '-STA',
+            '-ExecutionPolicy', 'Bypass',
+            '-NonInteractive',
+            '-File', tmpScript
+        ]);
+
+        let stdout = '';
+        let stderr = '';
+        ps.stdout.on('data', d => { stdout += d.toString(); });
+        ps.stderr.on('data', d => { stderr += d.toString(); });
+
+        ps.on('close', () => {
+            require('fs').unlink(tmpScript, () => {}); // cleanup temp file
+            // Extract path via prefix marker to avoid grabbing PS warnings/info
+            const match = stdout.match(/RESULT_PATH:(.*)/);
+            const selectedPath = match ? match[1].trim() : '';
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, path: selectedPath }));
+        });
+
+        ps.on('error', (err) => {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: err.message }));
+        });
+        return;
+    }
+
+    if (pathname === '/api/test-connection' && req.method === 'GET') {
+        const presetId = parsedUrl.searchParams.get('id');
+        const presets = getPresets();
+        const preset = presets.find(p => p.id === presetId);
+
+        if (!preset) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+            return;
+        }
+
+        const keyPath = preset.vpsKeyPath || path.join(__dirname, '..', preset.sshKeyChoice || 'nginxonly.pem');
+        const safeKey = path.join(require('os').tmpdir(), 'agy_test_conn.pem');
+
+        try {
+            require('fs').writeFileSync(safeKey, require('fs').readFileSync(keyPath));
+            const { execSync } = require('child_process');
+            const safeKeyWin = safeKey.replace(/\\/g, '\\\\');
+            const aclCmd = 'powershell -Command "$acl=New-Object System.Security.AccessControl.FileSecurity;$acl.SetAccessRuleProtection($true,$false);$rule=New-Object System.Security.AccessControl.FileSystemAccessRule([System.Security.Principal.WindowsIdentity]::GetCurrent().Name,\'FullControl\',\'Allow\');$acl.AddAccessRule($rule);Set-Acl -Path \'' + safeKeyWin + '\' -AclObject $acl"';
+            execSync(aclCmd, { timeout: 5000 });
+        } catch (e) { /* ignore acl errors */ }
+
+        // Build remote command using string concat (not template literal) to avoid backtick conflict with bash $()
+        const remoteCmd = [
+            'START_MS=$(date +%s%3N);',
+            'echo "===CONN_OK===";',
+            'echo "uptime:$(uptime -p 2>/dev/null || uptime)";',
+            'echo "ram:$(free -h 2>/dev/null | awk \'NR==2{print $3\"/\"$2}\' || echo N/A)";',
+            'echo "disk:$(df -h / 2>/dev/null | awk \'NR==2{print $3\"/\"$2}\' || echo N/A)";',
+            'echo "caddy:$(systemctl is-active caddy 2>/dev/null || echo unknown)";',
+            'echo "pm2:$(pm2 list --no-color 2>/dev/null | grep -E \'online|stopped|errored\' | awk \'{print $4":"$18}\' | tr \'\\n\' \',\' || echo N/A)";',
+            'END_MS=$(date +%s%3N);',
+            'echo "latency_ms:$((END_MS - START_MS))";'
+        ].join(' ');
+
+
+        const startTime = Date.now();
+        const sshProc = spawn('ssh', [
+            '-i', safeKey,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'ConnectTimeout=8',
+            '-o', 'BatchMode=yes',
+            `${preset.vpsUser || 'asepsuryadi'}@${preset.vpsIp}`,
+            remoteCmd
+        ]);
+
+        let stdout = '';
+        let stderr = '';
+        sshProc.stdout.on('data', d => { stdout += d.toString(); });
+        sshProc.stderr.on('data', d => { stderr += d.toString(); });
+
+        const timeout = setTimeout(() => {
+            sshProc.kill();
+            require('fs').unlink(safeKey, () => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, offline: true, message: 'Koneksi timeout (8 detik). VPS tidak dapat dijangkau.' }));
+        }, 10000);
+
+        sshProc.on('close', (code) => {
+            clearTimeout(timeout);
+            require('fs').unlink(safeKey, () => {});
+            const totalMs = Date.now() - startTime;
+
+            if (code !== 0 || !stdout.includes('===CONN_OK===')) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, offline: true, message: `SSH gagal (exit ${code}): ${stderr.trim().split('\n')[0] || 'Tidak ada output'}` }));
+                return;
+            }
+
+            const parse = (key) => {
+                const m = stdout.match(new RegExp(key + ':(.+)'));
+                return m ? m[1].trim() : 'N/A';
+            };
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                latency_ms: totalMs,
+                uptime: parse('uptime'),
+                ram: parse('ram'),
+                disk: parse('disk'),
+                caddy: parse('caddy'),
+                pm2: parse('pm2')
+            }));
+        });
+
+        sshProc.on('error', (err) => {
+            clearTimeout(timeout);
+            require('fs').unlink(safeKey, () => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, offline: true, message: 'SSH error: ' + err.message }));
+        });
+        return;
+    }
+
     if (pathname === '/api/stream-quick-update' && req.method === 'GET') {
         handleStreamQuickUpdate(req, res, parsedUrl);
         return;
     }
+
+
 
     if (pathname === '/api/stream-cluster-install' && req.method === 'GET') {
         handleStreamClusterInstall(req, res, parsedUrl);
@@ -146,6 +296,81 @@ function handleRequest(req, res) {
         handleFixTunnels(req, res, parsedUrl);
         return;
     }
+
+    if (pathname === '/api/fix-port-conflict' && req.method === 'GET') {
+        const presetId = parsedUrl.searchParams.get('id');
+        const port = parsedUrl.searchParams.get('port') || '5001';
+        const presets = getPresets();
+        const preset = presets.find(p => p.id === presetId);
+
+        if (!preset) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+            return;
+        }
+
+        const keyPath = preset.vpsKeyPath || path.join(__dirname, '..', preset.sshKeyChoice || 'nginxonly.pem');
+        const safeKey = path.join(require('os').tmpdir(), 'agy_fix_port.pem');
+        try {
+            require('fs').writeFileSync(safeKey, require('fs').readFileSync(keyPath));
+        } catch(e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'Gagal baca SSH key: ' + e.message }));
+            return;
+        }
+
+        const sudoPass = preset.vpsSudoPass || '';
+        const sudoPrefix = sudoPass ? 'echo "' + sudoPass + '" | sudo -S' : 'sudo';
+
+        const fixCmd = [
+            'echo "=== CEK PORT ' + port + ' ==="',
+            'PID_ON_PORT=$(' + sudoPrefix + ' fuser ' + port + '/tcp 2>/dev/null || echo "")',
+            'if [ -n "$PID_ON_PORT" ]; then',
+            '  echo "Port ' + port + ' dipakai PID: $PID_ON_PORT — membebaskan..."',
+            '  ' + sudoPrefix + ' fuser -k ' + port + '/tcp 2>/dev/null || true',
+            '  sleep 2',
+            '  echo "Port ' + port + ' berhasil dibebaskan."',
+            'else',
+            '  echo "Port ' + port + ' sudah bebas."',
+            'fi',
+            'echo "=== RESTART PM2 ==="',
+            'pm2 restart ecosystem.config.js 2>/dev/null || pm2 restart all 2>/dev/null || echo "PM2 restart selesai"',
+            'sleep 2',
+            'echo "=== STATUS PM2 SETELAH FIX ==="',
+            'pm2 list --no-color 2>/dev/null | head -20',
+            'echo "=== SELESAI ==="'
+        ].join('; ');
+
+        const sshFix = spawn('ssh', [
+            '-i', safeKey,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'ConnectTimeout=15',
+            '-o', 'BatchMode=yes',
+            (preset.vpsUser || 'asepsuryadi') + '@' + preset.vpsIp,
+            fixCmd
+        ]);
+
+        let output = '';
+        sshFix.stdout.on('data', d => { output += d.toString(); });
+        sshFix.stderr.on('data', d => { output += '[STDERR] ' + d.toString(); });
+
+        const tmout = setTimeout(() => {
+            sshFix.kill();
+            require('fs').unlink(safeKey, () => {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'SSH timeout.', output }));
+        }, 30000);
+
+        sshFix.on('close', (code) => {
+            clearTimeout(tmout);
+            require('fs').unlink(safeKey, () => {});
+            const ok = output.includes('SELESAI');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: ok || code === 0, output: output.trim() }));
+        });
+        return;
+    }
+
 
     if (pathname === '/api/stream-install' && req.method === 'GET') {
         handleStreamInstall(req, res, installParams);

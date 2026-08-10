@@ -439,10 +439,21 @@
 
         <div class="form-group">
             <label for="preset-modal-project">Target Proyek Deployment</label>
-            <select id="preset-modal-project">
+            <select id="preset-modal-project" onchange="toggleBuildModeField()">
                 <option value="absenta">Project Absenta (Aplikasi Absensi Utama)</option>
                 <option value="licensing">Server Lisensi (VPS Licensing System)</option>
             </select>
+        </div>
+
+        <div class="form-group" id="preset-buildmode-group" style="display: none;">
+            <label for="preset-modal-buildmode">🔨 Mode Build Server Lisensi</label>
+            <select id="preset-modal-buildmode">
+                <option value="remote">☁️ Remote Build — TypeScript dikompilasi langsung di VPS</option>
+                <option value="local">🖥️ Local Build + SCP — Kompilasi di PC ini, upload dist/ ke VPS (untuk VPS spek kecil)</option>
+            </select>
+            <small style="color: var(--text-muted); display: block; margin-top: 6px; line-height: 1.5;">
+                💡 <strong>Local Build</strong> direkomendasikan jika VPS memiliki RAM rendah (&lt;1GB) atau sering timeout saat <code>tsc</code> compile.
+            </small>
         </div>
 
         <div class="form-row">
@@ -450,18 +461,32 @@
                 <label for="preset-modal-keychoice">Pilih SSH Key File</label>
                 <select id="preset-modal-keychoice" onchange="togglePresetCustomKey()">
                     <option value="nginxonly.pem">🔑 Default (nginxonly.pem)</option>
-                    <option value="custom">📁 Path Kustom Lainnya...</option>
+                    <option value="ls-key.pem">🔑 LS Key (ls-key.pem)</option>
+                    <option value="custom">📁 Pilih File Lain...</option>
                 </select>
             </div>
             <div class="form-group">
-                <label for="preset-modal-sudopass">Password Sudo VPS</label>
-                <input type="password" id="preset-modal-sudopass" value="1">
+                <label for="preset-modal-sudopass">Password Sudo VPS <span style="color: var(--text-muted); font-size: 11px; font-weight: 400;">(opsional)</span></label>
+                <input type="password" id="preset-modal-sudopass" placeholder="Kosongkan jika NOPASSWD sudo">
             </div>
         </div>
 
         <div class="form-group" id="preset-custom-key-group" style="display: none;">
-            <label for="preset-modal-customkey">Full Path SSH Key File</label>
-            <input type="text" id="preset-modal-customkey" placeholder="C:\Path\To\your-key.pem">
+            <label>File SSH Key (.pem)</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="preset-modal-customkey" placeholder="Belum ada file dipilih..." readonly
+                    style="flex: 1; cursor: default; background: rgba(15,23,42,0.6); color: var(--text-muted); font-family: 'Fira Code', monospace; font-size: 12px;">
+                <button type="button" onclick="browseSSHKeyFile()"
+                    style="white-space: nowrap; padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(167,139,250,0.4); background: rgba(167,139,250,0.12); color: #a78bfa; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+                    onmouseover="this.style.background='rgba(167,139,250,0.25)'" 
+                    onmouseout="this.style.background='rgba(167,139,250,0.12)'"
+                    id="browse-key-btn">
+                    📂 Browse...
+                </button>
+            </div>
+            <small style="color: var(--text-muted); display: block; margin-top: 6px;">
+                Klik <strong>Browse</strong> untuk membuka dialog pilih file .pem dari komputer Anda.
+            </small>
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 25px;">

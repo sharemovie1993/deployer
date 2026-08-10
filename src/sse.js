@@ -21,7 +21,8 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
         return;
     }
 
-    const keyPath = preset.vpsKeyPath || path.join(ROOT_DIR, 'nginxonly.pem');
+    const keyPath = preset.vpsKeyPath || path.join(ROOT_DIR, preset.sshKeyChoice || 'nginxonly.pem');
+    const buildMode = preset.buildMode || 'remote'; // 'remote' atau 'local'
     const psArgs = [
         '-ExecutionPolicy', 'Bypass',
         '-File', path.join(ROOT_DIR, 'easy-update-remote.ps1'),
@@ -30,11 +31,17 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
         '-TargetUser', preset.vpsUser || 'asepsuryadi',
         '-KeyPath', keyPath,
         '-SudoPass', preset.vpsSudoPass || '',
-        '-Project', preset.project || 'absenta'
+        '-Project', preset.project || 'absenta',
+        '-BuildMode', buildMode
     ];
 
-    const logMsg = `[QUICK_UPDATE] Memulai Quick Update ke Server Target: ${preset.name} (${preset.vpsIp})\nProyek: ${preset.project === 'licensing' ? 'Server Lisensi' : 'Project Absenta'}\nCommand: powershell.exe ${psArgs.join(' ')}\n\n`;
+    const projectLabel = preset.project === 'licensing' ? 'Server Lisensi' : 'Project Absenta';
+    const buildModeLabel = buildMode === 'local'
+        ? '🖥️ Local Build + SCP ke VPS'
+        : '☁️ Remote Build di VPS';
+    const logMsg = `[QUICK_UPDATE] Memulai Quick Update ke Server Target: ${preset.name} (${preset.vpsIp})\nProyek: ${projectLabel}\nMode Build: ${buildModeLabel}\nCommand: powershell.exe ${psArgs.join(' ')}\n\n`;
     res.write(`data: ${logMsg.replace(/\n/g, '\ndata: ')}\n\n`);
+
 
     // Heartbeat every 10s to keep HTTP connection alive during long remote builds
     const heartbeat = setInterval(() => {

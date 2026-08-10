@@ -106,13 +106,13 @@ if ($projChoice -eq "2") {
 }
 
 # ---------------------------------------------------------
-# PEMILIHAN MODE BUILD (khusus Server Lisensi)
+# PEMILIHAN MODE BUILD
 # ---------------------------------------------------------
-if ($IS_SERVER_LISENSI -and -not $Silent) {
-    Show-Header "Pilih Mode Build - Server Lisensi"
+if (-not $Silent) {
+    Show-Header "Pilih Mode Build"
     Write-Host "" 
-    Write-Host " [remote] Build di VPS  - VPS yang compile TypeScript (cocok untuk VPS spek standar)" -ForegroundColor Cyan
-    Write-Host " [local]  Build di Lokal - Kompilasi di PC ini lalu upload dist/ ke VPS (cocok untuk VPS spek kecil)" -ForegroundColor Green
+    Write-Host " [remote] Build di VPS   - VPS yang compile TypeScript (cocok untuk VPS RAM >= 4GB)" -ForegroundColor Cyan
+    Write-Host " [local]  Build di Lokal  - Kompilasi di PC ini lalu upload dist/ ke VPS (cocok untuk VPS RAM 1GB/2GB)" -ForegroundColor Green
     Write-Host ""
     $buildChoice = (Read-Host "Pilih mode build [remote/local]").Trim().ToLower()
     if ($buildChoice -eq "local" -or $buildChoice -eq "l") {
