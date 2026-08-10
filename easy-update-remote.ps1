@@ -1,4 +1,4 @@
-# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
+﻿# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
 # Melakukan git pull, build backend/frontend, prisma sync, dan restart PM2 di VPS
 
 param(
@@ -21,8 +21,16 @@ $LOG_FILE = Join-Path $LOG_DIR "quick-update-remote-$(Get-Date -Format 'yyyy-MM-
 Start-Transcript -Path $LOG_FILE -Append -Force
 
 function Show-Log {
-    param([string]$Message, [string]$Color = "Cyan")
-    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Message" -ForegroundColor $Color
+    param(
+        [string]$Message, 
+        [string]$Color = "Cyan"
+    )
+    $validColors = @('Black', 'DarkBlue', 'DarkGreen', 'DarkCyan', 'DarkRed', 'DarkMagenta', 'DarkYellow', 'Gray', 'DarkGray', 'Blue', 'Green', 'Cyan', 'Red', 'Magenta', 'Yellow', 'White')
+    $targetColor = "Cyan"
+    if ($Color -and ($validColors -contains $Color)) {
+        $targetColor = $Color
+    }
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Message" -ForegroundColor $targetColor
 }
 
 function Show-Header {
