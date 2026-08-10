@@ -111,12 +111,17 @@ function renderPresetsGrid(presets) {
         const buildBadgeColor = p.buildMode === 'skip' ? '#fbbf24' : (p.buildMode === 'local' ? '#34d399' : '#60a5fa');
         const buildBadgeRgb = p.buildMode === 'skip' ? '251,191,36' : (p.buildMode === 'local' ? '52,211,153' : '59,130,246');
 
+        const obfBadgeText = p.obfuscate === 'Y' ? '🛡️ Obfuscate: On' : '⚡ Obfuscate: Off';
+        const obfBadgeColor = p.obfuscate === 'Y' ? '#a78bfa' : '#94a3b8';
+        const obfBadgeRgb = p.obfuscate === 'Y' ? '167,139,250' : '148,163,184';
+
         html += '<div class="preset-card" id="pcard-' + safeId + '">' +
             '<div>' +
                 '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">' +
                     '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
                         '<span class="badge ' + projBadgeClass + '">' + projName + '</span>' +
                         '<span class="badge" style="background:rgba(' + buildBadgeRgb + ',0.12);color:' + buildBadgeColor + ';border:1px solid rgba(' + buildBadgeRgb + ',0.3);font-size:10px;">' + buildBadgeText + '</span>' +
+                        '<span class="badge" style="background:rgba(' + obfBadgeRgb + ',0.12);color:' + obfBadgeColor + ';border:1px solid rgba(' + obfBadgeRgb + ',0.3);font-size:10px;">' + obfBadgeText + '</span>' +
                     '</div>' +
                     '<div style="display: flex; gap: 6px;">' +
                         '<button class="btn-action-inline" style="padding: 5px 10px; font-size: 11px;" onclick="openPresetModal(\'' + safeId + '\')">✏️ Edit</button>' +
@@ -184,6 +189,8 @@ function openPresetModal(presetId) {
             inputCustomKey.value = p.vpsKeyPath || '';
             const selBuildMode = document.getElementById('preset-modal-buildmode');
             if (selBuildMode) selBuildMode.value = p.buildMode || 'remote';
+            const selObfuscate = document.getElementById('preset-modal-obfuscate');
+            if (selObfuscate) selObfuscate.value = p.obfuscate || 'N';
         }
     } else {
         title.innerText = '➕ Tambah Preset Server';
@@ -197,6 +204,8 @@ function openPresetModal(presetId) {
         inputCustomKey.value = '';
         const selBuildMode = document.getElementById('preset-modal-buildmode');
         if (selBuildMode) selBuildMode.value = 'remote';
+        const selObfuscate = document.getElementById('preset-modal-obfuscate');
+        if (selObfuscate) selObfuscate.value = 'N';
     }
 
     togglePresetCustomKey();
@@ -278,6 +287,8 @@ function savePresetSubmit() {
     const customKey = document.getElementById('preset-modal-customkey').value;
     const buildModeEl = document.getElementById('preset-modal-buildmode');
     const buildMode = buildModeEl ? buildModeEl.value : 'remote';
+    const obfuscateEl = document.getElementById('preset-modal-obfuscate');
+    const obfuscate = obfuscateEl ? obfuscateEl.value : 'N';
 
     if (!vpsIp) {
         alert('Alamat IP VPS Target wajib diisi!');
@@ -293,7 +304,8 @@ function savePresetSubmit() {
         sshKeyChoice,
         vpsSudoPass: vpsSudoPass || '',
         vpsKeyPath: sshKeyChoice === 'custom' ? customKey : '',
-        buildMode: buildMode || 'local'
+        buildMode: buildMode || 'local',
+        obfuscate: obfuscate || 'N'
     };
 
     fetch('/api/presets', {

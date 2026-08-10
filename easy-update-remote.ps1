@@ -9,6 +9,7 @@ param(
     [string]$Project = "absenta",
     [string]$BuildMode = "remote",          # "remote" = build di VPS | "local" = build lokal | "skip" = skip build lokal (upload dist/ eksisting)
     [string]$LocalProjectPath = "",          # Path lokal Project-Server-Lisensi (auto-detect jika kosong)
+    [string]$Obfuscate = "N",               # "N" = matikan pengacakan (Trial & Error) | "Y" = aktifkan pengacakan (Proteksi HKI)
     [switch]$SkipBuild,
     [switch]$Silent
 )
@@ -584,6 +585,7 @@ fi
 # 3. Build TypeScript -> dist/
 if [ "`$DO_BUILD" = true ]; then
     echo "🔨 Kompilasi TypeScript (npm run build)..."
+    export ENABLE_OBFUSCATE='$Obfuscate'
     npm run build
     echo "✅ Build selesai. Entry point: dist/server.js"
 else
@@ -697,6 +699,7 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
                 Show-Log "[4/5] Kompilasi Backend & Frontend lokal (npm run build)..." "Yellow"
                 $savedPrefBuild = $ErrorActionPreference
                 $ErrorActionPreference = 'Continue'
+                $env:ENABLE_OBFUSCATE = if ($Obfuscate -eq "Y" -or $Obfuscate -eq "true" -or $Obfuscate -eq "1") { "Y" } else { "N" }
                 & npm run --prefix $LOCAL_BACKEND build
                 $bCode = $LASTEXITCODE
                 & npm run --prefix $LOCAL_FRONTEND build

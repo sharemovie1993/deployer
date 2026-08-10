@@ -61,6 +61,7 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
 
     const keyPath = preset.vpsKeyPath || path.join(ROOT_DIR, preset.sshKeyChoice || 'nginxonly.pem');
     const buildMode = preset.buildMode || 'remote'; // 'remote', 'local', atau 'skip'
+    const obfuscateMode = preset.obfuscate || 'N'; // 'N' = Trial & Error (Off), 'Y' = Proteksi HKI (On)
     const psArgs = [
         '-ExecutionPolicy', 'Bypass',
         '-File', path.join(ROOT_DIR, 'easy-update-remote.ps1'),
@@ -70,7 +71,8 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
         '-KeyPath', keyPath,
         '-SudoPass', preset.vpsSudoPass || '',
         '-Project', preset.project || 'absenta',
-        '-BuildMode', buildMode
+        '-BuildMode', buildMode,
+        '-Obfuscate', obfuscateMode
     ];
 
     const projectLabel = preset.project === 'licensing' ? 'Server Lisensi' : 'Project Absenta';
@@ -79,7 +81,8 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
         : buildMode === 'local'
             ? '🖥️ Local Build + SCP ke VPS'
             : '☁️ Remote Build di VPS';
-    const logMsg = `[QUICK_UPDATE] Memulai Quick Update ke Server Target: ${preset.name} (${preset.vpsIp})\nProyek: ${projectLabel}\nMode Build: ${buildModeLabel}\nCommand: powershell.exe ${psArgs.join(' ')}\n\n`;
+    const obfLabel = obfuscateMode === 'Y' ? '🛡️ Aktif (Proteksi HKI Rilis)' : '⚡ Nonaktif (Build Cepat Trial & Error)';
+    const logMsg = `[QUICK_UPDATE] Memulai Quick Update ke Server Target: ${preset.name} (${preset.vpsIp})\nProyek: ${projectLabel}\nMode Build: ${buildModeLabel}\nObfuscation (Pengacakan): ${obfLabel}\nCommand: powershell.exe ${psArgs.join(' ')}\n\n`;
     res.write(`data: ${logMsg.replace(/\n/g, '\ndata: ')}\n\n`);
 
 
