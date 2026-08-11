@@ -545,8 +545,7 @@ function runQuickUpdatePreset(presetId) {
 
 function runSeedWilayahPreset(presetId) {
     window.activePresetId = presetId;
-    const presets = getPresets();
-    const p = presets.find(item => item.id === presetId);
+    const p = globalPresets.find(item => item.id === presetId);
     if (!p) {
         alert('Preset tidak ditemukan!');
         return;
