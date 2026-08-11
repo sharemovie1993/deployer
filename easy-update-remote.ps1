@@ -145,6 +145,11 @@ function Run-RemoteScript {
     $ScriptContent = $ScriptContent -replace "`r`n", "`n"
     [System.IO.File]::WriteAllText($tempScript, $ScriptContent)
     
+    $minioLocalScript = Join-Path $PSScriptRoot "setup-minio.sh"
+    if (Test-Path $minioLocalScript) {
+        & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$minioLocalScript" "${TargetUser}@${TargetIP}:/tmp/setup-minio.sh"
+    }
+
     & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$tempScript" "${TargetUser}@${TargetIP}:/tmp/remote_script.sh"
     if ($LASTEXITCODE -ne 0) { throw "Gagal menyalin script ke VPS menggunakan SCP." }
     
@@ -235,7 +240,11 @@ if [ -n "`$OLD_COMMIT" ] && [ -n "`$CHANGED_FILES" ]; then
 fi
 
 # Ensure MinIO S3 Storage Server is installed & running
-if [ -f /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh ]; then
+if [ -f /tmp/setup-minio.sh ]; then
+    echo "Memeriksa & mengaktifkan MinIO Self-Hosted S3 Storage Server..."
+    chmod +x /tmp/setup-minio.sh
+    echo '$SUDO_PASS' | sudo -S bash /tmp/setup-minio.sh || true
+elif [ -f /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh ]; then
     echo "Memeriksa & mengaktifkan MinIO Self-Hosted S3 Storage Server..."
     chmod +x /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh || true
     echo '$SUDO_PASS' | sudo -S bash /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh || true
