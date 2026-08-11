@@ -43,15 +43,15 @@ $acl.AddAccessRule($rule)
 Set-Acl -Path $SAFE_KEY -AclObject $acl
 
 $remoteCommand = @"
-export PATH=\$PATH:/usr/local/bin:/usr/bin:/bin
-if [ -d "\$HOME/.nvm/versions/node" ]; then
-    NODE_BIN=\$(ls -td "\$HOME/.nvm/versions/node"/* 2>/dev/null | head -n 1)/bin
-    if [ -d "\$NODE_BIN" ]; then
-        export PATH="\$NODE_BIN:\$PATH"
+export PATH=`${PATH}:/usr/local/bin:/usr/bin:/bin
+if [ -d "`$HOME/.nvm/versions/node" ]; then
+    NODE_BIN=`$(ls -td "`$HOME/.nvm/versions/node"/* 2>/dev/null | head -n 1)/bin
+    if [ -d "`$NODE_BIN" ]; then
+        export PATH="`$NODE_BIN:`${PATH}"
     fi
 fi
-if [ -f "\$HOME/.nvm/nvm.sh" ]; then
-    source "\$HOME/.nvm/nvm.sh" 2>/dev/null || true
+if [ -f "`$HOME/.nvm/nvm.sh" ]; then
+    source "`$HOME/.nvm/nvm.sh" 2>/dev/null || true
 fi
 
 echo "=========================================================================="
@@ -67,14 +67,13 @@ elif [ -d "/var/www/project-absenta" ]; then
     TARGET_DIR="/var/www/project-absenta"
 fi
 
-if [ -z "\$TARGET_DIR" ]; then
+if [ -z "`$TARGET_DIR" ]; then
     echo "❌ ERROR: Folder proyek absenta_backend tidak ditemukan di /var/www/!"
     exit 1
 fi
 
-cd "\$TARGET_DIR"
-echo "📍 Directory Proyek: \$TARGET_DIR"
-echo "📍 Node Version: \$(node -v 2>/dev/null || echo 'Not Found')"
+cd "`$TARGET_DIR"
+echo "📍 Directory Proyek: `$TARGET_DIR"
 
 if [ -f src/scripts/seed_full_wilayah.ts ]; then
     echo "🌱 Menjalankan seed_full_wilayah.ts via ts-node..."

@@ -126,6 +126,8 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
     req.on('close', () => {
         clearInterval(heartbeat);
     });
+}
+
 function handleStreamSeedWilayah(req, res, parsedUrl) {
     const presetId = parsedUrl.searchParams.get('id');
     const presets = getPresets();
