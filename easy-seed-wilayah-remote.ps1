@@ -43,15 +43,47 @@ $acl.AddAccessRule($rule)
 Set-Acl -Path $SAFE_KEY -AclObject $acl
 
 $remoteCommand = @"
-set -e
+export PATH=\$PATH:/usr/local/bin:/usr/bin:/bin
+if [ -d "\$HOME/.nvm/versions/node" ]; then
+    NODE_BIN=\$(ls -td "\$HOME/.nvm/versions/node"/* 2>/dev/null | head -n 1)/bin
+    if [ -d "\$NODE_BIN" ]; then
+        export PATH="\$NODE_BIN:\$PATH"
+    fi
+fi
+if [ -f "\$HOME/.nvm/nvm.sh" ]; then
+    source "\$HOME/.nvm/nvm.sh" 2>/dev/null || true
+fi
+
 echo "=========================================================================="
 echo "🌐 MEMULAI SEEDER FULL WILAYAH INDONESIA SE-INDONESIA (~91.600 RECORD)"
 echo "=========================================================================="
-cd /var/www/project-absenta/absenta_backend
+
+TARGET_DIR=""
+if [ -d "/var/www/project-absenta/absenta_backend" ]; then
+    TARGET_DIR="/var/www/project-absenta/absenta_backend"
+elif [ -d "/var/www/absenta/absenta_backend" ]; then
+    TARGET_DIR="/var/www/absenta/absenta_backend"
+elif [ -d "/var/www/project-absenta" ]; then
+    TARGET_DIR="/var/www/project-absenta"
+fi
+
+if [ -z "\$TARGET_DIR" ]; then
+    echo "❌ ERROR: Folder proyek absenta_backend tidak ditemukan di /var/www/!"
+    exit 1
+fi
+
+cd "\$TARGET_DIR"
+echo "📍 Directory Proyek: \$TARGET_DIR"
+echo "📍 Node Version: \$(node -v 2>/dev/null || echo 'Not Found')"
+
 if [ -f src/scripts/seed_full_wilayah.ts ]; then
+    echo "🌱 Menjalankan seed_full_wilayah.ts via ts-node..."
     npx ts-node -r tsconfig-paths/register src/scripts/seed_full_wilayah.ts
+elif [ -f dist/scripts/seed_full_wilayah.js ]; then
+    echo "🌱 Menjalankan seed_full_wilayah.js via node dist..."
+    node -r tsconfig-paths/register dist/scripts/seed_full_wilayah.js
 else
-    echo "Script seed_full_wilayah.ts tidak ditemukan. Menjalankan fallback seeder..."
+    echo "🌱 Menjalankan fallback npx prisma db seed..."
     npx prisma db seed
 fi
 "@
