@@ -42,6 +42,13 @@ $rule = New-Object System.Security.AccessControl.FileSystemAccessRule([System.Se
 $acl.AddAccessRule($rule)
 Set-Acl -Path $SAFE_KEY -AclObject $acl
 
+# Upload local seed_full_wilayah.ts script if available to guarantee presence on VPS
+$LOCAL_SEED_SCRIPT = Join-Path $PSScriptRoot "..\Project Absenta\absenta_backend\src\scripts\seed_full_wilayah.ts"
+if (Test-Path $LOCAL_SEED_SCRIPT) {
+    Show-Log "Mengunggah file seeder lokal seed_full_wilayah.ts ke VPS..." "Cyan"
+    & scp -i "$SAFE_KEY" -o StrictHostKeyChecking=no "$LOCAL_SEED_SCRIPT" "${TargetUser}@${TargetIP}:/tmp/seed_full_wilayah.ts"
+}
+
 $remoteCommand = @"
 export PATH=`${PATH}:/usr/local/bin:/usr/bin:/bin
 if [ -d "`$HOME/.nvm/versions/node" ]; then
@@ -75,11 +82,20 @@ fi
 cd "`$TARGET_DIR"
 echo "📍 Directory Proyek: `$TARGET_DIR"
 
+echo "📥 Memperbarui kode dari repository git..."
+(cd .. && git fetch origin main && git checkout main && git pull origin main) || true
+
+if [ -f /tmp/seed_full_wilayah.ts ]; then
+    mkdir -p src/scripts
+    cp /tmp/seed_full_wilayah.ts src/scripts/seed_full_wilayah.ts
+    echo "✅ Script seed_full_wilayah.ts diselaras ke VPS."
+fi
+
 if [ -f src/scripts/seed_full_wilayah.ts ]; then
-    echo "🌱 Menjalankan seed_full_wilayah.ts via ts-node..."
+    echo "🚀 MENJALANKAN SEEDER FULL WILAYAH INDONESIA (38 PROV, 514 KAB, 7.288 KEC, 83.763 DESA)..."
     npx ts-node -r tsconfig-paths/register src/scripts/seed_full_wilayah.ts
 elif [ -f dist/scripts/seed_full_wilayah.js ]; then
-    echo "🌱 Menjalankan seed_full_wilayah.js via node dist..."
+    echo "🚀 MENJALANKAN SEEDER FULL WILAYAH INDONESIA (COMPILED)..."
     node -r tsconfig-paths/register dist/scripts/seed_full_wilayah.js
 else
     echo "🌱 Menjalankan fallback npx prisma db seed..."
@@ -91,7 +107,7 @@ $tempScript = "$env:TEMP\seed_wilayah_remote.sh"
 $remoteCommand = $remoteCommand -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText($tempScript, $remoteCommand)
 
-Show-Log "Mengunggah script seeder ke VPS..." "Cyan"
+Show-Log "Mengunggah script penggerak seeder ke VPS..." "Cyan"
 & scp -i "$SAFE_KEY" -o StrictHostKeyChecking=no "$tempScript" "${TargetUser}@${TargetIP}:/tmp/seed_wilayah_remote.sh"
 
 Show-Log "Eksekusi Seeder Berjalan di VPS (Real-time Stream)..." "Green"
