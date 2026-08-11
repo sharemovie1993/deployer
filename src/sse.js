@@ -126,6 +126,80 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
     req.on('close', () => {
         clearInterval(heartbeat);
     });
+function handleStreamSeedWilayah(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const preset = presets.find(p => p.id === presetId);
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    if (!preset) {
+        res.write(`data: [SEED_FAILED] Preset dengan ID ${presetId} tidak ditemukan.\n\n`);
+        res.end();
+        return;
+    }
+
+    cancelProcess(presetId);
+
+    const psArgs = [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', path.join(ROOT_DIR, 'easy-seed-wilayah-remote.ps1'),
+        '-TargetIP', preset.vpsIp,
+        '-TargetUser', preset.vpsUser || 'asepsuryadi',
+        '-KeyPath', path.join(ROOT_DIR, preset.sshKeyChoice || 'nginxonly.pem'),
+        '-SudoPass', preset.vpsSudoPass || '',
+        '-Project', preset.project || 'absenta',
+        '-Silent'
+    ];
+
+    const logMsg = `[SEED_WILAYAH] Memulai Remote Seed Full Wilayah Indonesia ke Server Target: ${preset.name} (${preset.vpsIp})...`;
+    console.log(logMsg);
+    res.write(`data: ${logMsg}\n\n`);
+
+    const psProcess = spawn('powershell.exe', psArgs, { windowsHide: true });
+    activeProcesses.set(presetId, psProcess);
+
+    const heartbeat = setInterval(() => {
+        res.write(': heartbeat\n\n');
+    }, 10000);
+
+    psProcess.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    psProcess.stderr.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: [ERROR] ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    psProcess.on('close', (code) => {
+        clearInterval(heartbeat);
+        activeProcesses.delete(presetId);
+        if (code === 0) {
+            res.write(`data: [SEED_COMPLETE] Sinkronisasi data wilayah Indonesia selesai!\n\n`);
+        } else {
+            res.write(`data: [SEED_FAILED] dengan exit code: ${code}\n\n`);
+        }
+        res.end();
+    });
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+    });
 }
 
 function handleStreamInstall(req, res, installParams) {
@@ -447,6 +521,7 @@ function handleStreamPm2Logs(req, res, parsedUrl) {
 
 module.exports = {
     handleStreamQuickUpdate,
+    handleStreamSeedWilayah,
     handleStreamInstall,
     handleStreamClusterInstall,
     handleStreamSetupSsh,

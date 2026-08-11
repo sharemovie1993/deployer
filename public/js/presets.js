@@ -154,6 +154,7 @@ function renderPresetsGrid(presets) {
                     '<button id="tunnel-fix-btn-' + safeId + '" class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(251,191,36,0.4); color: #fbbf24; background: rgba(251,191,36,0.08);" onclick="fixTunnelPreset(\'' + safeId + '\')">🔧 Perbaiki Tunnel</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(59,130,246,0.4); color: #60a5fa; background: rgba(59,130,246,0.08);" onclick="openHealthMatrixForPreset(\'' + safeId + '\')">🩺 System Health</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(167,139,250,0.4); color: #a78bfa; background: rgba(167,139,250,0.08);" onclick="openLogMonitorForPreset(\'' + safeId + '\')">📜 Log PM2</button>' +
+                    '<button class="btn btn-secondary" style="flex: 1; min-width: 130px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(16,185,129,0.4); color: #34d399; background: rgba(16,185,129,0.08);" onclick="runSeedWilayahPreset(\'' + safeId + '\')">🌐 Seed Full Wilayah</button>' +
                 '</div>' +
             '</div>' +
         '</div>';
@@ -537,6 +538,177 @@ function runQuickUpdatePreset(presetId) {
         }
         statusText.innerHTML = 'Koneksi stream terputus.';
         console.log('SSE Quick Update Error:', err);
+    };
+
+    consoleSection.scrollIntoView({ behavior: 'smooth' });
+}
+
+function runSeedWilayahPreset(presetId) {
+    window.activePresetId = presetId;
+    const presets = getPresets();
+    const p = presets.find(item => item.id === presetId);
+    if (!p) {
+        alert('Preset tidak ditemukan!');
+        return;
+    }
+
+    if (!confirm(`Apakah Anda yakin ingin memicu Seeder Full Wilayah Indonesia (~91.600 Record) ke server ${p.name} (${p.vpsIp})?`)) {
+        return;
+    }
+
+    const consoleSection = document.getElementById('quick-update-console-section');
+    const title = document.getElementById('quick-update-target-title');
+    const statusBadge = document.getElementById('quick-update-status-badge');
+    const progressBar = document.getElementById('quick-progress-fill');
+    const percentText = document.getElementById('quick-progress-percent');
+    const statusText = document.getElementById('quick-progress-status');
+    const consoleContainer = document.getElementById('quick-terminal-logs');
+    const timerBadge = document.getElementById('quick-update-timer');
+
+    if (!consoleSection || !consoleContainer) return;
+
+    if (window.quickUpdateTimerInterval) {
+        clearInterval(window.quickUpdateTimerInterval);
+    }
+    const updateStartTime = Date.now();
+    if (timerBadge) {
+        timerBadge.style.display = 'inline-block';
+        timerBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        timerBadge.style.color = '#6ee7b7';
+        timerBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        timerBadge.innerHTML = '⏱️ 0s';
+    }
+    window.quickUpdateTimerInterval = setInterval(() => {
+        const elapsed = Date.now() - updateStartTime;
+        if (timerBadge) {
+            timerBadge.innerHTML = '⏱️ ' + formatDurationShort(elapsed);
+        }
+    }, 1000);
+
+    consoleSection.style.display = 'block';
+    title.innerHTML = '🌐 Sedang Melakukan Seeder Full Wilayah: ' + p.name + ' (' + p.vpsIp + ')';
+    statusBadge.className = 'badge badge-purple';
+    statusBadge.innerHTML = 'Memproses Seeder...';
+    
+    progressBar.style.width = '5%';
+    percentText.innerHTML = '5%';
+    statusText.innerHTML = 'Menghubungkan via SSH ke VPS...';
+    consoleContainer.innerHTML = '>> Memulai aliran log Seeder Full Wilayah remote untuk ' + p.vpsIp + '...\n';
+
+    if (window.currentQuickUpdateEventSource) {
+        window.currentQuickUpdateEventSource.close();
+    }
+    const eventSource = new EventSource('/api/stream-seed-wilayah?id=' + encodeURIComponent(presetId));
+    window.currentQuickUpdateEventSource = eventSource;
+
+    eventSource.onmessage = function(event) {
+        const line = event.data;
+
+        if (line.includes('[SEED_COMPLETE]')) {
+            eventSource.close();
+            window.currentQuickUpdateEventSource = null;
+            if (window.quickUpdateTimerInterval) {
+                clearInterval(window.quickUpdateTimerInterval);
+            }
+            const totalElapsed = Date.now() - updateStartTime;
+            const durationFormatted = formatDuration(totalElapsed);
+            const durationShort = formatDurationShort(totalElapsed);
+
+            progressBar.style.width = '100%';
+            percentText.innerHTML = '100%';
+            statusText.innerHTML = 'Seeder Full Wilayah Indonesia Selesai Sukses dalam ' + durationFormatted + '! 🎉';
+            statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+            statusBadge.style.color = '#34d399';
+            statusBadge.innerHTML = '✅ Sukses';
+
+            if (timerBadge) {
+                timerBadge.style.background = 'rgba(16, 185, 129, 0.25)';
+                timerBadge.innerHTML = '⏱️ Selesai (' + durationShort + ')';
+            }
+            
+            const span = document.createElement('span');
+            span.style.color = 'var(--success)';
+            span.style.fontWeight = 'bold';
+            span.appendChild(document.createTextNode('\n=============================================\n  SEEDER FULL WILAYAH INDONESIA SELESAI SAKSES! (Durasi: ' + durationFormatted + ')\n=============================================\n'));
+            consoleContainer.appendChild(span);
+            consoleContainer.scrollTop = consoleContainer.scrollHeight;
+            return;
+        }
+
+        if (line.startsWith('[SEED_FAILED]')) {
+            eventSource.close();
+            if (window.quickUpdateTimerInterval) {
+                clearInterval(window.quickUpdateTimerInterval);
+            }
+            const totalElapsed = Date.now() - updateStartTime;
+            const durationFormatted = formatDuration(totalElapsed);
+
+            statusText.innerHTML = 'Seeder Wilayah Gagal setelah ' + durationFormatted + '! ❌';
+            statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+            statusBadge.style.color = '#f87171';
+            statusBadge.innerHTML = '❌ Gagal';
+
+            if (timerBadge) {
+                timerBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                timerBadge.style.color = '#f87171';
+                timerBadge.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                timerBadge.innerHTML = '⏱️ Gagal';
+            }
+            
+            const span = document.createElement('span');
+            span.style.color = 'var(--error)';
+            span.appendChild(document.createTextNode('\n[ERROR] ' + line + ' (Total Waktu: ' + durationFormatted + ')\n'));
+            consoleContainer.appendChild(span);
+            consoleContainer.scrollTop = consoleContainer.scrollHeight;
+            return;
+        }
+
+        const div = document.createElement('div');
+        if (line.includes('1/4 Memproses Data Provinsi')) {
+            div.style.color = '#6ee7b7';
+            div.style.fontWeight = 'bold';
+            progressBar.style.width = '20%';
+            percentText.innerHTML = '20%';
+            statusText.innerHTML = '1/4 Memproses Data Provinsi...';
+        } else if (line.includes('2/4 Memproses Data Kabupaten')) {
+            div.style.color = '#6ee7b7';
+            div.style.fontWeight = 'bold';
+            progressBar.style.width = '40%';
+            percentText.innerHTML = '40%';
+            statusText.innerHTML = '2/4 Memproses Data Kabupaten/Kota...';
+        } else if (line.includes('3/4 Memproses Data Kecamatan')) {
+            div.style.color = '#6ee7b7';
+            div.style.fontWeight = 'bold';
+            progressBar.style.width = '60%';
+            percentText.innerHTML = '60%';
+            statusText.innerHTML = '3/4 Memproses Data Kecamatan...';
+        } else if (line.includes('4/4 Memproses Data Kelurahan')) {
+            div.style.color = '#6ee7b7';
+            div.style.fontWeight = 'bold';
+            progressBar.style.width = '80%';
+            percentText.innerHTML = '80%';
+            statusText.innerHTML = '4/4 Memproses Data Kelurahan/Desa...';
+        } else if (line.startsWith('[ERROR]')) {
+            div.style.color = '#f87171';
+        } else if (line.includes('✅')) {
+            div.style.color = '#34d399';
+            div.style.fontWeight = 'bold';
+        } else {
+            div.style.color = 'var(--text-main)';
+        }
+
+        div.appendChild(document.createTextNode(line));
+        consoleContainer.appendChild(div);
+        consoleContainer.scrollTop = consoleContainer.scrollHeight;
+    };
+
+    eventSource.onerror = function(err) {
+        eventSource.close();
+        if (window.quickUpdateTimerInterval) {
+            clearInterval(window.quickUpdateTimerInterval);
+        }
+        statusText.innerHTML = 'Koneksi stream terputus.';
+        console.log('SSE Seeder Error:', err);
     };
 
     consoleSection.scrollIntoView({ behavior: 'smooth' });
