@@ -4,11 +4,12 @@
     "vpsIp": "10.10.10.99",
     "vpsUser": "asepsuryadi",
     "project": "absenta",
-    "buildMode": "local",
+    "buildMode": "remote",
     "sshKeyChoice": "nginxonly.pem",
     "vpsSudoPass": "1",
     "vpsKeyPath": "",
-    "id": "preset-1785418089536"
+    "id": "preset-1785418089536",
+    "obfuscate": "N"
   },
   {
     "name": "Server Lisensi",

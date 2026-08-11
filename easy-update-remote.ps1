@@ -292,6 +292,8 @@ if [ "`$DO_BUILD_BACKEND" = true ]; then
         echo "🌱 Memperbarui database schema & seeding..."
         npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal."
         npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
+        echo "🌐 Memicu sinkronisasi data wilayah Indonesia di latar belakang..."
+        npx ts-node -r tsconfig-paths/register src/scripts/seed_full_wilayah.ts & || true
     else
         echo "⏩ SMART SEED: Melewati db push & seed (skema DB & seeder tidak berubah)."
     fi
