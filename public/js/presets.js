@@ -799,12 +799,19 @@ function checkWatchdogStatus(presetId) {
         const uptime = d.uptime || '0m';
         const latency = d.latency || 'N/A';
 
+        const minioOk = d.minio === 'active';
+        const minioPortOk = d.minio_port && d.minio_port.includes('ONLINE');
+
         content.innerHTML =
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
                 '<div>' + dot(wgOk) + 'WireGuard: ' + badge(wgOk, 'UP', 'DOWN') + '</div>' +
                 '<div>' + dot(caddyOk) + 'Caddy: ' + badge(caddyOk, 'active', 'mati') + '</div>' +
                 '<div>' + dot(pm2Ok) + 'PM2: ' + badge(pm2Ok, 'running', 'mati') + '</div>' +
                 '<div>' + dot(timerOk) + 'Watchdog: ' + badge(timerOk, 'aktif', 'belum pasang') + '</div>' +
+            '</div>' +
+            '<div style="margin-bottom:10px;background:rgba(16,185,129,0.08);padding:7px 10px;border-radius:8px;border:1px solid rgba(16,185,129,0.25);display:flex;justify-content:space-between;align-items:center;font-size:12px;">' +
+                '<span>📦 <strong>MinIO S3 Storage</strong>: ' + badge(minioOk, 'Active (Systemd)', 'Inactive (Mati)') + '</span>' +
+                '<span style="font-size:11px;font-weight:bold;color:' + (minioPortOk ? '#34d399' : '#f87171') + ';">' + (d.minio_port || 'OFFLINE') + '</span>' +
             '</div>' +
             '<div style="display:flex;gap:8px;margin-bottom:10px;font-size:11px;background:rgba(0,0,0,0.2);padding:6px 10px;border-radius:6px;justify-content:space-between;">' +
                 '<span style="color:#a78bfa;">🧠 RAM: <strong>' + ram + '</strong></span>' +
