@@ -715,12 +715,10 @@ function runSeedWilayahPreset(presetId) {
             clearInterval(window.quickUpdateTimerInterval);
         }
         if (!isSeederFinished) {
-            statusText.innerHTML = 'Koneksi stream selesai.';
-            progressBar.style.width = '100%';
-            percentText.innerHTML = '100%';
-            statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
-            statusBadge.style.color = '#34d399';
-            statusBadge.innerHTML = '✅ Sukses';
+            statusText.innerHTML = '⚡ Seeder Berjalan di Background VPS (Memproses data kecamatan & desa...';
+            statusBadge.style.background = 'rgba(167, 139, 250, 0.2)';
+            statusBadge.style.color = '#a78bfa';
+            statusBadge.innerHTML = '⏳ Memproses...';
         }
         console.log('SSE Seeder Status:', err);
     };
