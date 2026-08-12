@@ -481,8 +481,13 @@ function handleRequest(req, res) {
     }
 
     // 404 Not Found
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('404 Not Found');
+    if (pathname.startsWith('/api/')) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: `Endpoint API "${pathname}" tidak ditemukan (404). Silakan restart aplikasi Deployer.` }));
+    } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('404 Not Found');
+    }
 }
 
 function serveFile(res, filePath, contentType) {

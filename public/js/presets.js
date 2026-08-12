@@ -995,7 +995,16 @@ function removeSelectedTunnelPreset(presetId, iface) {
     }
 
     fetch('/api/remove-selected-tunnel?id=' + encodeURIComponent(presetId) + '&iface=' + encodeURIComponent(iface))
-    .then(r => r.json())
+    .then(async r => {
+        const text = await r.text();
+        let res;
+        try {
+            res = JSON.parse(text);
+        } catch (e) {
+            throw new Error(`Server merespon (${r.status}): ${text.slice(0, 150)}... Silakan restart aplikasi Deployer.`);
+        }
+        return res;
+    })
     .then(res => {
         if (res.success) {
             alert('✅ Berhasil Copot Interface!\n\n' + res.message);
@@ -1005,7 +1014,7 @@ function removeSelectedTunnelPreset(presetId, iface) {
         }
     })
     .catch(err => {
-        alert('❌ Error koneksi: ' + err.message);
+        alert('❌ Error: ' + err.message);
     });
 }
 
