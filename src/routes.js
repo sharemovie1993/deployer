@@ -320,8 +320,8 @@ function handleRequest(req, res) {
         return;
     }
 
-    if (pathname === '/api/clean-ghost-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
-        handleCleanGhostTunnels(req, res, parsedUrl);
+    if (pathname === '/api/audit-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
+        handleAuditTunnels(req, res, parsedUrl);
         return;
     }
 
