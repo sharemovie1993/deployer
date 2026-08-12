@@ -375,7 +375,9 @@ check_wireguard() {
     slug="`${iface#et-}"
 
     if [ "`$cfile" != "/etc/wireguard/`$bname" ]; then
-      cp -f "`$cfile" "/etc/wireguard/`$bname" 2>/dev/null || true
+      # Gunakan symlink (ln -sf) bukan cp -f agar /etc/wireguard/ selalu menunjuk ke
+      # sumber kebenaran di tunnels/ dan tidak menjadi salinan fisik yang bisa beda isi
+      ln -sf "`$cfile" "/etc/wireguard/`$bname" 2>/dev/null || cp -f "`$cfile" "/etc/wireguard/`$bname" 2>/dev/null || true
       chmod 600 "/etc/wireguard/`$bname" 2>/dev/null || true
     fi
 
