@@ -787,9 +787,15 @@ function checkWatchdogStatus(presetId) {
                 const isWg = iface.startsWith('et-') || iface.startsWith('wg');
                 const icon = iface === 'lo' ? '🏠' : (isWg ? '🔒' : '🌐');
                 const color = isWg ? '#a78bfa' : '#38bdf8';
+                const removeBtn = (iface.startsWith('et-') || iface.startsWith('wg'))
+                    ? '<button onclick="removeSelectedTunnelPreset(\'' + presetId + '\', \'' + iface + '\')" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.35);padding:1px 6px;border-radius:4px;font-size:10px;font-weight:bold;cursor:pointer;margin-left:6px;" title="Copot & Mematikan interface WireGuard ' + iface + '">🔌 Copot</button>'
+                    : '';
                 return '<div style="font-family:\'Fira Code\',monospace;font-size:11.5px;display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,0.05);">' +
                     '<span style="color:' + color + ';font-weight:600;">' + icon + ' ' + iface + '</span>' +
-                    '<span style="color:#6ee7b7;font-weight:500;">' + ipAddr + '</span>' +
+                    '<div style="display:flex;align-items:center;">' +
+                        '<span style="color:#6ee7b7;font-weight:500;">' + ipAddr + '</span>' +
+                        removeBtn +
+                    '</div>' +
                 '</div>';
             }).join('')
             : '<div style="font-size:11px;color:var(--text-muted);">Tidak ada IP terdeteksi</div>';
@@ -933,6 +939,10 @@ function auditTunnelPreset(presetId) {
                 } else if (t.license_key) {
                     html += `<div style="color: var(--text-muted); font-size: 11px; margin-top: 2px;">Kunci Lisensi: ${t.license_key.slice(0,8)}••••••••</div>`;
                 }
+
+                html += `<div style="margin-top: 8px; display: flex; justify-content: flex-end;">
+                    <button class="btn btn-secondary btn-sm" style="border-color: rgba(239,68,68,0.5); color: #f87171; background: rgba(239,68,68,0.15); font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px; cursor: pointer;" onclick="removeSelectedTunnelPreset('${presetId}', '${t.interface_name}')">🔌 Copot Interface ${t.interface_name}</button>
+                </div>`;
                 html += '</div>';
             });
 
@@ -968,6 +978,30 @@ function cleanGhostTunnelsPreset(presetId) {
             auditTunnelPreset(presetId);
         } else {
             alert('❌ Gagal pembersihan: ' + res.message);
+        }
+    })
+    .catch(err => {
+        alert('❌ Error koneksi: ' + err.message);
+    });
+}
+
+function removeSelectedTunnelPreset(presetId, iface) {
+    if (!confirm(`Apakah Anda yakin ingin MENCOPOT & MEMATIKAN interface WireGuard "${iface}" dari server ini?\n\nInterface ini akan dimatikan (down) dan file konfigurasinya akan dihapus dari VPS.`)) {
+        return;
+    }
+    const content = document.getElementById('watchdog-content-' + presetId);
+    if (content) {
+        content.innerHTML = `<div style="color: #f87171; font-family: monospace;">⏳ Mencopot & mematikan interface WireGuard ${iface} di VPS...</div>`;
+    }
+
+    fetch('/api/remove-selected-tunnel?id=' + encodeURIComponent(presetId) + '&iface=' + encodeURIComponent(iface))
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            alert('✅ Berhasil Copot Interface!\n\n' + res.message);
+            checkWatchdogStatus(presetId);
+        } else {
+            alert('❌ Gagal mencopot interface: ' + res.message);
         }
     })
     .catch(err => {

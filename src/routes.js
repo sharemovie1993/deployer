@@ -295,8 +295,13 @@ function handleRequest(req, res) {
         return;
     }
 
-    if (pathname === '/api/audit-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
-        handleAuditTunnels(req, res, parsedUrl);
+    if (pathname === '/api/clean-ghost-tunnels' && (req.method === 'GET' || req.method === 'POST')) {
+        handleCleanGhostTunnels(req, res, parsedUrl);
+        return;
+    }
+
+    if (pathname === '/api/remove-selected-tunnel' && (req.method === 'GET' || req.method === 'POST')) {
+        handleRemoveSelectedTunnel(req, res, parsedUrl);
         return;
     }
 
@@ -1133,6 +1138,95 @@ function handleCleanGhostTunnels(req, res, parsedUrl) {
         res.end(JSON.stringify({
             success: code === 0,
             message: code === 0 ? 'Pembersihan tunnel bentrok/ghost di server VPS berhasil dijalankan!' : 'Gagal menjalankan pembersihan di VPS.',
+            raw_output: stdout
+        }));
+    });
+
+    if (proc.stdin) {
+        proc.stdin.write(scriptText);
+        proc.stdin.end();
+    }
+}
+
+function handleRemoveSelectedTunnel(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const iface = parsedUrl.searchParams.get('iface');
+
+    if (!iface || !/^[a-zA-Z0-9_-]+$/.test(iface)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Interface name (iface) tidak valid.' }));
+        return;
+    }
+
+    const presets = getPresets();
+    const p = presets.find(item => item.id === presetId);
+
+    if (!p && presetId !== 'local') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+        return;
+    }
+
+    const isLocal = !p || presetId === 'local';
+    const ip = isLocal ? '127.0.0.1' : p.vpsIp;
+    const user = isLocal ? '' : (p.vpsUser || 'asepsuryadi');
+    const sudoPass = isLocal ? '' : (p.vpsSudoPass || '1');
+    const keyChoice = isLocal ? '' : (p.sshKeyChoice || 'nginxonly.pem');
+    const keyPath = isLocal ? '' : (keyChoice === 'custom' ? p.vpsKeyPath : path.join(__dirname, '..', keyChoice));
+
+    const scriptText = [
+        `echo "=== COPOT / MEMATIKAN INTERFACE WIREGUARD ${iface} ==="`,
+        `echo "${sudoPass}" | sudo -S wg-quick down "${iface}" 2>/dev/null || true`,
+        `echo "${sudoPass}" | sudo -S ip link delete "${iface}" 2>/dev/null || true`,
+        `echo "${sudoPass}" | sudo -S systemctl disable "wg-quick@${iface}" 2>/dev/null || true`,
+        `echo "${sudoPass}" | sudo -S rm -f "/etc/wireguard/${iface}.conf" "/var/www/project-absenta/tunnels/${iface}.conf" 2>/dev/null || true`,
+        `echo "REMOVED_IFACE=${iface}"`
+    ].join('\n') + '\n';
+
+    let proc;
+    if (isLocal && process.platform === 'win32') {
+        const psCmd = `
+            Stop-Service -Name "WireGuardTunnel${iface}" -ErrorAction SilentlyContinue
+            Remove-Item -Path "d:\\BarayaProject\\Project Absenta\\tunnels\\${iface}.conf","C:\\Program Files\\WireGuard\\Data\\Configurations\\${iface}.conf" -ErrorAction SilentlyContinue
+        `;
+        proc = spawn('powershell.exe', ['-NoProfile', '-Command', psCmd], { windowsHide: true });
+    } else {
+        const safeKeyPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'remove-iface-key.pem');
+        try { fs.copyFileSync(keyPath, safeKeyPath); } catch (e) {}
+        const sshArgs = [
+            '-i', safeKeyPath,
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'ConnectTimeout=10',
+            '-o', 'BatchMode=yes',
+            `${user}@${ip}`,
+            'bash'
+        ];
+        proc = spawn('ssh', sshArgs, { windowsHide: true });
+    }
+
+    let stdout = '';
+    let responded = false;
+    const timer = setTimeout(() => {
+        if (responded) return;
+        responded = true;
+        try { proc.kill(); } catch (e) {}
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Copot interface timeout (15 detik).' }));
+    }, 15000);
+
+    if (proc.stdout) proc.stdout.on('data', d => stdout += d.toString());
+    if (proc.stderr) proc.stderr.on('data', d => stdout += d.toString());
+
+    proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (responded) return;
+        responded = true;
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: code === 0,
+            message: code === 0 ? `Interface ${iface} berhasil dimatikan & dicopot dari VPS!` : `Gagal mencopot interface ${iface}.`,
+            iface: iface,
             raw_output: stdout
         }));
     });
