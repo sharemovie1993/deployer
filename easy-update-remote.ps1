@@ -150,6 +150,11 @@ function Run-RemoteScript {
         & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$minioLocalScript" "${TargetUser}@${TargetIP}:/tmp/setup-minio.sh"
     }
 
+    $coturnLocalScript = Join-Path $PSScriptRoot "setup-coturn.sh"
+    if (Test-Path $coturnLocalScript) {
+        & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$coturnLocalScript" "${TargetUser}@${TargetIP}:/tmp/setup-coturn.sh"
+    }
+
     & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$tempScript" "${TargetUser}@${TargetIP}:/tmp/remote_script.sh"
     if ($LASTEXITCODE -ne 0) { throw "Gagal menyalin script ke VPS menggunakan SCP." }
     
@@ -250,6 +255,54 @@ elif [ -f /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh ]; then
     echo '$SUDO_PASS' | sudo -S bash /var/www/$TARGET_SUBDIR/deployer/setup-minio.sh || true
 fi
 
+# Ensure Coturn WebRTC STUN/TURN Relay Server is installed & running
+if [ -f /tmp/setup-coturn.sh ]; then
+    echo "Memeriksa & mengaktifkan Coturn WebRTC STUN/TURN Relay Server..."
+    chmod +x /tmp/setup-coturn.sh
+    echo '$SUDO_PASS' | sudo -S bash /tmp/setup-coturn.sh || true
+elif [ -f /var/www/$TARGET_SUBDIR/deployer/setup-coturn.sh ]; then
+    echo "Memeriksa & mengaktifkan Coturn WebRTC STUN/TURN Relay Server..."
+    chmod +x /var/www/$TARGET_SUBDIR/deployer/setup-coturn.sh || true
+    echo '$SUDO_PASS' | sudo -S bash /var/www/$TARGET_SUBDIR/deployer/setup-coturn.sh || true
+fi
+
+# Ensure Backend .env has Coturn TURN variables
+if [ -f absenta_backend/.env ]; then
+    if [ -f /etc/turnserver.conf ]; then
+        COTURN_SECRET=`$(grep "^static-auth-secret=" /etc/turnserver.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
+        COTURN_REALM=`$(grep "^realm=" /etc/turnserver.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
+        PUBLIC_IP=`$(curl -s4 https://api.ipify.org || hostname -I | awk '{print `$1}')
+        
+        if grep -q "^COTURN_ENABLED=" absenta_backend/.env; then
+            sed -i "s|^COTURN_ENABLED=.*|COTURN_ENABLED=true|g" absenta_backend/.env
+        else
+            echo "COTURN_ENABLED=true" >> absenta_backend/.env
+        fi
+        
+        if grep -q "^COTURN_PORT=" absenta_backend/.env; then
+            sed -i "s|^COTURN_PORT=.*|COTURN_PORT=3478|g" absenta_backend/.env
+        else
+            echo "COTURN_PORT=3478" >> absenta_backend/.env
+        fi
+
+        if [ -n "`$COTURN_SECRET" ]; then
+            if grep -q "^COTURN_SECRET=" absenta_backend/.env; then
+                sed -i "s|^COTURN_SECRET=.*|COTURN_SECRET=`$COTURN_SECRET|g" absenta_backend/.env
+            else
+                echo "COTURN_SECRET=`$COTURN_SECRET" >> absenta_backend/.env
+            fi
+        fi
+
+        if [ -n "`$PUBLIC_IP" ]; then
+            if grep -q "^COTURN_DOMAIN=" absenta_backend/.env; then
+                sed -i "s|^COTURN_DOMAIN=.*|COTURN_DOMAIN=`$PUBLIC_IP|g" absenta_backend/.env
+            else
+                echo "COTURN_DOMAIN=`$PUBLIC_IP" >> absenta_backend/.env
+            fi
+        fi
+    fi
+fi
+
 # Ensure Backend .env has S3 Storage variables
 if [ -f absenta_backend/.env ]; then
     if grep -q "^STORAGE_DRIVER=" absenta_backend/.env; then
@@ -305,6 +358,19 @@ if [ "`$DO_BUILD_BACKEND" = true ]; then
         nohup npx ts-node -r tsconfig-paths/register src/scripts/seed_full_wilayah.ts > /tmp/seed_wilayah.log 2>&1 &
     else
         echo "⏩ SMART SEED: Melewati db push & seed (skema DB & seeder tidak berubah)."
+    fi
+
+    # Auto-sync Coturn relay config into .env jika terpasang di VPS
+    if [ -f /etc/turnserver.conf ]; then
+        echo "📡 Mendeteksi Coturn Server di VPS -> Sinkronisasi konfigurasi ICE..."
+        C_SECRET=`$(grep "^static-auth-secret=" /etc/turnserver.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || true)
+        C_EXT_IP=`$(grep "^external-ip=" /etc/turnserver.conf 2>/dev/null | cut -d'=' -f2 | cut -d'/' -f1 | tr -d ' ' || true)
+        if [ -n "`$C_SECRET" ]; then
+            grep -q "^COTURN_ENABLED=" .env && sed -i "s|^COTURN_ENABLED=.*|COTURN_ENABLED=true|g" .env || echo "COTURN_ENABLED=true" >> .env
+            [ -n "`$C_EXT_IP" ] && (grep -q "^COTURN_DOMAIN=" .env && sed -i "s|^COTURN_DOMAIN=.*|COTURN_DOMAIN=`$C_EXT_IP|g" .env || echo "COTURN_DOMAIN=`$C_EXT_IP" >> .env)
+            grep -q "^COTURN_SECRET=" .env && sed -i "s|^COTURN_SECRET=.*|COTURN_SECRET=`$C_SECRET|g" .env || echo "COTURN_SECRET=`$C_SECRET" >> .env
+            grep -q "^COTURN_PORT=" .env && sed -i "s|^COTURN_PORT=.*|COTURN_PORT=3478|g" .env || echo "COTURN_PORT=3478" >> .env
+        fi
     fi
 
     npm run build
@@ -442,6 +508,17 @@ check_caddy() {
   fi
 }
 
+check_coturn() {
+  if [ -f /etc/turnserver.conf ]; then
+    if ! systemctl is-active --quiet coturn 2>/dev/null; then
+      log "⚠️  Coturn TURN Server DOWN - restart..."
+      systemctl restart coturn 2>/dev/null || true
+      sleep 2
+      systemctl is-active --quiet coturn && log "✅ Coturn restart sukses" || log "❌ Coturn gagal restart"
+    fi
+  fi
+}
+
 COUNTER_FILE="/tmp/absenta-watchdog-counter"
 COUNTER=`$(cat "`$COUNTER_FILE" 2>/dev/null || echo 0)
 COUNTER=`$((COUNTER + 1))
@@ -455,6 +532,7 @@ fi
 check_wireguard
 check_pm2
 check_caddy
+check_coturn
 WATCHDOG
 
 echo '$SUDO_PASS' | sudo -S cp /tmp/absenta-tunnel-watchdog.sh /usr/local/bin/absenta-tunnel-watchdog.sh

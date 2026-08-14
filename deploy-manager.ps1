@@ -1,4 +1,4 @@
-﻿# Centralized Deployment Manager (Global Deployer)
+# Centralized Deployment Manager (Global Deployer)
 # Untuk Windows PowerShell
 # Berfungsi memanggil skrip deploy internal masing-masing proyek
 
@@ -294,6 +294,7 @@ while ($true) {
     Write-Host "   9) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
     Write-Host "  12) Kernel & System Tuning Produksi Absenta (Remote)"
     Write-Host "  13) 🔧 Perbaikan & Pembersihan Terowongan Easy Tunnel (Remote)" -ForegroundColor Yellow
+    Write-Host "  14) 📹 Setup Coturn STUN/TURN Relay Server WebRTC (Remote)" -ForegroundColor Green
     Write-Host ""
     Write-Host " 🚨 [EMERGENCY & CLEANUP]" -ForegroundColor Cyan
     Write-Host "   10) Kill Semua Proses Node.js (Emergency)"
@@ -302,7 +303,7 @@ while ($true) {
     Write-Host " 🚪 [EXIT]" -ForegroundColor Cyan
     Write-Host "   0) Keluar"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [0-13]"
+    $choice = Read-Host "Pilih opsi [0-14]"
 
     switch ($choice) {
         "1" {
@@ -973,6 +974,21 @@ while ($true) {
                 }
             } else {
                 Write-Host "Script easy-tunnel-fix.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
+                Wait-Key
+            }
+        }
+        "14" {
+            $coturnScript = Join-Path $PSScriptRoot "easy-setup-coturn.ps1"
+            if (Test-Path $coturnScript) {
+                try {
+                    & $coturnScript
+                    Wait-Key
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-setup-coturn: $_" -ForegroundColor Red
+                    Wait-Key
+                }
+            } else {
+                Write-Host "Script easy-setup-coturn.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }
