@@ -37,10 +37,11 @@ apt-get update -yqq
 apt-get install -yqq coturn
 
 # 2. Aktifkan Coturn di /etc/default/coturn
-echo "⚙️ Mengaktifkan daemon Coturn..."
-if [ -f /etc/default/coturn ]; then
-  sed -i 's/#TURNSERVER_ENABLED=1/TURNSERVER_ENABLED=1/' /etc/default/coturn || true
-fi
+echo "⚙️ Mengaktifkan daemon Coturn di /etc/default/coturn..."
+mkdir -p /etc/default
+cat <<EOF > /etc/default/coturn
+TURNSERVER_ENABLED=1
+EOF
 
 # 3. Backup konfigurasi lama jika ada
 if [ -f /etc/turnserver.conf ]; then
@@ -55,7 +56,8 @@ cat <<EOF > /etc/turnserver.conf
 # ==========================================================
 listening-port=${TURN_PORT}
 tls-listening-port=${TURNS_PORT}
-listening-ip=${LISTENING_IP}
+
+# External IP NAT mapping
 external-ip=${PUBLIC_IP}/${LISTENING_IP}
 
 # Relay Port Allocation for WebRTC Video/Audio
@@ -75,9 +77,6 @@ no-multicast-peers
 no-cli
 no-loopback-peers
 no-tcp-relay
-denied-peer-ip=10.0.0.0-10.255.255.255
-denied-peer-ip=192.168.0.0-192.168.255.255
-denied-peer-ip=172.16.0.0-172.31.255.255
 
 # Logging
 log-file=/var/log/coturn/turnserver.log
@@ -87,6 +86,8 @@ EOF
 
 # 5. Siapkan direktori log dan permission
 mkdir -p /var/log/coturn
+touch /var/log/coturn/turnserver.log
+chmod 644 /etc/turnserver.conf
 chown -R turnserver:turnserver /var/log/coturn /etc/turnserver.conf 2>/dev/null || true
 
 # 6. Konfigurasi Firewall UFW
@@ -101,6 +102,7 @@ fi
 
 # 7. Aktifkan & Restart Service Coturn
 echo "🟢 Memulai service coturn..."
+systemctl unmask coturn 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable coturn
 systemctl restart coturn
