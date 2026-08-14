@@ -5,18 +5,24 @@ let globalPresets = [];
 window.activePresetId = null;
 
 function loadPresets() {
-    fetch('/api/presets')
-    .then(res => res.json())
-    .then(res => {
-        if (res.success && res.data) {
-            globalPresets = res.data;
-            renderPresetsGrid(res.data);
+    if (typeof window.fetchSharedPresets === 'function') {
+        window.fetchSharedPresets(true).then(presets => {
+            globalPresets = presets;
+            renderPresetsGrid(presets);
             if (typeof populateLogTargetPresets === 'function') {
                 populateLogTargetPresets();
             }
-        }
-    })
-    .catch(err => console.error('Gagal memuat preset:', err));
+        });
+    } else {
+        fetch('/api/presets')
+        .then(res => res.json())
+        .then(res => {
+            if (res.success && res.data) {
+                globalPresets = res.data;
+                renderPresetsGrid(res.data);
+            }
+        });
+    }
 }
 
 function testConnection(presetId) {
@@ -807,6 +813,8 @@ function checkWatchdogStatus(presetId) {
 
         const minioOk = d.minio === 'active';
         const minioPortOk = d.minio_port && d.minio_port.includes('ONLINE');
+        const coturnOk = d.coturn === 'active';
+        const coturnPortOk = d.coturn_port && d.coturn_port.includes('ONLINE');
 
         content.innerHTML =
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
@@ -815,9 +823,13 @@ function checkWatchdogStatus(presetId) {
                 '<div>' + dot(pm2Ok) + 'PM2: ' + badge(pm2Ok, 'running', 'mati') + '</div>' +
                 '<div>' + dot(timerOk) + 'Watchdog: ' + badge(timerOk, 'aktif', 'belum pasang') + '</div>' +
             '</div>' +
-            '<div style="margin-bottom:10px;background:rgba(16,185,129,0.08);padding:7px 10px;border-radius:8px;border:1px solid rgba(16,185,129,0.25);display:flex;justify-content:space-between;align-items:center;font-size:12px;">' +
+            '<div style="margin-bottom:8px;background:rgba(16,185,129,0.08);padding:7px 10px;border-radius:8px;border:1px solid rgba(16,185,129,0.25);display:flex;justify-content:space-between;align-items:center;font-size:12px;">' +
                 '<span>📦 <strong>MinIO S3 Storage</strong>: ' + badge(minioOk, 'Active (Systemd)', 'Inactive (Mati)') + '</span>' +
                 '<span style="font-size:11px;font-weight:bold;color:' + (minioPortOk ? '#34d399' : '#f87171') + ';">' + (d.minio_port || 'OFFLINE') + '</span>' +
+            '</div>' +
+            '<div style="margin-bottom:10px;background:rgba(14,113,235,0.08);padding:7px 10px;border-radius:8px;border:1px solid rgba(14,113,235,0.25);display:flex;justify-content:space-between;align-items:center;font-size:12px;">' +
+                '<span>📹 <strong>Coturn STUN/TURN</strong>: ' + badge(coturnOk, 'Active (Systemd)', 'Inactive (Mati)') + '</span>' +
+                '<span style="font-size:11px;font-weight:bold;color:' + (coturnPortOk ? '#38bdf8' : '#f87171') + ';">' + (d.coturn_port || 'OFFLINE') + '</span>' +
             '</div>' +
             '<div style="display:flex;gap:8px;margin-bottom:10px;font-size:11px;background:rgba(0,0,0,0.2);padding:6px 10px;border-radius:6px;justify-content:space-between;">' +
                 '<span style="color:#a78bfa;">🧠 RAM: <strong>' + ram + '</strong></span>' +
