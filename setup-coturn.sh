@@ -100,7 +100,17 @@ if command -v ufw >/dev/null 2>&1; then
   ufw allow ${MIN_PORT}:${MAX_PORT}/udp || true
 fi
 
-# 7. Aktifkan & Restart Service Coturn
+# 7. Hardening Systemd Auto-Restart & Auto-Start Saat Reboot
+echo "🛡️ Memasang Systemd Auto-Restart & Auto-Start untuk Coturn..."
+mkdir -p /etc/systemd/system/coturn.service.d
+cat <<EOF > /etc/systemd/system/coturn.service.d/restart.conf
+[Service]
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
+EOF
+
 echo "🟢 Memulai service coturn..."
 systemctl unmask coturn 2>/dev/null || true
 systemctl daemon-reload
