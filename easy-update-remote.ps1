@@ -645,6 +645,18 @@ fi
 
 echo "📦 Memperbarui dependensi Backend..."
 cd /var/www/$TARGET_SUBDIR/backend
+if [ ! -f .env ]; then
+    cat << 'EOF' > .env
+PORT=4001
+DATABASE_URL="file:./dev.db"
+JWT_SECRET="super-secret-jwt-key-undangan-digital-2026"
+LICENSE_SERVER_URL="https://api.absenta.id"
+EASY_TUNNEL_BASE_DOMAIN="absenta.id"
+EOF
+fi
+if ! grep -q "EASY_TUNNEL_BASE_DOMAIN" .env 2>/dev/null; then
+    echo 'EASY_TUNNEL_BASE_DOMAIN="absenta.id"' >> .env
+fi
 npm install --production=false
 npx prisma generate
 npx prisma db push --accept-data-loss || echo "Prisma db push dilewati atau sudah up-to-date."
