@@ -538,14 +538,22 @@ cat << 'EOF_CADDY' > /tmp/Caddyfile
 $caddyHostHeader {
     root * /var/www/$TARGET_SUBDIR/frontend/dist
 
-    # Reverse proxy backend API endpoints
-    reverse_proxy /api* localhost:$B_PORT
-    reverse_proxy /uploads* localhost:$B_PORT
-    reverse_proxy /health* localhost:$B_PORT
+    # Backend API endpoints proxy
+    handle /api/* {
+        reverse_proxy localhost:$B_PORT
+    }
+    handle /uploads/* {
+        reverse_proxy localhost:$B_PORT
+    }
+    handle /health* {
+        reverse_proxy localhost:$B_PORT
+    }
 
-    # SPA routing fallback
-    try_files {path} /index.html
-    file_server
+    # SPA frontend static files and routing fallback
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
 
     encode gzip zstd
 $caddyTlsBlock
