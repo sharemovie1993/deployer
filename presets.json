@@ -1,25 +1,38 @@
 [
   {
+    "id": "preset-1785418089536",
     "name": "10.10.10.99",
     "vpsIp": "10.10.10.99",
     "vpsUser": "asepsuryadi",
+    "vpsSudoPass": "1",
+    "sshKeyChoice": "nginxonly.pem",
+    "vpsKeyPath": "",
     "project": "absenta",
     "buildMode": "remote",
-    "sshKeyChoice": "nginxonly.pem",
-    "vpsSudoPass": "1",
-    "vpsKeyPath": "",
-    "id": "preset-1785418089536",
     "obfuscate": "N"
   },
   {
+    "id": "preset-1786160556752",
     "name": "Server Lisensi",
     "vpsIp": "103.196.155.87",
     "vpsUser": "asepsuryadi",
-    "project": "licensing",
-    "sshKeyChoice": "ls-key.pem",
     "vpsSudoPass": "",
+    "sshKeyChoice": "ls-key.pem",
     "vpsKeyPath": "",
+    "project": "licensing",
     "buildMode": "local",
-    "id": "preset-1786160556752"
+    "obfuscate": "N"
+  },
+  {
+    "id": "preset-1786847548388-55h8",
+    "name": "Server Undangan",
+    "vpsIp": "10.10.10.91",
+    "vpsUser": "asepsuryadi",
+    "vpsSudoPass": "1",
+    "sshKeyChoice": "nginxonly.pem",
+    "vpsKeyPath": "",
+    "project": "undangan",
+    "buildMode": "remote",
+    "obfuscate": "N"
   }
 ]

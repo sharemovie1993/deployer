@@ -1,87 +1,180 @@
-# Global Deployment Manager (Deployer)
+# Absenta Deployer & Maintenance Wizard
 
-Repositori ini berisi skrip otomatisasi deployment terpusat (**Global Deployer**) untuk men-deploy, memperbarui, dan memantau berbagai proyek web Anda langsung dari satu titik masuk (entry point). 
+Repositori ini berisi **Absenta Deployer** — sebuah toolset orkestrasi deployment dan pemeliharaan server berbasis GUI web yang dirancang untuk memudahkan pemasangan ekosistem **Absenta.id** ke berbagai skenario infrastruktur server.
 
-Proyek pertama yang terdaftar secara bawaan adalah **Project Yatim (Mustahiq Care)**.
+---
 
 ## Fitur Utama
-1. **Shallow Clone Otomatis**: Secara otomatis mengkloning kode produksi langsung dari GitHub (`depth 1`) ke direktori target yang diinginkan tanpa harus clone manual.
-2. **Setup Port Dinamis**: Memandu konfigurasi port Frontend & Backend secara terisolasi.
-3. **Inisialisasi Database & Build Otomatis**: Mengotomatiskan instalasi package npm, migrasi SQLite (Prisma), dan build static assets React (Vite).
-4. **Manajemen Proses PM2**: Mendaftarkan, menghentikan, dan memuat ulang proses server di background secara otomatis.
-6. **Otomasi Firewall Isolasi 3-Zona WireGuard**: Menginjeksi secara otomatis aturan `iptables` isolasi 3-zona (Admin Deployer `10.0.0.2/29`, Absenta On-Premise `10.0.0.X/32`, Standalone Retail `10.0.1.X/32`) pada berkas `/etc/wireguard/wg0.conf` saat men-deploy Server Lisensi baru.
-7. **Perbaikan Multi-Tunnel & Sanitasi Netmask `/32`**: Menyediakan alat otomatisasi (`easy-tunnel-fix.ps1` & `easy-migrate.ps1`) untuk memicu sanitasi netmask `/32` dan memulihkan multiple tunnel (`et-*`) secara simultan di 1 server sekolah.
+
+1. **GUI Setup Wizard (6 Tahap)**: Antarmuka web interaktif yang memandu pengisian parameter instalasi (OS target, SSH key, Database, Lisensi), validasi koneksi, hingga eksekusi deployment satu klik.
+2. **Remote Linux Deployer via SSH**: Mengorkestrasi pemasangan stack penuh (Node.js, PostgreSQL, Redis, PM2, Caddy) ke VPS Linux secara remote melalui SSH dari Windows.
+3. **Multi-VM Cluster Deploy**: Mendistribusikan deployment ke beberapa node VPS sekaligus (API nodes, WA node, Load Balancer, DB node) dengan satu perintah.
+4. **Preset Management**: Menyimpan konfigurasi deployment yang sering digunakan ke database lokal (SQLite) untuk digunakan ulang tanpa mengisi ulang formulir.
+5. **Server Maintenance Utilities**: Kumpulan skrip otomasi untuk hardening keamanan, penskalaan swap & disk, pembersihan log, migrasi database, dan perbaikan tunnel WireGuard.
+6. **SSE Real-Time Log Streaming**: Seluruh log output proses deployment dikirim secara baris-demi-baris ke browser secara langsung menggunakan Server-Sent Events.
+7. **Health & PM2 Monitoring**: Panel pemantauan status server, proses PM2, dan koneksi tunnel secara real-time.
+8. **License Verification**: Verifikasi dan tampilan detail metadata lisensi server langsung dari panel GUI.
 
 ---
 
-## Panduan Penggunaan
+## Cara Menjalankan
 
-### 1. Di Lingkungan Windows
-Cukup klik ganda (double-click) berkas **`run.bat`** di dalam folder ini untuk menjalankan deployer secara otomatis dengan bypass kebijakan eksekusi (*Execution Policy*).
+### Di Windows (Cara Termudah)
+Klik ganda **`Mulai Installer Absenta.bat`** — skrip VBScript akan menjalankan server `installer.js` secara tersembunyi di latar belakang dan membuka browser secara otomatis.
 
-Atau Anda dapat menjalankannya via PowerShell dengan perintah:
+### Via Command Line
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy-manager.ps1
+node installer.js
 ```
+Kemudian buka browser ke: `http://localhost:8080`
 
-### 2. Di Lingkungan Linux (Bash)
-Buka Terminal di folder repositori ini, berikan izin akses eksekusi, lalu jalankan:
-```bash
-chmod +x deploy-manager.sh
-./deploy-manager.sh
+> Server akan otomatis mencari port kosong mulai dari `8080` jika port tersebut sudah terpakai.
+
+---
+
+## Struktur Proyek
+
+```
+deployer/
+├── installer.js                   # Entry point — Node.js HTTP server
+├── src/                           # Backend modular
+│   ├── routes.js                  # Router utama semua endpoint API
+│   ├── sse.js                     # SSE streaming handler (install, cluster, update, logs)
+│   ├── preset-store.js            # CRUD preset ke SQLite (presets.db)
+│   ├── ssh-helper.js              # Helper spawn SSH subprocess
+│   └── controllers/               # Controller per domain fitur
+│       ├── installer.controller.js  # Save config, test SSH, test DB, verify license
+│       ├── connection.controller.js # Test SSH & DB connection
+│       ├── health.controller.js     # Status PM2, server metrics, tunnel health
+│       ├── preset.controller.js     # List/save/delete preset
+│       └── tunnel.controller.js     # Manajemen tunnel WireGuard
+├── public/                        # Frontend GUI (disajikan sebagai static files)
+│   ├── index.html                 # Satu file HTML utama (multi-view SPA)
+│   ├── css/style.css              # Stylesheet glassmorphic premium
+│   └── js/                        # JavaScript per modul halaman
+│       ├── app.js                 # Navigation, mode switching, shared utilities
+│       ├── wizard.js              # Full Setup Wizard (6 langkah)
+│       ├── presets.js             # Quick Deploy & Preset management
+│       ├── preset-picker.js       # Dropdown picker preset
+│       ├── cluster.js             # Multi-VM Cluster Deploy
+│       ├── health.js              # Server Health & PM2 monitoring
+│       └── logs.js                # PM2 log streaming viewer
+├── tests/                         # Regression test suite
+│   └── regression-test.js
+│
+│   [PowerShell Deployment Scripts]
+├── deploy-absenta-remote.ps1      # Deploy full stack ke VPS Linux via SSH
+├── deploy-cluster-remote.ps1      # Deploy ke multi-VM cluster
+├── deploy-onprem-windows.ps1      # Instalasi lokal Windows on-premise
+├── deploy-licensing-remote.ps1    # Deploy/update licensing server
+├── deploy-general-remote.ps1      # Deploy proyek umum via SSH
+├── deploy-remote-linux.ps1        # Universal remote Linux deployer
+├── deploy-manager.ps1             # Manager terpusat (entry point interaktif)
+│
+│   [Easy Maintenance Utilities]
+├── easy-hardening.ps1             # Hardening keamanan server (firewall, user, SSH)
+├── easy-migrate.ps1               # Sinkronisasi skema database Prisma
+├── easy-purge.ps1                 # Pembersihan cache & log sampah
+├── easy-resize.ps1                # Pembesaran partisi disk
+├── easy-swap.ps1                  # Penskalaan memori virtual swap
+├── easy-tuning.ps1                # Optimasi performa kernel & sysctl
+├── easy-update-remote.ps1         # Quick update kode aplikasi di VPS
+├── easy-update-config.ps1         # Update konfigurasi .env di VPS
+├── easy-setup-ssh.ps1             # Provisioning SSH key ke server baru
+├── easy-seed-wilayah-remote.ps1   # Seed data wilayah Indonesia ke DB
+├── easy-tunnel-fix.ps1            # Perbaikan tunnel WireGuard multi-server
+│
+│   [Launcher & Config]
+├── Mulai Installer Absenta.bat    # Double-click launcher (Windows)
+├── run.bat                        # Alternatif launcher CLI
+├── presets.db                     # Database SQLite preset lokal
+└── logs/                          # Log deployment lokal (di-gitignore)
 ```
 
 ---
 
-## Cara Mendaftarkan Proyek Baru
+## Alur Kerja
 
-Anda dapat menambahkan proyek baru Anda ke dalam skrip dengan mengedit berkas berikut:
+```
+[Operator/Teknisi]
+      │
+      ▼
+Klik Mulai Installer Absenta.bat
+      │
+      ▼
+installer.js UP di port 8080 (auto-detect port kosong)
+Browser terbuka otomatis
+      │
+      ▼
+Pilih Mode di GUI:
+  ├─ [Full Setup Wizard]     → Isi 6 langkah → Mulai deploy via SSE stream
+  ├─ [Quick Deploy Presets]  → Pilih preset tersimpan → Satu klik deploy
+  ├─ [Multi-VM Cluster]      → Input node-node VPS → Deploy paralel
+  ├─ [Server Health]         → Monitor PM2 / server metrics
+  └─ [Logs]                  → Lihat log PM2 live
+      │
+      ▼
+Backend spawn PowerShell → deploy-absenta-remote.ps1
+Output log SSE → tampil real-time di browser
+      │
+      ▼
+[INSTALL_COMPLETE] ✓
+```
 
-### Pada `deploy-manager.ps1` (Windows):
-Tambahkan entri baru ke dalam array `$PROJECTS` di bagian atas berkas:
+---
+
+## Endpoint API
+
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `POST` | `/api/save-config` | Simpan konfigurasi wizard ke `global.installParams` |
+| `POST` | `/api/test-ssh` | Tes koneksi SSH ke server target |
+| `POST` | `/api/test-db` | Tes koneksi PostgreSQL/Redis |
+| `POST` | `/api/verify-license` | Verifikasi & ambil detail metadata lisensi |
+| `GET`  | `/api/stream-install` | SSE stream log deployment (Full Setup) |
+| `GET`  | `/api/stream-cluster-install` | SSE stream log deployment cluster |
+| `GET`  | `/api/stream-quick-update` | SSE stream quick update via preset |
+| `GET`  | `/api/stream-seed-wilayah` | SSE stream seed data wilayah |
+| `GET`  | `/api/stream-setup-ssh` | SSE stream provisioning SSH key |
+| `GET`  | `/api/stream-pm2-logs` | SSE stream PM2 log viewer |
+| `GET`  | `/api/health` | Ambil status PM2 & metrics server |
+| `GET`  | `/api/presets` | Daftar semua preset tersimpan |
+| `POST` | `/api/presets` | Simpan preset baru |
+| `DELETE` | `/api/presets/:id` | Hapus preset |
+
+---
+
+## Konvensi Pengembangan
+
+### Streaming Console Log
+- **Wajib** gunakan call operator `&` untuk memanggil SSH/PowerShell native — bukan `Invoke-Expression` — agar output dapat di-stream baris-demi-baris.
+- Seluruh stdout & stderr subprocess di-pipe ke SSE endpoint secara real-time.
+
+### Mode Silent pada Script
+Seluruh skrip deployment wajib mendukung flag `-Silent` agar dapat dieksekusi tanpa input manual dari GUI backend:
 ```powershell
-$PROJECTS = @(
-    # Proyek yang sudah ada...
-    @{
-        ID = 2
-        Name = "Nama Proyek Baru Anda"
-        RepoUrl = "https://github.com/username/nama-repo.git"
-        DefaultDir = "C:\apps\nama-proyek"
-        DefaultBackendPort = "3000"
-        DefaultFrontendPort = "8080"
-    }
-)
+powershell -ExecutionPolicy Bypass -File deploy-absenta-remote.ps1 -Silent -TargetIP 10.0.0.1 ...
 ```
 
-### Pada `deploy-manager.sh` (Linux):
-Daftarkan metadata array asosiatif baru pada bagian inisialisasi di atas berkas:
-```bash
-PROJ_NAMES[2]="Nama Proyek Baru Anda"
-PROJ_REPOS[2]="https://github.com/username/nama-repo.git"
-PROJ_DIRS[2]="/var/www/nama-proyek"
-PROJ_B_PORTS[2]="3000"
-PROJ_F_PORTS[2]="8080"
-```
-Setelah didaftarkan, proyek baru Anda akan otomatis muncul sebagai opsi di menu utama deployer!
+### Penyimpanan Log
+- Log lokal disimpan di folder `logs/` (sudah di-gitignore).
+- Log remote di Linux disimpan ke `/tmp/deploy.log` terlebih dahulu sebelum dipindah ke folder target.
+
+### Penamaan Proses PM2
+Nama aplikasi di VPS harus seragam: `absenta-backend` dan `absenta-frontend`.
+
+### SSH Key Security
+Sebelum koneksi SSH, file `.pem` wajib diamankan permissionnya:
+- **Windows**: `icacls` — cabut inheritance, beri akses hanya user aktif.
+- **Linux**: `chmod 600`.
 
 ---
 
-## Kontrak Pengembangan Skrip (Standard Coding Guidelines)
+## Persyaratan Sistem (Sisi Operator/Teknisi)
 
-Untuk memastikan seluruh skrip di repositori ini selalu stabil, interaktif, dan mudah dibaca oleh pengembang maupun pengguna awam, patuhi aturan berikut saat melakukan modifikasi atau membuat skrip baru:
-
-### 1. Kebijakan Streaming Console Log (Real-Time Output)
-* **JANGAN GUNAKAN `Invoke-Expression`** untuk memanggil perintah remote interaktif/berat seperti `ssh` atau `scp`. PowerShell akan menahan (*buffering*) seluruh output native command tersebut sehingga layar tampak hang/diam hingga perintah selesai.
-* **Wajib Gunakan Call Operator (`&`) secara Native**:
-  * *Salah*: `Invoke-Expression "ssh -i ... 'commands'"`
-  * *Benar*: `& ssh -i $KEY_PATH -o StrictHostKeyChecking=no user@ip "commands"`
-  * Ini menjamin output teks dari Linux target langsung mengalir (*stream*) ke layar pengguna secara baris-demi-baris saat proses berjalan.
-
-### 2. Standar Struktur & Tempat Penyimpanan Log
-* **Folder Log Lokal**: Seluruh berkas log lokal wajib disimpan di dalam folder **`logs/`** pada repositori root (bukan langsung di folder root). Folder `logs/` harus dibuat secara otomatis jika belum ada:
-  ```powershell
-  $LOG_DIR = Join-Path $PSScriptRoot "logs"
-  if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null }
-  ```
-* **Gitignore**: Semua log di dalam folder `logs/` wajib terdaftar di berkas `.gitignore` agar tidak mengotori repositori GitHub saat melakukan komit.
-* **Logging Remote di Linux**: Saat menjalankan skrip remote di Linux, simpan log mentah di `/tmp/deploy.log` terlebih dahulu. Setelah proses selesai, salin berkas tersebut ke folder target `/var/www/nama-proyek/deploy.log`. Hal ini mencegah pipa log terputus akibat pembersihan direktori target (`rm -rf`) di tengah proses.
+| Komponen | Versi Minimum |
+|----------|---------------|
+| Node.js | LTS (v18+) |
+| PowerShell | 5.1+ (Windows) |
+| OpenSSH Client | Tersedia di Windows 10+ |
+| Browser | Chrome / Edge / Firefox terbaru |

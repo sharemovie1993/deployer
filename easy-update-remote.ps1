@@ -1,4 +1,4 @@
-# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
+﻿# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
 # Melakukan git pull, build backend/frontend, prisma sync, dan restart PM2 di VPS
 
 param(
@@ -58,7 +58,7 @@ if ($Silent) {
     if ([string]::IsNullOrWhiteSpace($NEW_KEY_SOURCE)) { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "nginxonly.pem" }
     $SUDO_PASS = $SudoPass
     # Sudo password bersifat opsional — jika kosong, perintah sudo tidak akan disertakan password
-    $projChoice = if ($Project -eq "licensing" -or $Project -eq "2") { "2" } else { "1" }
+    $projChoice = if ($Project -eq "licensing" -or $Project -eq "2") { "2" } elseif ($Project -eq "undangan" -or $Project -eq "3") { "3" } else { "1" }
     $BUILD_MODE = if ($SkipBuild -or $BuildMode -eq "skip") { "skip" } elseif ($BuildMode -eq "local") { "local" } else { "remote" }
 } else {
     $NEW_IP = (Read-Host "Masukkan IP VPS Target [10.10.10.163]").Trim()
@@ -101,17 +101,22 @@ if (-not $Silent) {
     Show-Header "Pilih Proyek Untuk Quick Update"
     Write-Host " 1) Project Absenta (Full Stack)"
     Write-Host " 2) Server Lisensi (Licensing Server VPS)"
+    Write-Host " 3) Project Undangan Digital (Multi-Event & Print Studio)"
     Write-Host ""
-    $projChoice = Read-Host "Pilih proyek [1-2]"
+    $projChoice = Read-Host "Pilih proyek [1-3]"
 }
 
 $TARGET_SUBDIR = ""
 $IS_ABSENTA = $false
 $IS_SERVER_LISENSI = $false
+$IS_UNDANGAN = $false
 
 if ($projChoice -eq "2") {
     $TARGET_SUBDIR = "licensing-server"
     $IS_SERVER_LISENSI = $true
+} elseif ($projChoice -eq "3") {
+    $TARGET_SUBDIR = "undangan-digital"
+    $IS_UNDANGAN = $true
 } else {
     $TARGET_SUBDIR = "project-absenta"
     $IS_ABSENTA = $true
@@ -593,6 +598,63 @@ echo "============================================="
 echo "   QUICK UPDATE ABSENTA VPS SELESAI SUKSES!  "
 echo "============================================="
 "@
+} elseif ($IS_UNDANGAN) {
+    $updateScript = @"
+set -e
+echo "==== Memulai Update Cepat Project Undangan Digital ===="
+cd /var/www/$TARGET_SUBDIR
+
+SUDO_PASS_VAL='$SUDO_PASS'
+run_sudo() {
+    if [ -n "`$SUDO_PASS_VAL" ]; then
+        echo "`$SUDO_PASS_VAL" | sudo -S "`$@" 2>/dev/null || sudo "`$@" 2>/dev/null || true
+    else
+        sudo "`$@" 2>/dev/null || true
+    fi
+}
+
+run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
+
+echo "Menghentikan Caddy sementara..."
+run_sudo systemctl stop caddy
+
+OLD_COMMIT=`$(git rev-parse HEAD 2>/dev/null || echo "")
+
+echo "Menarik kode terbaru dari branch main/master..."
+git fetch origin
+git reset --hard origin/main || git reset --hard origin/master
+
+echo "📦 Memperbarui dependensi Backend..."
+cd /var/www/$TARGET_SUBDIR/backend
+npm install --production=false
+npx prisma generate
+npx prisma db push --accept-data-loss || echo "Prisma db push dilewati atau sudah up-to-date."
+echo "🔨 Membangun Backend..."
+npm run build
+
+echo "📦 Memperbarui dependensi Frontend..."
+cd /var/www/$TARGET_SUBDIR/frontend
+npm install --production=false
+echo "🔨 Membangun Frontend..."
+npm run build
+
+cd /var/www/$TARGET_SUBDIR
+echo "🔁 Memuat ulang layanan PM2 Undangan Digital..."
+pm2 reload ecosystem.config.js \
+    || pm2 restart ecosystem.config.js \
+    || pm2 start ecosystem.config.js \
+    || pm2 reload undangan-backend \
+    || echo "PM2 reload selesai."
+pm2 save || true
+
+echo "Menjalankan kembali Caddy..."
+run_sudo systemctl start caddy
+run_sudo systemctl enable caddy
+
+echo "================================================="
+echo "   QUICK UPDATE UNDANGAN DIGITAL SELESAI! 🚀    "
+echo "================================================="
+"@
 } else {
     $updateScript = @"
 set -e
@@ -717,6 +779,8 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
     if ([string]::IsNullOrWhiteSpace($LOCAL_PROJECT)) {
         if ($IS_SERVER_LISENSI) {
             $LOCAL_PROJECT = Join-Path (Split-Path $PSScriptRoot -Parent) "Project-Server-Lisensi"
+        } elseif ($IS_UNDANGAN) {
+            $LOCAL_PROJECT = Join-Path (Split-Path $PSScriptRoot -Parent) "Project Undangan Digital"
         } else {
             $LOCAL_PROJECT = Join-Path (Split-Path $PSScriptRoot -Parent) "Project Absenta"
         }
@@ -804,6 +868,50 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
                 $fCode = $LASTEXITCODE
                 $ErrorActionPreference = $savedPrefBuild
                 if ($bCode -ne 0 -or $fCode -ne 0) { throw "npm run build lokal (Backend/Frontend) gagal." }
+            } elseif ($IS_UNDANGAN) {
+                $LOCAL_BACKEND = Join-Path $LOCAL_PROJECT "backend"
+                $LOCAL_FRONTEND = Join-Path $LOCAL_PROJECT "frontend"
+
+                # ------------------------------------------------------------------
+                # STEP 2: npm install lokal (Undangan Digital)
+                # ------------------------------------------------------------------
+                Show-Log "[2/5] npm install lokal (backend & frontend)..." "Yellow"
+                $savedPrefNpm = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & npm install --prefix $LOCAL_BACKEND --production=false
+                & npm install --prefix $LOCAL_FRONTEND --production=false
+                $ErrorActionPreference = $savedPrefNpm
+
+                # ------------------------------------------------------------------
+                # STEP 3: prisma generate lokal
+                # ------------------------------------------------------------------
+                Show-Log "[3/5] Prisma generate lokal (backend)..." "Yellow"
+                $savedPref2 = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                try {
+                    $prismaBin = Join-Path $LOCAL_BACKEND "node_modules\.bin\prisma.cmd"
+                    if (Test-Path $prismaBin) {
+                        & $prismaBin generate --schema="$LOCAL_BACKEND\prisma\schema.prisma"
+                    } else {
+                        & npm exec --prefix $LOCAL_BACKEND -- prisma generate --schema="$LOCAL_BACKEND\prisma\schema.prisma"
+                    }
+                } catch {
+                    Show-Log "⚠️ Prisma generate lokal dilewati. Prisma Client Linux akan di-generate otomatis di VPS." "Yellow"
+                }
+                $ErrorActionPreference = $savedPref2
+
+                # ------------------------------------------------------------------
+                # STEP 4: Build Backend & Frontend
+                # ------------------------------------------------------------------
+                Show-Log "[4/5] Kompilasi Backend & Frontend lokal (npm run build)..." "Yellow"
+                $savedPrefBuild = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & npm run --prefix $LOCAL_BACKEND build
+                $bCode = $LASTEXITCODE
+                & npm run --prefix $LOCAL_FRONTEND build
+                $fCode = $LASTEXITCODE
+                $ErrorActionPreference = $savedPrefBuild
+                if ($bCode -ne 0 -or $fCode -ne 0) { throw "npm run build lokal (Backend/Frontend) gagal." }
             } else {
                 # ------------------------------------------------------------------
                 # STEP 2: npm install lokal (Server Lisensi)
@@ -870,6 +978,25 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
                 Show-Log "📦 Uploading absenta_frontend/dist..." "Cyan"
                 & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_FRONTEND_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/absenta_frontend/"
                 if ($LASTEXITCODE -ne 0) { throw "SCP upload absenta_frontend/dist ke VPS gagal." }
+            }
+        } elseif ($IS_UNDANGAN) {
+            $LOCAL_BACKEND_DIST = Join-Path $LOCAL_PROJECT "backend\dist"
+            $LOCAL_FRONTEND_DIST = Join-Path $LOCAL_PROJECT "frontend\dist"
+
+            if (-not (Test-Path $LOCAL_BACKEND_DIST) -and -not (Test-Path $LOCAL_FRONTEND_DIST)) {
+                throw "Folder dist/ Backend ($LOCAL_BACKEND_DIST) maupun Frontend ($LOCAL_FRONTEND_DIST) tidak ditemukan. Harap jalankan npm run build manual terlebih dahulu."
+            }
+
+            if (Test-Path $LOCAL_BACKEND_DIST) {
+                Show-Log "📦 Uploading backend/dist..." "Cyan"
+                & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_BACKEND_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/backend/"
+                if ($LASTEXITCODE -ne 0) { throw "SCP upload backend/dist ke VPS gagal." }
+            }
+
+            if (Test-Path $LOCAL_FRONTEND_DIST) {
+                Show-Log "📦 Uploading frontend/dist..." "Cyan"
+                & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_FRONTEND_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/frontend/"
+                if ($LASTEXITCODE -ne 0) { throw "SCP upload frontend/dist ke VPS gagal." }
             }
         } else {
             $LOCAL_DIST = Join-Path $LOCAL_PROJECT "dist"

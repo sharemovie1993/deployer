@@ -1,4 +1,4 @@
-# Centralized Deployment Manager (Global Deployer)
+﻿# Centralized Deployment Manager (Global Deployer)
 # Untuk Windows PowerShell
 # Berfungsi memanggil skrip deploy internal masing-masing proyek
 
@@ -280,27 +280,27 @@ function Wait-Key {
 
 while ($true) {
     Show-Header "Menu Utama"
-    Write-Host " 🚀 [DEPLOYMENT & UPDATES]" -ForegroundColor Cyan
+    Write-Host " [DEPLOYMENT & UPDATES]" -ForegroundColor Cyan
     Write-Host "   1) Deploy Proyek Lokal (Windows On-Premise / LAN)"
     Write-Host "   2) CI/CD Quick Update (Rilis, Pull dan Build)"
     Write-Host "   3) Deploy Proyek Remote (Linux VPS / Cloud)"
     Write-Host "   4) Migrasi Server Lisensi (VPS Lama ke VPS Baru)"
     Write-Host ""
-    Write-Host " 🛠️ [SERVER MAINTENANCE & UTILITIES]" -ForegroundColor Cyan
+    Write-Host " [SERVER MAINTENANCE & UTILITIES]" -ForegroundColor Cyan
     Write-Host "   5) Manajemen Layanan PM2 (Global)"
     Write-Host "   6) Server Hardening (Firewall, Fail2Ban, Keamanan SSH)"
     Write-Host "   7) Setup SWAP Space 4GB Linux (Remote)"
     Write-Host "   8) Perluas Partisi Disk Linux VM/VPS (Remote)"
     Write-Host "   9) Daftarkan SSH Key nginxonly.pem ke VPS (Remote)"
     Write-Host "  12) Kernel & System Tuning Produksi Absenta (Remote)"
-    Write-Host "  13) 🔧 Perbaikan & Pembersihan Terowongan Easy Tunnel (Remote)" -ForegroundColor Yellow
-    Write-Host "  14) 📹 Setup Coturn STUN/TURN Relay Server WebRTC (Remote)" -ForegroundColor Green
+    Write-Host "  13) Perbaikan & Pembersihan Terowongan Easy Tunnel (Remote)" -ForegroundColor Yellow
+    Write-Host "  14) Setup Coturn STUN/TURN Relay Server WebRTC (Remote)" -ForegroundColor Green
     Write-Host ""
-    Write-Host " 🚨 [EMERGENCY & CLEANUP]" -ForegroundColor Cyan
+    Write-Host " [EMERGENCY & CLEANUP]" -ForegroundColor Cyan
     Write-Host "   10) Kill Semua Proses Node.js (Emergency)"
     Write-Host "   11) Factory Reset VPS Baru (Purge Kertas Kosong)"
     Write-Host ""
-    Write-Host " 🚪 [EXIT]" -ForegroundColor Cyan
+    Write-Host " [EXIT]" -ForegroundColor Cyan
     Write-Host "   0) Keluar"
     Write-Host "==========================================================================" -ForegroundColor Cyan
     $choice = Read-Host "Pilih opsi [0-14]"
@@ -856,10 +856,11 @@ while ($true) {
                 Show-Header "Deploy Proyek Remote (Linux VPS)"
                 Write-Host " 1) Server Lisensi (Licensing Server)" -ForegroundColor White
                 Write-Host " 2) Project Absenta (Full Stack)" -ForegroundColor White
-                Write-Host " 3) Proyek Umum Lainnya (POS, Yatim, gform, dll.)" -ForegroundColor White
+                Write-Host " 3) Project Undangan Digital (Digital Invitation Studio)" -ForegroundColor White
+                Write-Host " 4) Proyek Umum Lainnya (POS, Yatim, gform, dll.)" -ForegroundColor White
                 Write-Host " 0) Kembali ke Menu Utama" -ForegroundColor White
                 Write-Host ""
-                $subChoice = Read-Host "Pilih opsi [0-3]"
+                $subChoice = Read-Host "Pilih opsi [0-4]"
 
                 if ($subChoice -eq "0") {
                     break
@@ -883,6 +884,15 @@ while ($true) {
                     break
                 }
                 elseif ($subChoice -eq "3") {
+                    $script = Join-Path $PSScriptRoot "deploy-undangan-remote.ps1"
+                    if (Test-Path $script) {
+                        try { & $script } catch { Write-Host "[ERROR] $_" -ForegroundColor Red; Wait-Key }
+                    } else {
+                        Write-Host "Script deploy-undangan-remote.ps1 tidak ditemukan!" -ForegroundColor Red; Wait-Key
+                    }
+                    break
+                }
+                elseif ($subChoice -eq "4") {
                     $script = Join-Path $PSScriptRoot "deploy-general-remote.ps1"
                     if (Test-Path $script) {
                         try { & $script } catch { Write-Host "[ERROR] $_" -ForegroundColor Red; Wait-Key }
