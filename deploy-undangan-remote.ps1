@@ -287,15 +287,18 @@ if ($Silent) {
     Write-Host " 1) Otomatis Let's Encrypt / HTTPS Standar (Default untuk Domain Publik)"
     Write-Host " 2) Cloudflare DNS-01 Challenge"
     Write-Host " 3) Internal Self-Signed (Caddy Local CA / IP Address)"
-    $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
+    Write-Host " 4) Unduh & Sinkronisasi Sertifikat SSL dari Server Lisensi (*.absenta.id / sync)"
+    $sslChoice = Read-Host "Pilih [1-4] (Default: 4)"
     $CF_TOKEN = ""
-    if ($sslChoice -eq "2") {
+    if ($sslChoice -eq "1") {
+        $SSL_SCENARIO = "auto"
+    } elseif ($sslChoice -eq "2") {
         $SSL_SCENARIO = "cloudflare"
         $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token").Trim()
     } elseif ($sslChoice -eq "3") {
         $SSL_SCENARIO = "internal"
     } else {
-        $SSL_SCENARIO = "auto"
+        $SSL_SCENARIO = "sync"
     }
 }
 
@@ -425,6 +428,10 @@ $caddyTlsBlock = if ($SSL_SCENARIO -eq "cloudflare" -and $CF_TOKEN) {
 @"
     tls internal
 "@
+} elseif ($SSL_SCENARIO -eq "sync") {
+@"
+    tls /etc/caddy/ssl/cert.pem /etc/caddy/ssl/key.pem
+"@
 } else {
     ""
 }
@@ -529,7 +536,15 @@ echo '$SUDO_PASS' | sudo -S chmod -R 755 /var/www/$TARGET_SUBDIR/frontend/dist 2
 echo '$SUDO_PASS' | sudo -S systemctl stop nginx 2>/dev/null || true
 echo '$SUDO_PASS' | sudo -S systemctl stop apache2 2>/dev/null || true
 echo '$SUDO_PASS' | sudo -S systemctl disable nginx 2>/dev/null || true
-echo '$SUDO_PASS' | sudo -S systemctl disable apache2 2>/dev/null || true
+# Sinkronisasi Sertifikat SSL jika menggunakan mode sync
+if [ "$SSL_SCENARIO" = "sync" ]; then
+    echo "Mengunduh sertifikat SSL wildcard dari Server Lisensi ($LICENSE_SERVER_URL)..."
+    echo '$SUDO_PASS' | sudo -S mkdir -p /etc/caddy/ssl
+    echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /etc/caddy/ssl
+    curl -s -f "$LICENSE_SERVER_URL/api/public/download-ssl?domain=$TARGET_DOMAIN&license_key=$LICENSE_KEY" -o /tmp/ssl_response.json || true
+    node -e "const fs = require('fs'); try { const d = JSON.parse(fs.readFileSync('/tmp/ssl_response.json')); if (d.success && d.cert && d.key) { fs.writeFileSync('/etc/caddy/ssl/cert.pem', d.cert); fs.writeFileSync('/etc/caddy/ssl/key.pem', d.key); console.log('Sertifikat SSL berhasil diunduh & dipasang.'); } else { console.log('Gagal unduh SSL:', d); } } catch(e){}" 2>/dev/null || true
+    rm -f /tmp/ssl_response.json
+fi
 
 # -------------------------------------------------------------
 # Caddy Web Server & Reverse Proxy Setup
