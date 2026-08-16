@@ -399,6 +399,12 @@ if (Test-Path $LOCAL_CADDY) {
     & scp -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "$LOCAL_CADDY" "${NEW_USER}@${NEW_IP}:/tmp/caddy_offline"
 }
 
+$LOCAL_MINIO = Join-Path $PSScriptRoot "setup-minio.sh"
+if (Test-Path $LOCAL_MINIO) {
+    Show-Log "Menyalin script setup MinIO S3 ke VPS..." "Yellow"
+    & scp -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "$LOCAL_MINIO" "${NEW_USER}@${NEW_IP}:/tmp/setup-minio.sh"
+}
+
 Run-RemoteScript -ScriptContent $provisionScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
 Show-Log "Provisioning VPS selesai." "Green"
 
@@ -462,8 +468,15 @@ fi
 cd /var/www/$TARGET_SUBDIR
 
 # -------------------------------------------------------------
-# Konfigurasi Backend
+# Konfigurasi Backend & MinIO S3 Storage
 # -------------------------------------------------------------
+# Otomatis Pemasangan & Inisialisasi MinIO S3 Storage Server (Pola Absenta)
+if [ -f /tmp/setup-minio.sh ]; then
+    echo "Memeriksa & mengaktifkan MinIO Self-Hosted S3 Storage Server..."
+    chmod +x /tmp/setup-minio.sh
+    echo '$SUDO_PASS' | sudo -S bash /tmp/setup-minio.sh || true
+fi
+
 cd /var/www/$TARGET_SUBDIR/backend
 mkdir -p uploads
 
@@ -473,6 +486,15 @@ DATABASE_URL="$DB_URL"
 JWT_SECRET="$JWT_SECRET"
 LICENSE_SERVER_URL="$LICENSE_SERVER_URL"
 EASY_TUNNEL_BASE_DOMAIN="absenta.id"
+
+# MinIO S3 Storage Configuration (Pola Standar Absenta)
+STORAGE_DRIVER=s3
+S3_BUCKET=absenta-storage
+S3_ENDPOINT=http://127.0.0.1:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_URL=https://$TARGET_DOMAIN/absenta-storage
 EOF
 
 echo "Menginstal dependensi Backend..."
@@ -559,6 +581,9 @@ $caddyHostHeader {
     }
     handle /uploads/* {
         reverse_proxy localhost:$B_PORT
+    }
+    handle /absenta-storage/* {
+        reverse_proxy localhost:9000
     }
     handle /health* {
         reverse_proxy localhost:$B_PORT
