@@ -657,6 +657,28 @@ fi
 if ! grep -q "EASY_TUNNEL_BASE_DOMAIN" .env 2>/dev/null; then
     echo 'EASY_TUNNEL_BASE_DOMAIN="absenta.id"' >> .env
 fi
+
+# Ensure MinIO S3 Storage variables in backend/.env
+if ! grep -q "STORAGE_DRIVER" .env 2>/dev/null; then
+    cat << 'EOF_S3' >> .env
+
+# MinIO S3 Storage Configuration (Pola Standar Absenta)
+STORAGE_DRIVER=s3
+S3_BUCKET=absenta-storage
+S3_ENDPOINT=http://127.0.0.1:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_URL=/absenta-storage
+EOF_S3
+fi
+
+# Ensure Caddy reverse proxy for /absenta-storage/*
+if [ -f /etc/caddy/Caddyfile ] && ! grep -q "absenta-storage" /etc/caddy/Caddyfile 2>/dev/null; then
+    echo "Menambahkan reverse proxy MinIO S3 ke Caddyfile..."
+    run_sudo sed -i '/handle \/uploads\/\* {/i \    handle \/absenta-storage\/\* {\n        reverse_proxy localhost:9000\n    }' /etc/caddy/Caddyfile || true
+fi
+
 npm install --production=false
 npx prisma generate
 npx prisma db push --accept-data-loss || echo "Prisma db push dilewati atau sudah up-to-date."
