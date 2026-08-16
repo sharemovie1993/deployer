@@ -539,9 +539,9 @@ $caddyHostHeader {
     root * /var/www/$TARGET_SUBDIR/frontend/dist
 
     # Reverse proxy backend API endpoints
-    reverse_proxy /api/* localhost:$B_PORT
-    reverse_proxy /uploads/* localhost:$B_PORT
-    reverse_proxy /health localhost:$B_PORT
+    reverse_proxy /api* localhost:$B_PORT
+    reverse_proxy /uploads* localhost:$B_PORT
+    reverse_proxy /health* localhost:$B_PORT
 
     # SPA routing fallback
     try_files {path} /index.html
