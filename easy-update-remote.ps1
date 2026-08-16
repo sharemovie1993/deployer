@@ -1026,12 +1026,14 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
 
             if (Test-Path $LOCAL_BACKEND_DIST) {
                 Show-Log "📦 Uploading backend/dist..." "Cyan"
+                & ssh -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "${NEW_USER}@${NEW_IP}" "rm -rf /var/www/${TARGET_SUBDIR}/backend/dist"
                 & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_BACKEND_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/backend/"
                 if ($LASTEXITCODE -ne 0) { throw "SCP upload backend/dist ke VPS gagal." }
             }
 
             if (Test-Path $LOCAL_FRONTEND_DIST) {
                 Show-Log "📦 Uploading frontend/dist..." "Cyan"
+                & ssh -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "${NEW_USER}@${NEW_IP}" "rm -rf /var/www/${TARGET_SUBDIR}/frontend/dist"
                 & scp -i "$SAFE_NEW_KEY" -O -o StrictHostKeyChecking=no -r "$LOCAL_FRONTEND_DIST" "${NEW_USER}@${NEW_IP}:/var/www/${TARGET_SUBDIR}/frontend/"
                 if ($LASTEXITCODE -ne 0) { throw "SCP upload frontend/dist ke VPS gagal." }
             }
