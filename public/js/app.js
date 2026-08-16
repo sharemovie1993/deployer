@@ -55,10 +55,14 @@ function switchAppMode(mode) {
         healthBtn?.classList.remove('active');
         if (typeof populateLogTargetPresets === 'function') {
             populateLogTargetPresets(() => {
-                // Pastikan server aktif terpilih, bukan Windows lokal
-                if (window.activePresetId) {
-                    const sel = document.getElementById('log-target-preset');
-                    if (sel) sel.value = window.activePresetId;
+                const sel = document.getElementById('log-target-preset');
+                if (sel) {
+                    if (window.activePresetId && sel.querySelector(`option[value="${window.activePresetId}"]`)) {
+                        sel.value = window.activePresetId;
+                    }
+                    if (typeof populateLogTargetApps === 'function') {
+                        populateLogTargetApps(sel.value);
+                    }
                 }
             });
         }

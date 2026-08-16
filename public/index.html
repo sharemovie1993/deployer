@@ -310,6 +310,89 @@
         </div>
     </div>
 
+    <!-- VIEW 3: MULTI-VM CLUSTER DEPLOYMENT -->
+    <div class="container" id="cluster-view-container" style="display: none; flex-direction: column;">
+        <div class="wizard-header">
+            <div class="logo-section">
+                <h1>🌐 MULTI-NODE CLUSTER ORCHESTRATOR</h1>
+                <p>Deployment Horizontal Scaling untuk N-Jumlah VM/Server Absenta</p>
+            </div>
+            <div id="cluster-status-badge" class="badge badge-info">
+                Standby / Ready
+            </div>
+        </div>
+
+        <div class="wizard-body space-y-6">
+            <div class="panel-section">
+                <h2>Konfigurasi Target Cluster Nodes</h2>
+                <p class="subtitle">Tentukan daftar IP VM untuk setiap peran (*Role*) dalam cluster.</p>
+
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="cluster-api-nodes">Daftar IP API Worker Nodes (Pisahkan dengan Koma untuk N-Jumlah VM)</label>
+                    <input type="text" id="cluster-api-nodes" value="10.10.10.99, 10.10.10.100" placeholder="10.10.10.99, 10.10.10.100, 10.10.10.101">
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">Contoh: 10.10.10.99, 10.10.10.100 (Bisa memasukkan N IP VM tanpa batas)</small>
+                </div>
+
+                <div class="form-row" style="margin-top: 15px;">
+                    <div class="form-group">
+                        <label for="cluster-wa-node">IP Singleton WA Daemon Node</label>
+                        <input type="text" id="cluster-wa-node" value="10.10.10.99" placeholder="10.10.10.99">
+                    </div>
+                    <div class="form-group">
+                        <label for="cluster-lb-node">IP Edge Router / Load Balancer Node</label>
+                        <input type="text" id="cluster-lb-node" value="10.10.10.99" placeholder="10.10.10.99">
+                    </div>
+                    <div class="form-group">
+                        <label for="cluster-db-node">IP DB / Redis Server Node</label>
+                        <input type="text" id="cluster-db-node" value="10.10.10.99" placeholder="10.10.10.99">
+                    </div>
+                </div>
+
+                <div class="form-row" style="margin-top: 15px;">
+                    <div class="form-group">
+                        <label for="cluster-vps-user">User SSH</label>
+                        <input type="text" id="cluster-vps-user" value="asepsuryadi">
+                    </div>
+                    <div class="form-group">
+                        <label for="cluster-key-choice">Pilih SSH Key (.pem)</label>
+                        <select id="cluster-key-choice" onchange="toggleClusterCustomKey()">
+                            <option value="nginxonly.pem">🔑 Default (nginxonly.pem)</option>
+                            <option value="ls-key.pem">🔑 Licensing Key (ls-key.pem)</option>
+                            <option value="custom">📁 Path Kustom / Input Manual...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cluster-sudo-pass">Password Sudo VPS</label>
+                        <input type="password" id="cluster-sudo-pass" value="1">
+                    </div>
+                </div>
+
+                <div class="form-group" id="cluster-custom-key-group" style="display: none; margin-top: 15px;">
+                    <label for="cluster-key-path">Full Path SSH Key Kustom (.pem)</label>
+                    <input type="text" id="cluster-key-path" placeholder="D:\Path\To\your-key.pem">
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+                <button class="btn btn-secondary" id="btn-test-cluster-nodes" type="button" onclick="testClusterConnectivity()">
+                    🔍 Tes Koneksi Seluruh Node Cluster
+                </button>
+                <button class="btn btn-primary" id="btn-run-cluster-deploy" type="button" onclick="runClusterDeployment()">
+                    🚀 Mulai Multi-Node Cluster Deployment
+                </button>
+            </div>
+
+            <div class="terminal-card" style="margin-top: 25px;">
+                <div class="terminal-header">
+                    <span>🖥️ Realtime Cluster Orchestrator Terminal Output Streamer</span>
+                </div>
+                <div class="terminal-body" id="cluster-terminal-output">
+                    <div class="term-line" style="color: var(--text-muted);">Menunggu eksekusi deployment cluster...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- VIEW 4: MONITOR LOG SERVER (PM2) -->
     <div class="container" id="logs-view-container" style="display: none;">
         <div class="wizard-header">
@@ -443,6 +526,7 @@
             <select id="preset-modal-project" onchange="toggleBuildModeField()">
                 <option value="absenta">Project Absenta (Aplikasi Absensi Utama)</option>
                 <option value="licensing">Server Lisensi (VPS Licensing System)</option>
+                <option value="undangan">Project Undangan Digital (Digital Invitation Studio)</option>
             </select>
         </div>
 
@@ -507,89 +591,8 @@
     </div>
 </div>
 
-<!-- VIEW 3: MULTI-VM CLUSTER DEPLOYMENT -->
-<div class="container" id="cluster-view-container" style="display: none; flex-direction: column;">
-    <div class="wizard-header">
-        <div class="logo-section">
-            <h1>MULTI-NODE CLUSTER ORCHESTRATOR</h1>
-            <p>Deployment Horizontal Scaling untuk N-Jumlah VM/Server Absenta</p>
-        </div>
-        <div id="cluster-status-badge" class="badge badge-info">
-            Standby / Ready
-        </div>
-    </div>
 
-    <div class="wizard-body space-y-6">
-        <div class="panel-section">
-            <h2>Konfigurasi Target Cluster Nodes</h2>
-            <p class="subtitle">Tentukan daftar IP VM untuk setiap peran (*Role*) dalam cluster.</p>
-
-            <div class="form-group" style="margin-top: 15px;">
-                <label for="cluster-api-nodes">Daftar IP API Worker Nodes (Pisahkan dengan Koma untuk N-Jumlah VM)</label>
-                <input type="text" id="cluster-api-nodes" value="10.10.10.99, 10.10.10.100" placeholder="10.10.10.99, 10.10.10.100, 10.10.10.101">
-                <small style="color: var(--text-muted); display: block; margin-top: 4px;">Contoh: 10.10.10.99, 10.10.10.100 (Bisa memasukkan N IP VM tanpa batas)</small>
-            </div>
-
-            <div class="form-row" style="margin-top: 15px;">
-                <div class="form-group">
-                    <label for="cluster-wa-node">IP Singleton WA Daemon Node</label>
-                    <input type="text" id="cluster-wa-node" value="10.10.10.99" placeholder="10.10.10.99">
-                </div>
-                <div class="form-group">
-                    <label for="cluster-lb-node">IP Edge Router / Load Balancer Node</label>
-                    <input type="text" id="cluster-lb-node" value="10.10.10.99" placeholder="10.10.10.99">
-                </div>
-                <div class="form-group">
-                    <label for="cluster-db-node">IP DB / Redis Server Node</label>
-                    <input type="text" id="cluster-db-node" value="10.10.10.99" placeholder="10.10.10.99">
-                </div>
-            </div>
-
-            <div class="form-row" style="margin-top: 15px;">
-                <div class="form-group">
-                    <label for="cluster-vps-user">User SSH</label>
-                    <input type="text" id="cluster-vps-user" value="asepsuryadi">
-                </div>
-                <div class="form-group">
-                    <label for="cluster-key-choice">Pilih SSH Key (.pem)</label>
-                    <select id="cluster-key-choice" onchange="toggleClusterCustomKey()">
-                        <option value="nginxonly.pem">🔑 Default (nginxonly.pem)</option>
-                        <option value="ls-key.pem">🔑 Licensing Key (ls-key.pem)</option>
-                        <option value="custom">📁 Path Kustom / Input Manual...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="cluster-sudo-pass">Password Sudo VPS</label>
-                    <input type="password" id="cluster-sudo-pass" value="1">
-                </div>
-            </div>
-
-            <div class="form-group" id="cluster-custom-key-group" style="display: none; margin-top: 15px;">
-                <label for="cluster-key-path">Full Path SSH Key Kustom (.pem)</label>
-                <input type="text" id="cluster-key-path" placeholder="D:\Path\To\your-key.pem">
-            </div>
-        </div>
-
-        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
-            <button class="btn btn-secondary" id="btn-test-cluster-nodes" type="button" onclick="testClusterConnectivity()">
-                🔍 Tes Koneksi Seluruh Node Cluster
-            </button>
-            <button class="btn btn-primary" id="btn-run-cluster-deploy" type="button" onclick="runClusterDeployment()">
-                🚀 Mulai Multi-Node Cluster Deployment
-            </button>
-        </div>
-
-        <div class="terminal-card" style="margin-top: 25px;">
-            <div class="terminal-header">
-                <span>🖥️ Realtime Cluster Orchestrator Terminal Output Streamer</span>
-            </div>
-            <div class="terminal-body" id="cluster-terminal-output">
-                <div class="term-line" style="color: var(--text-muted);">Menunggu eksekusi deployment cluster...</div>
-            </div>
-        </div>
-    </div>
-</div>
-
+<script src="/js/preset-picker.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/wizard.js"></script>
 <script src="/js/presets.js"></script>

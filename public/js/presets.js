@@ -106,8 +106,8 @@ function renderPresetsGrid(presets) {
 
     let html = '';
     presets.forEach(p => {
-        const projName = p.project === 'licensing' ? 'Server Lisensi (VPS)' : 'Project Absenta (Full Stack)';
-        const projBadgeClass = p.project === 'licensing' ? 'badge-blue' : 'badge-purple';
+        const projName = p.project === 'licensing' ? 'Server Lisensi (VPS)' : (p.project === 'undangan' ? 'Undangan Digital (Studio)' : 'Project Absenta (Full Stack)');
+        const projBadgeClass = p.project === 'licensing' ? 'badge-blue' : (p.project === 'undangan' ? 'badge-blue' : 'badge-purple');
         const keyName = p.sshKeyChoice || 'nginxonly.pem';
         const pName = p.name || ('Server ' + p.vpsIp);
         const pUser = p.vpsUser || 'asepsuryadi';

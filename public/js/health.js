@@ -1,44 +1,37 @@
-// public/js/health.js - System & Worker Health Matrix UI for IT Admins
-
 function populateHealthPresetDropdown(callback) {
     const select = document.getElementById('health-target-preset');
-    if (!select) return;
-
-    const renderSelectOptions = (presets) => {
-        // Prioritaskan: server yang sudah terpilih > server aktif dari Multi-Preset > lokal
-        const currentValue = select.value && select.value !== 'local' ? select.value
-                           : (window.activePresetId || null);
-
-        let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
-        if (Array.isArray(presets) && presets.length > 0) {
-            presets.forEach(p => {
-                const pName = p.name || ('Server ' + p.vpsIp);
-                const projLabel = p.project === 'licensing' ? '[Server Lisensi]' : '[Project Absenta]';
-                html += `<option value="${p.id}">🌐 ${pName} (${p.vpsIp}) ${projLabel}</option>`;
-            });
-        }
-        select.innerHTML = html;
-        // Set ke server aktif jika ada, jika tidak gunakan nilai sebelumnya
-        if (currentValue) select.value = currentValue;
+    if (!select) {
         if (typeof callback === 'function') callback();
-    };
+        return;
+    }
 
-    if (typeof globalPresets !== 'undefined' && Array.isArray(globalPresets) && globalPresets.length > 0) {
-        renderSelectOptions(globalPresets);
+    if (typeof window.populatePresetDropdown === 'function') {
+        window.populatePresetDropdown(select, { includeLocal: true });
+        if (window.activePresetId && select.querySelector(`option[value="${window.activePresetId}"]`)) {
+            select.value = window.activePresetId;
+        }
+        if (typeof callback === 'function') callback();
     } else {
         fetch('/api/presets')
         .then(res => res.json())
         .then(res => {
-            if (res.success && res.data) {
-                if (typeof globalPresets !== 'undefined') {
-                    globalPresets = res.data;
+            if (res.success && Array.isArray(res.data)) {
+                let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
+                res.data.forEach(p => {
+                    const pName = p.name || ('Server ' + p.vpsIp);
+                    const projLabel = p.project === 'licensing' ? '[Server Lisensi]' : '[Project Absenta]';
+                    html += `<option value="${p.id}">🌐 ${pName} (${p.vpsIp}) ${projLabel}</option>`;
+                });
+                select.innerHTML = html;
+                if (window.activePresetId && select.querySelector(`option[value="${window.activePresetId}"]`)) {
+                    select.value = window.activePresetId;
                 }
-                renderSelectOptions(res.data);
-            } else {
-                renderSelectOptions([]);
             }
+            if (typeof callback === 'function') callback();
         })
-        .catch(() => renderSelectOptions([]));
+        .catch(() => {
+            if (typeof callback === 'function') callback();
+        });
     }
 }
 

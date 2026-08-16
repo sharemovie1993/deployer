@@ -318,6 +318,7 @@ Show-Log "Menginstal dependensi sistem di VPS ($NEW_IP)..." "Yellow"
 
 $provisionScript = @"
 set -e
+export DEBIAN_FRONTEND=noninteractive
 # Cepat clear locks
 echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
 echo '$SUDO_PASS' | sudo -S dpkg --configure -a 2>/dev/null || true

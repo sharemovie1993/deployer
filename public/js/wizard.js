@@ -108,7 +108,9 @@ function testDatabaseConnection() {
 
 function checkExistingLicense() {
     const alertBox = document.getElementById('license-test-alert');
-    const key = document.getElementById('license-key').value;
+    const key = document.getElementById('license-key').value.trim();
+    const schoolName = document.getElementById('school-name').value.trim();
+    const adminEmail = document.getElementById('admin-email').value.trim();
 
     if (!key) {
         alertBox.className = 'alert-box error';
@@ -117,12 +119,63 @@ function checkExistingLicense() {
     }
 
     alertBox.className = 'alert-box warning';
-    alertBox.innerHTML = '🛡️ Memverifikasi Serial Key...';
+    alertBox.innerHTML = '🛡️ Memverifikasi Serial Key Lisensi ke server Absenta...';
 
-    setTimeout(() => {
-        alertBox.className = 'alert-box success';
-        alertBox.innerHTML = '✅ Lisensi Valid & Terverifikasi Aktif!';
-    }, 1000);
+    fetch('/api/verify-license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ licenseKey: key, schoolName, adminEmail })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success && data.data) {
+            const d = data.data;
+            alertBox.className = 'alert-box success';
+            alertBox.style.background = 'rgba(16, 185, 129, 0.1)';
+            alertBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+            alertBox.style.padding = '16px';
+            alertBox.style.borderRadius = '12px';
+            alertBox.innerHTML = `
+                <div style="font-weight: 700; font-size: 15px; color: #34d399; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; border-bottom: 1px solid rgba(52,211,153,0.2); padding-bottom: 8px;">
+                    <span>🛡️ ${data.message}</span>
+                    <span class="badge badge-success" style="background: #059669; color: #fff; padding: 3px 10px; border-radius: 6px; font-size: 11px;">VERIFIED</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; font-size: 13px; text-align: left; color: #e2e8f0;">
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;">Serial Key Lisensi</span>
+                        <code style="color: #6ee7b7; font-family: 'Fira Code', monospace; font-size: 12.5px; font-weight: 700;">${d.key}</code>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;">Lembaga / Sekolah Target</span>
+                        <strong style="color: #fff;">${d.schoolName}</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;">Paket / Tipe Lisensi</span>
+                        <span style="color: #38bdf8; font-weight: 600;">${d.packageType}</span>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;">Akses SSL & Domain</span>
+                        <span style="color: #a78bfa; font-weight: 600;">${d.tunnelAccess}</span>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;">Masa Berlaku / Status</span>
+                        <span style="color: #34d399; font-weight: 600;">${d.status} (${d.expiredDate})</span>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;">Admin / E-mail</span>
+                        <span>${d.adminEmail}</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = '❌ ' + (data.message || 'Gagal memverifikasi lisensi.');
+        }
+    })
+    .catch(err => {
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Gagal memverifikasi lisensi: ' + err.message;
+    });
 }
 
 function updateStepUI() {
@@ -150,9 +203,20 @@ function updateStepUI() {
 
 function nextStep() {
     if (currentStep === 1) {
-        installConfig.vpsIp = document.getElementById('vps-ip').value;
-        installConfig.vpsUser = document.getElementById('vps-user').value;
-        installConfig.vpsSudoPass = document.getElementById('vps-sudo-pass').value;
+        // targetOS already set via selectTargetOS() click handler
+        if (installConfig.targetOS === 'linux') {
+            installConfig.vpsIp = document.getElementById('vps-ip').value;
+            installConfig.vpsUser = document.getElementById('vps-user').value;
+            installConfig.vpsSudoPass = document.getElementById('vps-sudo-pass').value;
+            const keyChoiceEl = document.getElementById('vps-key-select');
+            if (keyChoiceEl) installConfig.vpsKeyChoice = keyChoiceEl.value;
+        } else {
+            // Windows on-premise: clear SSH fields so they don't confuse the backend
+            installConfig.vpsIp = 'localhost';
+            installConfig.vpsUser = '';
+            installConfig.vpsSudoPass = '';
+            installConfig.vpsKeyPath = '';
+        }
     } else if (currentStep === 2) {
         installConfig.targetDomain = document.getElementById('target-domain').value;
         installConfig.backendPort = document.getElementById('backend-port').value;

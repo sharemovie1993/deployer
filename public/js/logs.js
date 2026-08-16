@@ -17,18 +17,16 @@ function populateLogTargetApps(presetId, selectedApp, callback) {
         .then(res => res.json())
         .then(res => {
             let html = '<option value="all">🌐 SEMUA Aplikasi (Gabungan PM2)</option>';
-            
-            if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-                res.data.forEach(w => {
-                    const statusIcon = w.status === 'online' ? '🟢' : '🔴';
-                    const memInfo = w.memory_mb ? ` (${w.memory_mb} MB)` : '';
-                    html += `<option value="${w.name}">${statusIcon} ${w.name}${memInfo}</option>`;
+            const rawList = res.data || res.apps || [];
+            if (res.success && Array.isArray(rawList) && rawList.length > 0) {
+                rawList.forEach(w => {
+                    const name = typeof w === 'string' ? w : w.name;
+                    const statusIcon = (typeof w === 'object' && w.status === 'online') ? '🟢' : (typeof w === 'object' && w.status === 'stopped' ? '🔴' : '⚙️');
+                    const memInfo = (typeof w === 'object' && w.memory_mb) ? ` (${w.memory_mb} MB)` : '';
+                    html += `<option value="${name}">${statusIcon} ${name}${memInfo}</option>`;
                 });
             } else {
-                html += `
-                    <option value="absenta-backend">⚙️ Backend Absenta (absenta-backend)</option>
-                    <option value="absenta-frontend">🎨 Frontend Absenta (absenta-frontend)</option>
-                `;
+                html += '<option value="" disabled>⚠️ Tidak ada proses PM2 terdeteksi di server ini</option>';
             }
 
             html += `
@@ -47,13 +45,13 @@ function populateLogTargetApps(presetId, selectedApp, callback) {
         })
         .catch(err => {
             console.error('Gagal mengambil daftar PM2 untuk target aplikasi:', err);
-            appSelect.innerHTML = `
-                <option value="all">🌐 SEMUA Aplikasi (Gabungan PM2)</option>
-                <option value="absenta-backend">⚙️ Backend Absenta (absenta-backend)</option>
-                <option value="absenta-frontend">🎨 Frontend Absenta (absenta-frontend)</option>
+            let html = '<option value="all">🌐 SEMUA Aplikasi (Gabungan PM2)</option>';
+            html += '<option value="" disabled>⚠️ Gagal membaca daftar PM2 dari server</option>';
+            html += `
                 <option value="caddy">🛡️ Reverse Proxy Caddy</option>
                 <option value="custom">✏️ Nama/ID Aplikasi Kustom...</option>
             `;
+            appSelect.innerHTML = html;
             if (currentVal) appSelect.value = currentVal;
             toggleCustomLogAppInput();
             if (typeof callback === 'function') callback();
@@ -61,60 +59,55 @@ function populateLogTargetApps(presetId, selectedApp, callback) {
 }
 
 function onLogTargetPresetChange() {
-    const selectPreset = document.getElementById('log-target-preset');
+    const selectPreset = document.getElementById('log-target-preset') || document.getElementById('logs-preset-select');
     const presetId = selectPreset ? selectPreset.value : 'local';
+    window.activePresetId = presetId;
     populateLogTargetApps(presetId);
 }
 
 function populateLogTargetPresets(callback) {
-    const select = document.getElementById('log-target-preset');
+    const select = document.getElementById('log-target-preset') || document.getElementById('logs-preset-select');
     if (!select) return;
 
-    const renderSelectOptions = (presets) => {
-        // Prioritaskan: server yang sudah terpilih > server aktif dari Multi-Preset > lokal
-        const currentValue = select.value && select.value !== 'local' ? select.value
-                           : (window.activePresetId || null);
-
-        let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
-        if (Array.isArray(presets) && presets.length > 0) {
-            presets.forEach(p => {
-                const pName = p.name || ('Server ' + p.vpsIp);
-                const projLabel = p.project === 'licensing' ? '[Server Lisensi]' : '[Project Absenta]';
-                html += `<option value="${p.id}">🌐 ${pName} (${p.vpsIp}) ${projLabel}</option>`;
-            });
+    if (typeof window.populatePresetDropdown === 'function') {
+        window.populatePresetDropdown(select, { includeLocal: true });
+        if (window.activePresetId && select.querySelector(`option[value="${window.activePresetId}"]`)) {
+            select.value = window.activePresetId;
         }
-        select.innerHTML = html;
-        // Set ke server aktif jika ada
-        if (currentValue) select.value = currentValue;
-        
-        // Dynamic fetch PM2 app list for selected server preset
-        populateLogTargetApps(select.value, null, callback);
-    };
-
-    if (typeof globalPresets !== 'undefined' && Array.isArray(globalPresets) && globalPresets.length > 0) {
-        renderSelectOptions(globalPresets);
+        if (select.value) {
+            populateLogTargetApps(select.value, null, callback);
+        }
     } else {
         fetch('/api/presets')
         .then(res => res.json())
         .then(res => {
-            if (res.success && res.data) {
-                if (typeof globalPresets !== 'undefined') {
-                    globalPresets = res.data;
+            if (res.success && Array.isArray(res.data)) {
+                let html = '<option value="local">💻 Server Windows Lokal (Localhost)</option>';
+                res.data.forEach(p => {
+                    const pName = p.name || ('Server ' + p.vpsIp);
+                    const projLabel = p.project === 'licensing' ? '[Server Lisensi]' : '[Project Absenta]';
+                    html += `<option value="${p.id}">🌐 ${pName} (${p.vpsIp}) ${projLabel}</option>`;
+                });
+                select.innerHTML = html;
+                if (window.activePresetId && select.querySelector(`option[value="${window.activePresetId}"]`)) {
+                    select.value = window.activePresetId;
                 }
-                renderSelectOptions(res.data);
-            } else {
-                renderSelectOptions([]);
+                if (select.value) {
+                    populateLogTargetApps(select.value, null, callback);
+                }
             }
-        })
-        .catch(err => {
-            console.error('Gagal mengambil data preset untuk log monitor:', err);
-            renderSelectOptions([]);
         });
     }
 }
 
-// Auto populate preset dropdown saat halaman selesai dimuat
+// Auto populate preset dropdown & bind change event listener saat halaman dimuat
 document.addEventListener('DOMContentLoaded', () => {
+    const select = document.getElementById('log-target-preset') || document.getElementById('logs-preset-select');
+    if (select) {
+        select.addEventListener('change', () => {
+            onLogTargetPresetChange();
+        });
+    }
     populateLogTargetPresets();
 });
 

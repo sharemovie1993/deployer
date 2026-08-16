@@ -614,6 +614,7 @@ run_sudo() {
 }
 
 run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
+export DEBIAN_FRONTEND=noninteractive
 
 # Pastikan WireGuard & passwordless sudo terkonfigurasi untuk Easy-Tunnel
 if ! command -v wg-quick &> /dev/null || [ ! -f /etc/sudoers.d/99-easy-tunnel-undangan ]; then
@@ -821,12 +822,18 @@ if ($BUILD_MODE -eq "local" -or $BUILD_MODE -eq "skip") {
             Show-Log "[1/5] Git pull kode terbaru di lokal..." "Yellow"
             $savedPref = $ErrorActionPreference
             $ErrorActionPreference = 'Continue'
-            & git -C $LOCAL_PROJECT fetch origin main --quiet 2>$null
+            & git -C $LOCAL_PROJECT fetch origin --quiet 2>$null
             $fetchCode = $LASTEXITCODE
-            & git -C $LOCAL_PROJECT reset --hard origin/main
+            $currentBranch = (& git -C $LOCAL_PROJECT branch --show-current 2>$null).Trim()
+            if ([string]::IsNullOrWhiteSpace($currentBranch)) { $currentBranch = "main" }
+            & git -C $LOCAL_PROJECT reset --hard "origin/$currentBranch"
             $resetCode = $LASTEXITCODE
+            if ($resetCode -ne 0) {
+                $altBranch = if ($currentBranch -eq "main") { "master" } else { "main" }
+                & git -C $LOCAL_PROJECT reset --hard "origin/$altBranch"
+                $resetCode = $LASTEXITCODE
+            }
             $ErrorActionPreference = $savedPref
-            if ($fetchCode -ne 0) { throw "Git fetch lokal gagal (exit $fetchCode)." }
             if ($resetCode -ne 0) { throw "Git reset --hard lokal gagal (exit $resetCode)." }
             Show-Log "✅ Git pull lokal selesai." "Green"
 
