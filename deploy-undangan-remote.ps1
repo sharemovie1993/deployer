@@ -1,4 +1,4 @@
-﻿# deploy-undangan-remote.ps1 - Skrip Deploy Undangan Digital Terisolasi (VPS Linux)
+# deploy-undangan-remote.ps1 - Skrip Deploy Undangan Digital Terisolasi (VPS Linux)
 # Men-deploy Webapp Undangan Digital (Fastify + Vite React + Prisma) secara remote via SSH
 
 param(
@@ -330,15 +330,18 @@ echo '$SUDO_PASS' | sudo -S apt-get update -y || {
     echo '$SUDO_PASS' | sudo -S dpkg --configure -a
     echo '$SUDO_PASS' | sudo -S apt-get update -y
 }
-echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw build-essential wireguard openresolv
+echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw build-essential wireguard wireguard-tools openresolv
 
 # Sudoers Passwordless untuk Easy-Tunnel WireGuard Engine
-echo "${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/bin/ip, /usr/bin/systemctl, /usr/bin/ln, /usr/bin/rm, /usr/bin/chmod, /usr/bin/apt-get" | echo '$SUDO_PASS' | sudo -S tee /etc/sudoers.d/99-easy-tunnel-undangan >/dev/null || true
-echo '$SUDO_PASS' | sudo -S chmod 0440 /etc/sudoers.d/99-easy-tunnel-undangan || true
+echo "${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg, /usr/bin/ip, /usr/sbin/ip, /usr/bin/systemctl, /usr/bin/ln, /usr/bin/rm, /usr/bin/chmod, /usr/bin/apt-get, /usr/bin/dpkg" > /tmp/99-easy-tunnel-undangan
+echo '$SUDO_PASS' | sudo -S cp /tmp/99-easy-tunnel-undangan /etc/sudoers.d/99-easy-tunnel-undangan
+echo '$SUDO_PASS' | sudo -S chown root:root /etc/sudoers.d/99-easy-tunnel-undangan
+echo '$SUDO_PASS' | sudo -S chmod 0440 /etc/sudoers.d/99-easy-tunnel-undangan
+rm -f /tmp/99-easy-tunnel-undangan
 
 # Enable IPv4 Forwarding
-echo "net.ipv4.ip_forward=1" | echo '$SUDO_PASS' | sudo -S tee -a /etc/sysctl.conf >/dev/null || true
-echo '$SUDO_PASS' | sudo -S sysctl -p >/dev/null 2>&1 || true
+echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf >/dev/null || true
+echo '$SUDO_PASS' | sudo -S sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
 
 # Install Node.js 20 LTS
 if ! command -v node &>/dev/null; then

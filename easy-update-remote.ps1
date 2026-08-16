@@ -1,4 +1,4 @@
-﻿# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
+# easy-update-remote.ps1 - Skrip Update Cepat Remote (VPS Linux)
 # Melakukan git pull, build backend/frontend, prisma sync, dan restart PM2 di VPS
 
 param(
@@ -615,6 +615,20 @@ run_sudo() {
 
 run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
 
+# Pastikan WireGuard & passwordless sudo terkonfigurasi untuk Easy-Tunnel
+if ! command -v wg-quick &> /dev/null || [ ! -f /etc/sudoers.d/99-easy-tunnel-undangan ]; then
+    echo "WireGuard/sudoers belum lengkap. Memasang WireGuard & sudoers..."
+    run_sudo apt-get update -y
+    run_sudo apt-get install -y wireguard wireguard-tools openresolv
+    run_sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+    echo "net.ipv4.ip_forward=1" | run_sudo tee -a /etc/sysctl.conf >/dev/null || true
+    echo "${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg, /usr/bin/ip, /usr/sbin/ip, /usr/bin/systemctl, /usr/bin/ln, /usr/bin/rm, /usr/bin/chmod, /usr/bin/apt-get, /usr/bin/dpkg" > /tmp/99-easy-tunnel-undangan
+    run_sudo cp /tmp/99-easy-tunnel-undangan /etc/sudoers.d/99-easy-tunnel-undangan
+    run_sudo chown root:root /etc/sudoers.d/99-easy-tunnel-undangan
+    run_sudo chmod 0440 /etc/sudoers.d/99-easy-tunnel-undangan
+    rm -f /tmp/99-easy-tunnel-undangan
+fi
+
 echo "Menghentikan Caddy sementara..."
 run_sudo systemctl stop caddy
 
@@ -1039,6 +1053,20 @@ run_sudo() {
 
 # Pastikan izin folder /var/www/$TARGET_SUBDIR milik user
 run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
+
+# Pastikan WireGuard & sudoers terkonfigurasi
+if ! command -v wg-quick &> /dev/null || [ ! -f /etc/sudoers.d/99-easy-tunnel-undangan -a ! -f /etc/sudoers.d/90-wireguard ]; then
+    echo "Memverifikasi dependensi WireGuard & sudoers..."
+    run_sudo apt-get update -y
+    run_sudo apt-get install -y wireguard wireguard-tools openresolv
+    run_sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+    echo "net.ipv4.ip_forward=1" | run_sudo tee -a /etc/sysctl.conf >/dev/null || true
+    echo "${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg, /usr/bin/ip, /usr/sbin/ip, /usr/bin/systemctl, /usr/bin/ln, /usr/bin/rm, /usr/bin/chmod, /usr/bin/apt-get, /usr/bin/dpkg" > /tmp/99-easy-tunnel-undangan
+    run_sudo cp /tmp/99-easy-tunnel-undangan /etc/sudoers.d/99-easy-tunnel-undangan
+    run_sudo chown root:root /etc/sudoers.d/99-easy-tunnel-undangan
+    run_sudo chmod 0440 /etc/sudoers.d/99-easy-tunnel-undangan
+    rm -f /tmp/99-easy-tunnel-undangan
+fi
 
 echo "Menghentikan Caddy sementara..."
 run_sudo systemctl stop caddy
