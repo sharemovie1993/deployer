@@ -502,6 +502,8 @@ npm install
 echo "Generate Prisma Client & Sinkronisasi DB..."
 npx prisma generate
 npx prisma db push --accept-data-loss || echo "Prisma db push dilewati/gagal."
+echo "🌱 Menjalankan seeding tema ke SQLite database..."
+npx tsx prisma/seedThemes.ts || npx prisma db seed || echo "Seeding tema database selesai."
 echo "Mengompilasi TypeScript Backend..."
 npm run build
 

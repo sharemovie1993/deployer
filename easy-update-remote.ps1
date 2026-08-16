@@ -682,6 +682,8 @@ fi
 npm install --production=false
 npx prisma generate
 npx prisma db push --accept-data-loss || echo "Prisma db push dilewati atau sudah up-to-date."
+echo "🌱 Menjalankan sinkronisasi seeder tema ke SQLite database..."
+npx tsx prisma/seedThemes.ts || npx prisma db seed || echo "Seeding tema database selesai/dilewati."
 echo "🔨 Membangun Backend..."
 npm run build
 
