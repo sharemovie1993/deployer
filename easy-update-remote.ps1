@@ -635,9 +635,13 @@ run_sudo systemctl stop caddy
 
 OLD_COMMIT=`$(git rev-parse HEAD 2>/dev/null || echo "")
 
-echo "Menarik kode terbaru dari branch main/master..."
-git fetch origin
-git reset --hard origin/main || git reset --hard origin/master
+echo "Menarik kode terbaru dari branch aktif..."
+git fetch origin --quiet
+if git rev-parse --verify origin/master &>/dev/null; then
+    git reset --hard origin/master
+elif git rev-parse --verify origin/main &>/dev/null; then
+    git reset --hard origin/main
+fi
 
 echo "📦 Memperbarui dependensi Backend..."
 cd /var/www/$TARGET_SUBDIR/backend
