@@ -428,8 +428,8 @@ if ! echo '$SUDO_PASS' | sudo -S test -f /etc/wireguard/privatekey; then
     echo "SaveConfig = true" >> wg0.conf
     echo "ListenPort = 51820" >> wg0.conf
     echo "PrivateKey = `$PRV_KEY" >> wg0.conf
-    echo "PostUp = iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -A FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
-    echo "PostDown = iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -D FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
+    echo "PostUp = iptables -t nat -A PREROUTING -p udp -m multiport --dports 51821,50000 -j REDIRECT --to-port 51820; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -A FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
+    echo "PostDown = iptables -t nat -D PREROUTING -p udp -m multiport --dports 51821,50000 -j REDIRECT --to-port 51820; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -D FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
 
     echo '$SUDO_PASS' | sudo -S cp privatekey publickey wg0.conf /etc/wireguard/
     echo '$SUDO_PASS' | sudo -S chmod 600 /etc/wireguard/privatekey /etc/wireguard/wg0.conf
@@ -440,7 +440,7 @@ npm install --production
 npx prisma generate
 
 # Sinkronisasi Skema & Seeding
-npx prisma db push --accept-data-loss || echo "Prisma db push dilewati/gagal."
+npx prisma db push --skip-generate || echo "Prisma db push dilewati/gagal."
 npx prisma db seed || echo "Prisma db seed dilewati/gagal."
 
 # PM2 Restart

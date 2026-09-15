@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 
 $LOG_DIR = Join-Path $PSScriptRoot "logs"
 if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null }
@@ -97,11 +97,13 @@ echo ""
 echo "3. Memeriksa & melonggarkan Firewall UFW untuk trafik WireGuard..."
 if command -v ufw >/dev/null 2>&1; then
     echo "$SUDO_PASS" | sudo -S ufw allow 51820/udp 2>/dev/null || true
+    echo "$SUDO_PASS" | sudo -S ufw allow 51821/udp 2>/dev/null || true
+    echo "$SUDO_PASS" | sudo -S ufw allow 50000/udp 2>/dev/null || true
     echo "$SUDO_PASS" | sudo -S ufw allow 443/tcp 2>/dev/null || true
     echo "$SUDO_PASS" | sudo -S ufw allow 80/tcp 2>/dev/null || true
     echo "$SUDO_PASS" | sudo -S ufw allow 3001/tcp 2>/dev/null || true
     echo "$SUDO_PASS" | sudo -S ufw allow 3000/tcp 2>/dev/null || true
-    echo "✅ Aturan UFW diperbarui."
+    echo "✅ Aturan UFW diperbarui (51820, 51821, 50000 UDP & Web TCP diizinkan)."
 fi
 
 echo ""

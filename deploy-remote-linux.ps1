@@ -432,6 +432,25 @@ if ($IS_SERVER_LISENSI -eq "True") {
     Write-Host "`n[BAGIAN D: Identitas Node]" -ForegroundColor Cyan
     $NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [node-$($NEW_IP.Replace('.', '-'))]").Trim()
     if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = "node-$($NEW_IP.Replace('.', '-'))" }
+
+    Write-Host "`n[Konfigurasi Zona Waktu Platform]" -ForegroundColor Cyan
+    Write-Host "Fungsi : Menentukan basis waktu operasional platform & job global (backup DB, billing, dsb)." -ForegroundColor DarkGray
+    Write-Host "Catatan: Presensi KBM sekolah tetap otomatis mengikuti zona waktu lokal masing-masing sekolah." -ForegroundColor DarkGray
+    Write-Host "Pilih Zona Waktu Operasional Platform (DEFAULT_TIMEZONE):" -ForegroundColor White
+    Write-Host " 1) Asia/Jakarta (WIB - Indonesia Barat, UTC+7) [Default]" -ForegroundColor Gray
+    Write-Host " 2) Asia/Makassar (WITA - Indonesia Tengah, UTC+8)" -ForegroundColor Gray
+    Write-Host " 3) Asia/Jayapura (WIT - Indonesia Timur, UTC+9)" -ForegroundColor Gray
+    Write-Host " 4) Asia/Singapore (Singapura / Malaysia, UTC+8)" -ForegroundColor Gray
+    Write-Host " 5) Input manual zona waktu IANA (contoh: Australia/Sydney, Europe/London)..." -ForegroundColor Gray
+    $tzChoice = Read-Host "Pilih [1-5] (Default: 1)"
+    $DEFAULT_TIMEZONE = "Asia/Jakarta"
+    if ($tzChoice -eq "2") { $DEFAULT_TIMEZONE = "Asia/Makassar" }
+    elseif ($tzChoice -eq "3") { $DEFAULT_TIMEZONE = "Asia/Jayapura" }
+    elseif ($tzChoice -eq "4") { $DEFAULT_TIMEZONE = "Asia/Singapore" }
+    elseif ($tzChoice -eq "5") {
+        $customTz = (Read-Host "Masukkan Zona Waktu IANA [Asia/Jakarta]").Trim()
+        if (-not [string]::IsNullOrWhiteSpace($customTz)) { $DEFAULT_TIMEZONE = $customTz }
+    }
 } else {
     $B_PORT = (Read-Host "Masukkan Port Aplikasi [3000]").Trim()
     if ([string]::IsNullOrWhiteSpace($B_PORT)) { $B_PORT = "3000" }
@@ -713,6 +732,11 @@ if [ "$IS_ABSENTA" = "True" ]; then
     else
         echo "DEPLOY_SCENARIO=$DEPLOY_SCENARIO" >> absenta_backend/.env
     fi
+    if grep -q "^DEFAULT_TIMEZONE=" absenta_backend/.env; then
+        sed -i "s|^DEFAULT_TIMEZONE=.*|DEFAULT_TIMEZONE=$DEFAULT_TIMEZONE|g" absenta_backend/.env
+    else
+        echo "DEFAULT_TIMEZONE=$DEFAULT_TIMEZONE" >> absenta_backend/.env
+    fi
 
     # S3 MinIO Storage Configuration for On-Premise / Production
     if grep -q "^STORAGE_DRIVER=" absenta_backend/.env; then
@@ -775,7 +799,7 @@ if [ "$IS_ABSENTA" = "True" ]; then
     npx prisma generate
 
     # Jalankan prisma db push & seed (jika database postgresql sudah siap)
-    npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal. Pastikan PostgreSQL siap."
+    npx prisma db push --skip-generate || echo "Prisma DB push dilewati atau gagal. Pastikan PostgreSQL siap."
     npx prisma db seed || echo "Prisma DB seed dilewati atau gagal."
 
     npm run build
@@ -873,8 +897,8 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
         echo "SaveConfig = true" >> wg0.conf
         echo "ListenPort = 51820" >> wg0.conf
         echo "PrivateKey = \`$PRV_KEY" >> wg0.conf
-        echo "PostUp = iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -A FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
-        echo "PostDown = iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -D FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
+        echo "PostUp = iptables -t nat -A PREROUTING -p udp -m multiport --dports 51821,50000 -j REDIRECT --to-port 51820; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -A FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -A FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
+        echo "PostDown = iptables -t nat -D PREROUTING -p udp -m multiport --dports 51821,50000 -j REDIRECT --to-port 51820; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.2/29 -j ACCEPT; iptables -D FORWARD -i wg0 -o wg0 -m iprange --src-range 10.0.0.10-10.0.0.254 --dst-range 10.0.0.10-10.0.0.254 -j REJECT --reject-with icmp-port-unreachable; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.1.0/24 -d 10.0.0.0/24 -j REJECT; iptables -D FORWARD -i wg0 -o wg0 -s 10.0.0.0/24 -d 10.0.1.0/24 -j REJECT; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE" >> wg0.conf
 
         echo '$SUDO_PASS' | sudo -S cp privatekey publickey wg0.conf /etc/wireguard/
         echo '$SUDO_PASS' | sudo -S chmod 600 /etc/wireguard/privatekey /etc/wireguard/wg0.conf
@@ -883,7 +907,7 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
     cd /var/www/licensing-server
     npm install --production
     npx prisma generate
-    npx prisma db push --accept-data-loss || echo "Prisma db push dilewati atau gagal."
+    npx prisma db push --skip-generate || echo "Prisma db push dilewati atau gagal."
     npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
 
     pm2 delete licensing-server || true

@@ -134,6 +134,8 @@ function handleFixTunnels(req, res, parsedUrl) {
         '  echo "' + sudoPass + '" | sudo -S ufw allow 80/tcp 2>/dev/null || true',
         '  echo "' + sudoPass + '" | sudo -S ufw allow 3001/tcp 2>/dev/null || true',
         '  echo "' + sudoPass + '" | sudo -S ufw allow 51820/udp 2>/dev/null || true',
+        '  echo "' + sudoPass + '" | sudo -S ufw allow 51821/udp 2>/dev/null || true',
+        '  echo "' + sudoPass + '" | sudo -S ufw allow 50000/udp 2>/dev/null || true',
         'fi',
         'echo "FIX_COMPLETE=1"'
     ].join('\n');
