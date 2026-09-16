@@ -62,7 +62,14 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
     // Cancel any existing running update process for this preset
     cancelProcess(presetId);
 
-    const keyPath = createSafeKeyFile(preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem');
+    let keyPath;
+    try {
+        keyPath = createSafeKeyFile(preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem');
+    } catch (err) {
+        res.write(`data: [UPDATE_FAILED] Gagal membaca kunci SSH: ${err.message}\n\n`);
+        res.end();
+        return;
+    }
     const buildMode = preset.buildMode || 'remote'; // 'remote', 'local', atau 'skip'
     const obfuscateMode = preset.obfuscate || 'N'; // 'N' = Trial & Error (Off), 'Y' = Proteksi HKI (On)
     const psArgs = [
@@ -78,7 +85,7 @@ function handleStreamQuickUpdate(req, res, parsedUrl) {
         '-Obfuscate', obfuscateMode
     ];
 
-    const projectLabel = preset.project === 'licensing' ? 'Server Lisensi' : (preset.project === 'undangan' ? 'Project Undangan Digital' : 'Project Absenta');
+    const projectLabel = preset.project === 'licensing' ? 'Server Lisensi' : (preset.project === 'undangan' ? 'Project Undangan Digital' : (preset.project === 'rekber' ? 'Project Rekening Bersama' : 'Project Absenta'));
     const buildModeLabel = buildMode === 'skip'
         ? '🚀 Skip Build (Upload dist/ eksisting via SCP)'
         : buildMode === 'local'
@@ -150,7 +157,14 @@ function handleStreamSeedWilayah(req, res, parsedUrl) {
 
     cancelProcess(presetId);
 
-    const keyPath = createSafeKeyFile(preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem');
+    let keyPath;
+    try {
+        keyPath = createSafeKeyFile(preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem');
+    } catch (err) {
+        res.write(`data: [SEED_FAILED] Gagal membaca kunci SSH: ${err.message}\n\n`);
+        res.end();
+        return;
+    }
     const psArgs = [
         '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
@@ -219,15 +233,23 @@ function handleStreamInstall(req, res, installParams) {
     let psArgs = [];
 
     if (targetOS === 'linux') {
+        const rawKey = installParams.vpsKeyPath || installParams.vpsKeyChoice || 'nginxonly.pem';
+        let keyPath = rawKey;
+        try {
+            keyPath = createSafeKeyFile(rawKey);
+        } catch (e) {
+            keyPath = path.isAbsolute(rawKey) ? rawKey : path.join(ROOT_DIR, rawKey);
+        }
+
         psArgs = [
             '-ExecutionPolicy', 'Bypass',
             '-File', path.join(ROOT_DIR, 'deploy-absenta-remote.ps1'),
             '-Silent',
             '-TargetIP', installParams.vpsIp || '',
             '-TargetUser', installParams.vpsUser || 'asepsuryadi',
-            '-KeyPath', installParams.vpsKeyPath || '',
+            '-KeyPath', keyPath,
             '-SudoPass', installParams.vpsSudoPass || '',
-            '-DeployScenario', installParams.deployScenario || 'hybrid',
+            '-DeployScenario', installParams.deployScenario || 'saas',
             '-TargetDomain', installParams.targetDomain || '',
             '-BackendPort', installParams.backendPort || '3003',
             '-FrontendPort', installParams.frontendPort || '5175',
@@ -235,8 +257,9 @@ function handleStreamInstall(req, res, installParams) {
             '-cfToken', installParams.cfToken || '',
             '-DbUrl', installParams.dbUrl || '',
             '-InstallPostgres', installParams.postgresMode || 'Y',
-            '-RedisMode', installParams.redisMode || 'N',
+            '-RedisMode', installParams.redisMode || 'Y',
             '-RedisUrl', installParams.redisUrl || 'redis://localhost:6379',
+            '-DefaultTimezone', installParams.defaultTimezone || 'Asia/Jakarta',
             '-LicenseKey', installParams.licenseKey || '',
             '-SchoolName', installParams.schoolName || '',
             '-AdminEmail', installParams.adminEmail || ''
