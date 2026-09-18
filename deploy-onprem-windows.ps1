@@ -780,7 +780,7 @@ Push-Location absenta_backend
 npm install --quiet
 Write-Host "Sinkronisasi skema database..." -ForegroundColor Cyan
 npx prisma generate
-npx prisma db push --accept-data-loss
+npx prisma db push --skip-generate
 
 Write-Host "Migrasi data tenant (subdomain)..." -ForegroundColor Cyan
 node -e "const { PrismaClient } = require('@prisma/client'); const p = new PrismaClient(); p.tenant.findMany({ where: { subdomain: null, domain: { not: null } } }).then(ts => Promise.all(ts.map(t => p.tenant.update({ where: { id: t.id }, data: { subdomain: t.domain.includes('.') ? t.domain.split('.')?.[0] : t.domain } })))).then(() => { console.log('Migrasi selesai.'); process.exit(0); }).catch(e => { console.error(e); process.exit(1); })"

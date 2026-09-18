@@ -26,12 +26,36 @@
   {
     "id": "preset-1786847548388-55h8",
     "name": "Server Undangan",
-    "vpsIp": "10.10.10.91",
+    "vpsIp": "10.10.10.99",
     "vpsUser": "asepsuryadi",
     "vpsSudoPass": "1",
     "sshKeyChoice": "nginxonly.pem",
     "vpsKeyPath": "",
     "project": "undangan",
+    "buildMode": "remote",
+    "obfuscate": "N"
+  },
+  {
+    "id": "preset-1789019446217-nirp",
+    "name": "10.10.10.116",
+    "vpsIp": "10.10.10.116",
+    "vpsUser": "asep",
+    "vpsSudoPass": "1",
+    "sshKeyChoice": "nginxonly.pem",
+    "vpsKeyPath": "",
+    "project": "absenta",
+    "buildMode": "remote",
+    "obfuscate": "N"
+  },
+  {
+    "id": "preset-1789698633838-rpwa",
+    "name": "10.10.10.20",
+    "vpsIp": "10.10.10.20",
+    "vpsUser": "asep",
+    "vpsSudoPass": "1",
+    "sshKeyChoice": "nginxonly.pem",
+    "vpsKeyPath": "",
+    "project": "absenta",
     "buildMode": "remote",
     "obfuscate": "N"
   }

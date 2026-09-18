@@ -1,4 +1,14 @@
-﻿# easy-tuning.ps1 - Skrip Remote Tuning Linux Produksi Absenta
+param (
+    [string]$TargetIP,
+    [string]$TargetUser,
+    [string]$KeyPath,
+    [string]$SudoPass = "1",
+    [string]$Timezone = "UTC",
+    [string]$Role = "all-in-one",
+    [switch]$Silent
+)
+
+# easy-tuning.ps1 - Skrip Remote Tuning Linux Produksi Absenta
 # Berfungsi melakukan tuning kernel sysctl, limit file, Docker, & waktu secara remote via SSH
 
 $ErrorActionPreference = "Stop"
@@ -16,62 +26,85 @@ function Show-Log {
 
 function Show-Header {
     param ($Title)
-    Clear-Host
-    Write-Host "==========================================================" -ForegroundColor Cyan
-    Write-Host "      $Title" -ForegroundColor Yellow -Bold
-    Write-Host "==========================================================" -ForegroundColor Cyan
+    if (-not $Silent) {
+        Clear-Host
+        Write-Host "==========================================================" -ForegroundColor Cyan
+        Write-Host "      $Title" -ForegroundColor Yellow
+        Write-Host "==========================================================" -ForegroundColor Cyan
+    }
 }
 
 Show-Header "TUNING KERNEL & SISTEM LINUX PRODUKSI (REMOTE)"
-Write-Host "Script ini akan melakukan tuning kernel sysctl, file descriptor limits,"
-Write-Host "Docker log-rotation, serta sinkronisasi waktu NTP untuk skenario On-Premise & SaaS." -ForegroundColor Green
-Write-Host "----------------------------------------------------------"
+if (-not $Silent) {
+    Write-Host "Script ini akan melakukan tuning kernel sysctl, file descriptor limits,"
+    Write-Host "Docker log-rotation, serta sinkronisasi waktu NTP untuk skenario On-Premise & SaaS." -ForegroundColor Green
+    Write-Host "----------------------------------------------------------"
+}
 
-$TARGET_IP = (Read-Host "Masukkan IP VPS Target [Default: 10.10.10.99]").Trim()
-if ([string]::IsNullOrWhiteSpace($TARGET_IP)) { $TARGET_IP = "10.10.10.99" }
+$TARGET_IP = if (-not [string]::IsNullOrWhiteSpace($TargetIP)) { $TargetIP.Trim() } else {
+    $tip = (Read-Host "Masukkan IP VPS Target [Default: 10.10.10.99]").Trim()
+    if ([string]::IsNullOrWhiteSpace($tip)) { "10.10.10.99" } else { $tip }
+}
 
-$TARGET_USER = "asepsuryadi"
-
-Write-Host "Pilih SSH Key untuk VPS tersebut:"
-Write-Host " 1) nginxonly.pem"
-Write-Host " 2) ls-key.pem"
-Write-Host " 3) Input path file manual..."
-$keyChoice = Read-Host "Pilih opsi [1-3] (Default: 1)"
+$TARGET_USER = if (-not [string]::IsNullOrWhiteSpace($TargetUser)) { $TargetUser.Trim() } else {
+    $inputUser = (Read-Host "Masukkan Username VPS Target [Default: asep]").Trim()
+    if ([string]::IsNullOrWhiteSpace($inputUser)) { "asep" } else { $inputUser }
+}
 
 $KEY_FILE = ""
-if ([string]::IsNullOrWhiteSpace($keyChoice) -or $keyChoice -eq "1") { $KEY_FILE = Join-Path $PSScriptRoot "nginxonly.pem" }
-elseif ($keyChoice -eq "2") { $KEY_FILE = Join-Path $PSScriptRoot "ls-key.pem" }
-elseif ($keyChoice -eq "3") { $KEY_FILE = (Read-Host "Masukkan path absolut file .pem").Trim() }
-else { throw "Pilihan key tidak valid." }
+if (-not [string]::IsNullOrWhiteSpace($KeyPath)) {
+    $KEY_FILE = $KeyPath.Trim()
+    if (-not (Test-Path $KEY_FILE)) {
+        $altKey = Join-Path $PSScriptRoot (Split-Path $KEY_FILE -Leaf)
+        if (Test-Path $altKey) { $KEY_FILE = $altKey }
+    }
+} else {
+    Write-Host "Pilih SSH Key untuk VPS tersebut:"
+    Write-Host " 1) nginxonly.pem"
+    Write-Host " 2) ls-key.pem"
+    Write-Host " 3) Input path file manual..."
+    $keyChoice = Read-Host "Pilih opsi [1-3] (Default: 1)"
+
+    if ([string]::IsNullOrWhiteSpace($keyChoice) -or $keyChoice -eq "1") { $KEY_FILE = Join-Path $PSScriptRoot "nginxonly.pem" }
+    elseif ($keyChoice -eq "2") { $KEY_FILE = Join-Path $PSScriptRoot "ls-key.pem" }
+    elseif ($keyChoice -eq "3") { $KEY_FILE = (Read-Host "Masukkan path absolut file .pem").Trim() }
+    else { throw "Pilihan key tidak valid." }
+}
 
 if (-not (Test-Path $KEY_FILE)) {
     throw "SSH Key tidak ditemukan di: $KEY_FILE"
 }
 
-$SUDO_PASS = (Read-Host "Masukkan password sudo VPS Anda [Default: 1]").Trim()
-if ([string]::IsNullOrWhiteSpace($SUDO_PASS)) { $SUDO_PASS = "1" }
+$SUDO_PASS = if (-not [string]::IsNullOrWhiteSpace($SudoPass)) { $SudoPass } else {
+    $sp = (Read-Host "Masukkan password sudo VPS Anda [Default: 1]").Trim()
+    if ([string]::IsNullOrWhiteSpace($sp)) { "1" } else { $sp }
+}
 
-Write-Host "`nPilih Zona Waktu Server OS:" -ForegroundColor Yellow
-Write-Host " 1) UTC (Standar SaaS Multi-Tenant Cloud)" -ForegroundColor White
-Write-Host " 2) Asia/Jakarta (WIB - On-Premise Jawa/Sumatera)" -ForegroundColor White
-Write-Host " 3) Asia/Makassar (WITA - Bali, Sulawesi, Kalsel, Kaltim, NTB, NTT)" -ForegroundColor White
-Write-Host " 4) Asia/Jayapura (WIT - Papua, Maluku)" -ForegroundColor White
-$tzChoice = Read-Host "Pilih zona waktu [1-4] (Default: 1 - UTC)"
+$CHOSEN_TZ = if (-not [string]::IsNullOrWhiteSpace($Timezone) -and $Timezone -ne "UTC") { $Timezone } else { "UTC" }
+if ([string]::IsNullOrWhiteSpace($TargetIP) -and -not $Silent) {
+    Write-Host "`nPilih Zona Waktu Server OS:" -ForegroundColor Yellow
+    Write-Host " 1) UTC (Standar SaaS Multi-Tenant Cloud)" -ForegroundColor White
+    Write-Host " 2) Asia/Jakarta (WIB - On-Premise Jawa/Sumatera)" -ForegroundColor White
+    Write-Host " 3) Asia/Makassar (WITA - Bali, Sulawesi, Kalsel, Kaltim, NTB, NTT)" -ForegroundColor White
+    Write-Host " 4) Asia/Jayapura (WIT - Papua, Maluku)" -ForegroundColor White
+    $tzChoice = Read-Host "Pilih zona waktu [1-4] (Default: 1 - UTC)"
 
-$CHOSEN_TZ = "UTC"
-if ($tzChoice -eq "2") { $CHOSEN_TZ = "Asia/Jakarta" }
-elseif ($tzChoice -eq "3") { $CHOSEN_TZ = "Asia/Makassar" }
-elseif ($tzChoice -eq "4") { $CHOSEN_TZ = "Asia/Jayapura" }
+    if ($tzChoice -eq "2") { $CHOSEN_TZ = "Asia/Jakarta" }
+    elseif ($tzChoice -eq "3") { $CHOSEN_TZ = "Asia/Makassar" }
+    elseif ($tzChoice -eq "4") { $CHOSEN_TZ = "Asia/Jayapura" }
+}
 
-Write-Host "`nPilih Profil Peran Server (Server Deployment Profile):" -ForegroundColor Yellow
-Write-Host " 1) All-In-One Server (Gabungan OS + App + Postgres + Redis dalam 1 VPS) [Default]" -ForegroundColor White
-Write-Host " 2) Dedicated PostgreSQL Database Server (Khusus Server DB Postgres)" -ForegroundColor White
-Write-Host " 3) Dedicated Redis Caching Server (Khusus Server Cache Redis)" -ForegroundColor White
-$roleChoice = Read-Host "Pilih profil [1-3] (Default: 1 - All-In-One)"
+$CHOSEN_ROLE = if (-not [string]::IsNullOrWhiteSpace($Role)) { $Role } else { "all-in-one" }
+if ([string]::IsNullOrWhiteSpace($TargetIP) -and -not $Silent) {
+    Write-Host "`nPilih Profil Peran Server (Server Deployment Profile):" -ForegroundColor Yellow
+    Write-Host " 1) All-In-One Server (Gabungan OS + App + Postgres + Redis dalam 1 VPS) [Default]" -ForegroundColor White
+    Write-Host " 2) Dedicated PostgreSQL Database Server (Khusus Server DB Postgres)" -ForegroundColor White
+    Write-Host " 3) Dedicated Redis Caching Server (Khusus Server Cache Redis)" -ForegroundColor White
+    $roleChoice = Read-Host "Pilih profil [1-3] (Default: 1 - All-In-One)"
 
-$CHOSEN_ROLE = "all-in-one"
-if ($roleChoice -eq "2") { $CHOSEN_ROLE = "dedicated-postgres" }
-elseif ($roleChoice -eq "3") { $CHOSEN_ROLE = "dedicated-redis" }
+    if ($roleChoice -eq "2") { $CHOSEN_ROLE = "dedicated-postgres" }
+    elseif ($roleChoice -eq "3") { $CHOSEN_ROLE = "dedicated-redis" }
+}
 
 # Perbaiki permission SSH Key agar Windows OpenSSH tidak memblokirnya
 $SAFE_KEY = Join-Path $env:TEMP "safe-tuning-key.pem"
@@ -116,4 +149,6 @@ Write-Host "Seluruh jalannya proses ini telah dicatat di berkas log:" -Foregroun
 Write-Host " -> $LOG_FILE" -ForegroundColor Cyan
 Write-Host ""
 Stop-Transcript
-Read-Host "Tekan [ENTER] untuk kembali ke menu utama..."
+if (-not $Silent) {
+    Read-Host "Tekan [ENTER] untuk kembali ke menu utama..."
+}

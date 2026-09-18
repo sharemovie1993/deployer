@@ -477,6 +477,14 @@ if [ -f /tmp/setup-minio.sh ]; then
     echo '$SUDO_PASS' | sudo -S bash /tmp/setup-minio.sh || true
 fi
 
+# Pastikan bucket undangan-storage siap digunakan di MinIO yang sudah ada
+if command -v mc &>/dev/null || [ -f /usr/local/bin/mc ]; then
+    echo "Memastikan bucket 'undangan-storage' aktif di MinIO..."
+    /usr/local/bin/mc alias set local http://127.0.0.1:9000 minioadmin minioadmin --api s3v4 2>/dev/null || true
+    /usr/local/bin/mc mb local/undangan-storage --ignore-existing 2>/dev/null || true
+    /usr/local/bin/mc anonymous set download local/undangan-storage 2>/dev/null || true
+fi
+
 cd /var/www/$TARGET_SUBDIR/backend
 mkdir -p uploads
 
@@ -487,21 +495,27 @@ JWT_SECRET="$JWT_SECRET"
 LICENSE_SERVER_URL="$LICENSE_SERVER_URL"
 EASY_TUNNEL_BASE_DOMAIN="absenta.id"
 
-# MinIO S3 Storage Configuration (Pola Standar Absenta)
+# MinIO S3 Storage Configuration (Dedicated Undangan Digital)
 STORAGE_DRIVER=s3
-S3_BUCKET=absenta-storage
+S3_BUCKET=undangan-storage
 S3_ENDPOINT=http://127.0.0.1:9000
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
 S3_FORCE_PATH_STYLE=true
-S3_PUBLIC_URL=https://$TARGET_DOMAIN/absenta-storage
+S3_PUBLIC_URL=https://$TARGET_DOMAIN/undangan-storage
+MINIO_ENDPOINT=127.0.0.1
+MINIO_PORT=9000
+MINIO_BUCKET=undangan-storage
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_PUBLIC_URL=https://$TARGET_DOMAIN/undangan-storage
 EOF
 
 echo "Menginstal dependensi Backend..."
 npm install
 echo "Generate Prisma Client & Sinkronisasi DB..."
 npx prisma generate
-npx prisma db push --accept-data-loss || echo "Prisma db push dilewati/gagal."
+npx prisma db push --skip-generate || echo "Prisma db push dilewati/gagal."
 echo "🌱 Menjalankan seeding tema ke SQLite database..."
 npx tsx prisma/seedThemes.ts || npx prisma db seed || echo "Seeding tema database selesai."
 echo "Mengompilasi TypeScript Backend..."
@@ -571,9 +585,9 @@ if [ "$SSL_SCENARIO" = "sync" ]; then
 fi
 
 # -------------------------------------------------------------
-# Caddy Web Server & Reverse Proxy Setup
+# Caddy Web Server & Reverse Proxy Setup (Smart Multi-App Coexistence)
 # -------------------------------------------------------------
-cat << 'EOF_CADDY' > /tmp/Caddyfile
+cat << 'EOF_CADDY' > /tmp/caddy_undangan_block.conf
 $caddyHostHeader {
     root * /var/www/$TARGET_SUBDIR/frontend/dist
 
@@ -583,6 +597,9 @@ $caddyHostHeader {
     }
     handle /uploads/* {
         reverse_proxy localhost:$B_PORT
+    }
+    handle /undangan-storage/* {
+        reverse_proxy localhost:9000
     }
     handle /absenta-storage/* {
         reverse_proxy localhost:9000
@@ -602,15 +619,53 @@ $caddyTlsBlock
 }
 EOF_CADDY
 
-echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
-echo "Validasi konfigurasi Caddyfile..."
-echo '$SUDO_PASS' | sudo -S caddy validate --config /etc/caddy/Caddyfile || true
-echo '$SUDO_PASS' | sudo -S systemctl enable caddy
-echo '$SUDO_PASS' | sudo -S systemctl restart caddy || {
-    echo "Caddy restart gagal, memeriksa log detail terbaru:"
-    sudo journalctl -u caddy.service -n 25 --no-pager || true
-    exit 1
-}
+echo "Menggabungkan konfigurasi Caddyfile dengan Smart Multi-App Merger..."
+echo '$SUDO_PASS' | sudo -S mkdir -p /etc/caddy
+if [ ! -f /etc/caddy/Caddyfile ]; then
+    echo "# Baraya Multi-Project Caddy Gateway" | echo '$SUDO_PASS' | sudo -S tee /etc/caddy/Caddyfile > /dev/null
+fi
+
+echo '$SUDO_PASS' | sudo -S cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
+
+# Hapus blok lama project jika ada, lalu gabungkan dengan blok baru
+echo '$SUDO_PASS' | sudo -S python3 -c "
+import re
+caddy_file = '/etc/caddy/Caddyfile'
+try:
+    with open(caddy_file, 'r') as f:
+        content = f.read()
+    pattern = r'# === BEGIN PROJECT: undangan ===.*?# === END PROJECT: undangan ===\n?'
+    cleaned = re.sub(pattern, '', content, flags=re.DOTALL).strip()
+    with open('/tmp/caddy_cleaned.txt', 'w') as f:
+        f.write(cleaned + '\n\n' if cleaned else '')
+except Exception as e:
+    with open('/tmp/caddy_cleaned.txt', 'w') as f:
+        f.write('')
+" 2>/dev/null || (
+    echo '$SUDO_PASS' | sudo -S sed -e '/# === BEGIN PROJECT: undangan ===/,/# === END PROJECT: undangan ===/d' /etc/caddy/Caddyfile > /tmp/caddy_cleaned.txt 2>/dev/null || true
+)
+
+{
+    cat /tmp/caddy_cleaned.txt 2>/dev/null
+    echo "# === BEGIN PROJECT: undangan ==="
+    cat /tmp/caddy_undangan_block.conf
+    echo ""
+    echo "# === END PROJECT: undangan ==="
+} > /tmp/Caddyfile.merged
+
+echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile.merged /etc/caddy/Caddyfile
+echo '$SUDO_PASS' | sudo -S rm -f /tmp/caddy_cleaned.txt /tmp/caddy_undangan_block.conf /tmp/Caddyfile.merged 2>/dev/null || true
+
+echo "Validasi konfigurasi Caddyfile Multi-App..."
+if echo '$SUDO_PASS' | sudo -S caddy validate --config /etc/caddy/Caddyfile; then
+    echo "✅ Konfigurasi Caddyfile valid!"
+    echo '$SUDO_PASS' | sudo -S systemctl enable caddy 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S systemctl reload caddy 2>/dev/null || echo '$SUDO_PASS' | sudo -S systemctl restart caddy 2>/dev/null || true
+else
+    echo "⚠️ Validasi Caddyfile gagal, memulihkan backup..."
+    echo '$SUDO_PASS' | sudo -S cp /etc/caddy/Caddyfile.bak /etc/caddy/Caddyfile 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S systemctl restart caddy 2>/dev/null || true
+fi
 "@
 
 Run-RemoteScript -ScriptContent $setupScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP

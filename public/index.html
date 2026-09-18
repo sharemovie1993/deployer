@@ -26,6 +26,7 @@
             <button class="mode-tab-btn" id="mode-btn-cluster" onclick="switchAppMode('cluster')">🌐 Multi-VM Cluster Deploy</button>
             <button class="mode-tab-btn" id="mode-btn-logs" onclick="switchAppMode('logs')">📜 Monitor Log Server (PM2)</button>
             <button class="mode-tab-btn" id="mode-btn-health" onclick="switchAppMode('health')">🩺 System Health & Services</button>
+            <button class="mode-tab-btn" id="mode-btn-audit" onclick="switchAppMode('audit')">🛡️ Audit Hardening & Tuning</button>
         </div>
     </div>
 
@@ -132,14 +133,18 @@
                 <h2>Mode Akses & Sertifikat SSL</h2>
                 <p class="subtitle">Tentukan bagaimana pengguna akan mengakses portal sekolah ini.</p>
 
-                <div class="card-grid" style="margin-bottom: 20px;">
-                    <div class="selection-card selected" id="card-mode-hybrid" onclick="selectScenario('hybrid')">
-                        <div class="card-title">🌐 Full Domain Public + Easy-Tunnel</div>
-                        <div class="card-desc">Domain publik lengkap dengan SSL Cloudflare otomatis & Easy-Tunnel publik.</div>
+                <div class="card-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
+                    <div class="selection-card selected" id="card-mode-saas" onclick="selectScenario('saas')">
+                        <div class="card-title">🌐 SaaS / Cloud Direct</div>
+                        <div class="card-desc">VPS Cloud dengan IP Publik. Domain sekolah langsung diarahkan ke server ini tanpa VPN tunnel.</div>
+                    </div>
+                    <div class="selection-card" id="card-mode-hybrid" onclick="selectScenario('hybrid')">
+                        <div class="card-title">🔗 Hybrid (Easy-Tunnel)</div>
+                        <div class="card-desc">Server fisik di sekolah (IP lokal). Terhubung ke internet via WireGuard ke Server Lisensi.</div>
                     </div>
                     <div class="selection-card" id="card-mode-onprem" onclick="selectScenario('onprem')">
-                        <div class="card-title">🏫 On-Premise Jaringan Lokal Sekolah</div>
-                        <div class="card-desc">Hanya diakses melalui IP lokal / domain intranet sekolah tanpa tunnel publik.</div>
+                        <div class="card-title">🏫 On-Premise Intranet</div>
+                        <div class="card-desc">Hanya diakses melalui IP lokal / intranet sekolah tanpa akses internet publik.</div>
                     </div>
                 </div>
 
@@ -157,6 +162,16 @@
                         <label for="frontend-port">Port Frontend Web</label>
                         <input type="text" id="frontend-port" value="5175">
                     </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="platform-timezone">Zona Waktu Platform (Timezone)</label>
+                    <select id="platform-timezone">
+                        <option value="Asia/Jakarta" selected>🇮🇩 Asia/Jakarta (WIB - Indonesia Barat, UTC+7)</option>
+                        <option value="Asia/Makassar">🇮🇩 Asia/Makassar (WITA - Indonesia Tengah, UTC+8)</option>
+                        <option value="Asia/Jayapura">🇮🇩 Asia/Jayapura (WIT - Indonesia Timur, UTC+9)</option>
+                        <option value="Asia/Singapore">🇸🇬 Asia/Singapore (UTC+8)</option>
+                    </select>
                 </div>
             </div>
 
@@ -181,38 +196,103 @@
 
                 <div class="form-group">
                     <label for="db-url">Database Connection URL (PostgreSQL Connection String)</label>
-                    <input type="text" id="db-url" value="postgresql://postgres:postgres@localhost:5432/absenta_db" placeholder="postgresql://user:pass@host:5432/dbname">
+                    <input type="text" id="db-url" value="postgresql://postgres:123123123@localhost:5432/absensi" placeholder="postgresql://user:pass@host:5432/dbname">
                 </div>
 
-                <button class="btn btn-secondary" type="button" onclick="testDatabaseConnection()">
-                    🔍 Tes Koneksi Port Database
-                </button>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>Instalasi Redis Server?</label>
+                    <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-top: 8px;">
+                        <div class="selection-card selected" id="card-redis-yes" onclick="setRedisMode('Y')">
+                            <div class="card-title">⚡ Otomatis Pasang Redis (Rekomendasi)</div>
+                            <div class="card-desc">Pasang redis-server lokal di VPS untuk performa caching maksimal.</div>
+                        </div>
+                        <div class="selection-card" id="card-redis-no" onclick="setRedisMode('N')">
+                            <div class="card-title">⚪ Lewati / Redis Eksternal</div>
+                            <div class="card-desc">Jangan pasang redis lokal atau gunakan server Redis terpisah.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group" id="redis-url-group" style="display: none; margin-top: 10px;">
+                    <label for="redis-url">Redis Connection URL</label>
+                    <input type="text" id="redis-url" value="redis://localhost:6379" placeholder="redis://localhost:6379">
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" type="button" onclick="testDatabaseConnection()">
+                        🔍 Tes Koneksi & Periksa Database
+                    </button>
+                    <button class="btn btn-secondary" type="button" onclick="createDatabaseAuto()" style="background: rgba(56, 189, 248, 0.15); border-color: #38bdf8; color: #38bdf8;">
+                        ✨ Buat Database Otomatis
+                    </button>
+                </div>
                 <div id="db-test-alert" class="alert-box"></div>
             </div>
 
             <!-- STEP 4: LISENSI APLIKASI -->
             <div class="step-panel" id="panel-4">
                 <h2>Aktivasi Lisensi Server Absenta</h2>
-                <p class="subtitle">Masukkan Serial Key Lisensi resmi untuk server ini.</p>
+                <p class="subtitle">Tentukan apakah Anda sudah memiliki Serial Key atau ingin registrasi baru secara instan.</p>
 
-                <div class="form-group">
-                    <label for="license-key">Serial Key Lisensi Server</label>
-                    <input type="text" id="license-key" placeholder="Contoh: ABSENTA-2026-XXXX-YYYY-ZZZZ">
+                <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
+                    <div class="selection-card selected" id="card-lic-existing" onclick="toggleLicenseMode('existing')">
+                        <div class="card-title">🔑 Sudah Punya Serial Key</div>
+                        <div class="card-desc">Masukkan kunci lisensi resmi yang sudah Anda miliki untuk diverifikasi.</div>
+                    </div>
+                    <div class="selection-card" id="card-lic-register" onclick="toggleLicenseMode('register')">
+                        <div class="card-title">✨ Registrasi Baru (Gratis / Trial)</div>
+                        <div class="card-desc">Daftarkan sekolah Anda sekarang dan dapatkan Serial Key otomatis via WhatsApp.</div>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="school-name">Nama Resmi Sekolah / Lembaga</label>
-                    <input type="text" id="school-name" placeholder="Contoh: SMK Negeri 1 Jakarta">
+                <!-- Form 1: Sudah punya Serial Key -->
+                <div id="form-lic-existing">
+                    <div class="form-group">
+                        <label for="license-key">Serial Key Lisensi Server</label>
+                        <input type="text" id="license-key" placeholder="Contoh: ABSENTA-2026-XXXX-YYYY-ZZZZ">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="school-name">Nama Resmi Sekolah / Lembaga (Opsional)</label>
+                        <input type="text" id="school-name" placeholder="Contoh: SMK Negeri 1 Jakarta">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin-email">Email Penanggung Jawab / Admin</label>
+                        <input type="text" id="admin-email" placeholder="admin@sekolah.sch.id">
+                    </div>
+
+                    <button class="btn btn-secondary" type="button" onclick="checkExistingLicense()">
+                        🛡️ Verifikasi Lisensi Server
+                    </button>
                 </div>
 
-                <div class="form-group">
-                    <label for="admin-email">Email Penanggung Jawab / Admin</label>
-                    <input type="text" id="admin-email" placeholder="admin@sekolah.sch.id">
+                <!-- Form 2: Registrasi Baru -->
+                <div id="form-lic-register" style="display: none;">
+                    <div class="form-group">
+                        <label for="reg-school-name">Nama Resmi Sekolah / Lembaga <span style="color: var(--error);">*</span></label>
+                        <input type="text" id="reg-school-name" placeholder="Contoh: SMK Negeri 4 Bandung">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="reg-wa-number">Nomor WhatsApp Admin / Penanggung Jawab <span style="color: var(--error);">*</span></label>
+                        <input type="text" id="reg-wa-number" placeholder="Contoh: 081234567890 (Kunci lisensi akan dikirim via WA)">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="reg-slug">Subdomain / Slug Akses Pilihan <span style="color: var(--error);">*</span></label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="text" id="reg-slug" placeholder="contoh: smp4" style="flex: 1;">
+                            <span style="color: var(--primary); font-weight: 700; font-size: 14px;">.absenta.id</span>
+                        </div>
+                        <small style="color: var(--text-muted); display: block; margin-top: 4px;">Alamat domain publik yang akan diberikan server lisensi untuk portal sekolah Anda.</small>
+                    </div>
+
+                    <button class="btn btn-primary" type="button" onclick="requestNewLicense()" style="margin-top: 10px;">
+                        🚀 Daftarkan & Dapatkan Kunci Lisensi Sekarang
+                    </button>
                 </div>
 
-                <button class="btn btn-secondary" type="button" onclick="checkExistingLicense()">
-                    🛡️ Verifikasi Lisensi Server
-                </button>
                 <div id="license-test-alert" class="alert-box"></div>
             </div>
 
@@ -497,7 +577,80 @@
         </div>
     </div>
 
+    <!-- VIEW 6: AUDIT HARDENING & TUNING LINUX -->
+    <div class="container" id="audit-view-container" style="display: none;">
+        <div class="wizard-header">
+            <div class="logo-section">
+                <h1>🛡️ AUDIT HARDENING & KERNEL TUNING LINUX</h1>
+                <p>Pengecekan Kepatuhan Keamanan Produksi & Optimasi Kernel Sysctl, Limits, Database, & Cache</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-secondary" type="button" onclick="runAuditUI()">🔄 Refresh Audit</button>
+            </div>
+        </div>
+
+        <div class="wizard-body" style="gap: 20px; display: flex; flex-direction: column;">
+            <!-- Target Selection Header -->
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Pilih Target Server VPS</label>
+                        <select id="audit-target-preset" style="width: 100%; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px;" onchange="toggleCustomAuditInputs(); runAuditUI();">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div>
+                        <button class="btn btn-primary" type="button" onclick="runAuditUI()" style="padding: 10px 24px; font-weight: 700;">🔍 Audit Server Sekarang</button>
+                    </div>
+                </div>
+
+                <!-- Custom Input Parameters (hidden by default) -->
+                <div id="audit-custom-inputs-row" style="display: none; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">IP Server VPS</label>
+                        <input type="text" id="audit-custom-ip" placeholder="10.10.10.116" value="10.10.10.116" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 12px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">User SSH</label>
+                        <input type="text" id="audit-custom-user" placeholder="asep" value="asep" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 12px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">SSH Key (.pem)</label>
+                        <select id="audit-custom-key" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 12px;">
+                            <option value="nginxonly.pem">nginxonly.pem</option>
+                            <option value="ls-key.pem">ls-key.pem</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Password Sudo</label>
+                        <input type="password" id="audit-custom-sudo" placeholder="1" value="1" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 12px;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audit Matrix Display Container -->
+            <div id="audit-matrix-display" style="display: flex; flex-direction: column; gap: 20px;">
+                <div style="color: var(--text-muted); text-align: center; padding: 40px;">Pilih target server di atas lalu klik <strong>🔍 Audit Server Sekarang</strong>.</div>
+            </div>
+        </div>
+    </div>
+
 </div> <!-- end .app-wrapper -->
+
+<!-- Modal Dialog Audit Stream (Hardening/Tuning Execution) -->
+<div id="audit-stream-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="background: #0f172a; border: 1px solid var(--glass-border); border-radius: 20px; width: 90%; max-width: 800px; padding: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 id="audit-stream-modal-title" style="font-size: 16px; font-weight: 700; color: #fff; margin: 0;">Proses Sedang Berjalan...</h3>
+            <button onclick="closeAuditStreamModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+        </div>
+        <div id="audit-stream-terminal" style="height: 380px; background: #000; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); padding: 14px; font-family: 'Fira Code', monospace; font-size: 12px; overflow-y: auto; color: #e2e8f0; line-height: 1.6;">
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+            <button class="btn btn-secondary" onclick="closeAuditStreamModal()">Tutup Jendela</button>
+        </div>
+    </div>
+</div>
 
 <!-- Modal Dialog Add/Edit Preset -->
 <div id="preset-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center;">
@@ -527,6 +680,7 @@
                 <option value="absenta">Project Absenta (Aplikasi Absensi Utama)</option>
                 <option value="licensing">Server Lisensi (VPS Licensing System)</option>
                 <option value="undangan">Project Undangan Digital (Digital Invitation Studio)</option>
+                <option value="rekber">Project Rekening Bersama (B-Pay Gateway & Rekber Hub)</option>
             </select>
         </div>
 
@@ -540,6 +694,8 @@
             <small style="color: var(--text-muted); display: block; margin-top: 6px; line-height: 1.5;">
                 💡 <strong>Skip Build</strong> mengunggah folder <code>dist/</code> lokal yang sudah Anda kompilasi manual di terminal secara instan.
             </small>
+        </div>
+
         <div class="form-group" id="preset-obfuscate-group">
             <label for="preset-modal-obfuscate">🛡️ Proteksi Pengacakan Kode (Obfuscation / Enkripsi HKI)</label>
             <select id="preset-modal-obfuscate">
@@ -591,14 +747,122 @@
     </div>
 </div>
 
+<!-- Modal Guided Domain & Subdomain Switcher -->
+<div id="domain-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 10000; justify-content: center; align-items: center;">
+    <div style="background: #1e293b; border: 1px solid rgba(167,139,250,0.3); border-radius: 20px; width: 90%; max-width: 680px; max-height: 90vh; overflow-y: auto; padding: 28px; box-shadow: 0 25px 70px rgba(0,0,0,0.7);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 19px; color: var(--text-main); display: flex; align-items: center; gap: 10px; margin: 0;">
+                <span>🌐</span> Guided Domain & Subdomain Switcher
+            </h3>
+            <button onclick="closeDomainModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+        </div>
 
-<script src="/js/preset-picker.js"></script>
-<script src="/js/app.js"></script>
-<script src="/js/wizard.js"></script>
-<script src="/js/presets.js"></script>
-<script src="/js/cluster.js"></script>
-<script src="/js/logs.js"></script>
-<script src="/js/health.js"></script>
+        <div id="domain-modal-server-badge" style="background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.25); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #c4b5fd; margin-bottom: 18px;">
+            Target Server: <strong>-</strong>
+        </div>
+        <input type="hidden" id="domain-modal-preset-id">
+
+        <div id="domain-modal-form-area">
+            <!-- Pre-Check Box -->
+            <div id="domain-modal-precheck-box" style="background: rgba(15,23,42,0.7); border: 1px solid rgba(59,130,246,0.25); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div style="font-size: 13px; font-weight: 600; color: #93c5fd; display: flex; align-items: center; gap: 8px;">
+                        <span>🔍</span> Status Konfigurasi VPS Saat Ini (Pre-Check)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span id="domain-precheck-status-badge" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">
+                            ⏳ Memeriksa...
+                        </span>
+                        <button type="button" onclick="runDomainPrecheck()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; border-radius: 6px; padding: 2px 8px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Cek ulang konfigurasi VPS">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="domain-precheck-content" style="font-size: 12px; color: var(--text-muted);">
+                    <div style="text-align: center; padding: 8px 0; color: #94a3b8;">
+                        <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #60a5fa; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
+                        Sedang membaca .env backend, .env frontend, dan database tenant di VPS...
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="domain-modal-old-subdomain">Subdomain Lama <span style="color: var(--text-muted); font-size: 11px;">(opsional)</span></label>
+                    <input type="text" id="domain-modal-old-subdomain" placeholder="Contoh: smkn1pld">
+                    <small style="color: var(--text-muted); font-size: 11px;">Untuk pencocokan rekaman tenant di database.</small>
+                </div>
+                <div class="form-group">
+                    <label for="domain-modal-new-subdomain">Subdomain Baru <span style="color: #34d399; font-weight: 700;">*</span></label>
+                    <input type="text" id="domain-modal-new-subdomain" placeholder="Contoh: demo" oninput="updateDomainPreview()">
+                    <small style="color: var(--text-muted); font-size: 11px;">Subdomain utama baru yang akan aktif.</small>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="domain-modal-base-domain">Base Domain Platform</label>
+                    <input type="text" id="domain-modal-base-domain" value="absenta.id" oninput="updateDomainPreview()">
+                </div>
+                <div class="form-group">
+                    <label for="domain-modal-custom-domain">Custom Domain Penuh <span style="color: var(--text-muted); font-size: 11px;">(opsional)</span></label>
+                    <input type="text" id="domain-modal-custom-domain" placeholder="Contoh: absensi.sekolah.sch.id" oninput="updateDomainPreview()">
+                </div>
+            </div>
+
+            <!-- Live URL Preview -->
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px; margin-bottom: 18px;">
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Preview URL Akses Baru:</div>
+                <div id="domain-modal-preview-url" style="font-family: 'Fira Code', monospace; font-size: 14px; font-weight: 600; color: #34d399;">
+                    https://demo.absenta.id
+                </div>
+            </div>
+
+            <!-- Automation Checklist -->
+            <div style="background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 14px; margin-bottom: 20px; font-size: 12px; line-height: 1.8; color: var(--text-muted);">
+                <div style="font-weight: 600; color: var(--text-main); margin-bottom: 6px;">Tahapan Otomasi yang Akan Dijalankan:</div>
+                <div>🛡️ <strong>1. Backup:</strong> Otomatis membuat <code>.env.bak_[timestamp]</code> di VPS.</div>
+                <div>📝 <strong>2. Variabel .env:</strong> Memperbarui <code>MAIN_DOMAIN</code>, <code>APP_URL</code>, <code>PUBLIC_DOMAIN_BASE</code>.</div>
+                <div>🗄️ <strong>3. Database Tenant:</strong> Mengupdate <code>subdomain</code> pada tabel Tenant PostgreSQL.</div>
+                <div>📡 <strong>4. Server Lisensi:</strong> Sinkronisasi Caddy Cloud Gateway & regenerasi routing SSL.</div>
+                <div>🔁 <strong>5. PM2 & Caddy:</strong> Reload zero-downtime tanpa memutus sesi pengguna.</div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn btn-secondary" type="button" onclick="closeDomainModal()">Batal</button>
+                <button class="btn btn-primary" id="domain-modal-apply-btn" type="button" onclick="startDomainUpdateStream()">
+                    🚀 Terapkan Pembaruan Domain
+                </button>
+            </div>
+        </div>
+
+        <!-- Terminal Output Log Area (Hidden during form input) -->
+        <div id="domain-modal-terminal-area" style="display: none; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span id="domain-stream-status" style="font-size: 13px; font-weight: 600; color: #60a5fa;">⏳ Menghubungkan ke VPS...</span>
+                <span id="domain-stream-spinner" class="spinner" style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #60a5fa; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite;"></span>
+            </div>
+            <pre id="domain-stream-terminal" style="background: #090d16; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; font-family: 'Fira Code', monospace; font-size: 12px; color: #a5f3fc; height: 320px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;"></pre>
+            
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
+                <button class="btn btn-secondary" id="domain-modal-close-stream-btn" type="button" onclick="closeDomainModal()">Tutup Jendela</button>
+                <a id="domain-modal-open-link-btn" href="#" target="_blank" class="btn btn-primary" style="display: none; text-decoration: none;">
+                    🌐 Buka Aplikasi Baru ↗
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/preset-picker.js?v=20260918_v3"></script>
+<script src="/js/app.js?v=20260918_v3"></script>
+<script src="/js/wizard.js?v=20260918_v3"></script>
+<script src="/js/presets.js?v=20260918_v3"></script>
+<script src="/js/cluster.js?v=20260918_v3"></script>
+<script src="/js/logs.js?v=20260918_v3"></script>
+<script src="/js/health.js?v=20260918_v3"></script>
+<script src="/js/audit.js?v=20260918_v2"></script>
 
 </body>
 </html>

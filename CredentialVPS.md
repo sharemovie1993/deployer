@@ -15,7 +15,7 @@ password : 1
 
 VPS Lokal (Server Produksi Undangan Digital)
 Akun SSH
-IP : 10.10.10.91
+IP : 10.10.10.99
 domain : luxury.absenta.id
 Key :  nginxonly.pem
 user : asepsuryadi

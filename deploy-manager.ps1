@@ -1,4 +1,4 @@
-﻿# Centralized Deployment Manager (Global Deployer)
+# Centralized Deployment Manager (Global Deployer)
 # Untuk Windows PowerShell
 # Berfungsi memanggil skrip deploy internal masing-masing proyek
 
@@ -257,6 +257,14 @@ $PROJECTS = @(
         DefaultDir = "C:\Users\SERVER-DELL\Documents\Project-Server-Lisensi"
         HasDeployScript = $true
         HasQuickUpdate = $false
+    },
+    @{
+        ID = 8
+        Name = "Project Rekening Bersama (B-Pay Gateway & Rekber Hub)"
+        RepoUrl = "https://github.com/sharemovie1993/Project-Rekening-Bersama.git"
+        DefaultDir = "C:\apps\project-rekber"
+        HasDeployScript = $true
+        HasQuickUpdate = $true
     }
 )
 
@@ -295,6 +303,7 @@ while ($true) {
     Write-Host "  12) Kernel & System Tuning Produksi Absenta (Remote)"
     Write-Host "  13) Perbaikan & Pembersihan Terowongan Easy Tunnel (Remote)" -ForegroundColor Yellow
     Write-Host "  14) Setup Coturn STUN/TURN Relay Server WebRTC (Remote)" -ForegroundColor Green
+    Write-Host "  15) Setup MinIO S3 Storage Server (Remote Linux VM)" -ForegroundColor Cyan
     Write-Host ""
     Write-Host " [EMERGENCY & CLEANUP]" -ForegroundColor Cyan
     Write-Host "   10) Kill Semua Proses Node.js (Emergency)"
@@ -303,7 +312,7 @@ while ($true) {
     Write-Host " [EXIT]" -ForegroundColor Cyan
     Write-Host "   0) Keluar"
     Write-Host "==========================================================================" -ForegroundColor Cyan
-    $choice = Read-Host "Pilih opsi [0-14]"
+    $choice = Read-Host "Pilih opsi [0-15]"
 
     switch ($choice) {
         "1" {
@@ -857,10 +866,11 @@ while ($true) {
                 Write-Host " 1) Server Lisensi (Licensing Server)" -ForegroundColor White
                 Write-Host " 2) Project Absenta (Full Stack)" -ForegroundColor White
                 Write-Host " 3) Project Undangan Digital (Digital Invitation Studio)" -ForegroundColor White
-                Write-Host " 4) Proyek Umum Lainnya (POS, Yatim, gform, dll.)" -ForegroundColor White
+                Write-Host " 4) Project Rekening Bersama (B-Pay Gateway & Billing)" -ForegroundColor White
+                Write-Host " 5) Proyek Umum Lainnya (POS, Yatim, gform, dll.)" -ForegroundColor White
                 Write-Host " 0) Kembali ke Menu Utama" -ForegroundColor White
                 Write-Host ""
-                $subChoice = Read-Host "Pilih opsi [0-4]"
+                $subChoice = Read-Host "Pilih opsi [0-5]"
 
                 if ($subChoice -eq "0") {
                     break
@@ -893,6 +903,15 @@ while ($true) {
                     break
                 }
                 elseif ($subChoice -eq "4") {
+                    $script = Join-Path $PSScriptRoot "deploy-rekber-remote.ps1"
+                    if (Test-Path $script) {
+                        try { & $script } catch { Write-Host "[ERROR] $_" -ForegroundColor Red; Wait-Key }
+                    } else {
+                        Write-Host "Script deploy-rekber-remote.ps1 tidak ditemukan!" -ForegroundColor Red; Wait-Key
+                    }
+                    break
+                }
+                elseif ($subChoice -eq "5") {
                     $script = Join-Path $PSScriptRoot "deploy-general-remote.ps1"
                     if (Test-Path $script) {
                         try { & $script } catch { Write-Host "[ERROR] $_" -ForegroundColor Red; Wait-Key }
@@ -999,6 +1018,21 @@ while ($true) {
                 }
             } else {
                 Write-Host "Script easy-setup-coturn.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
+                Wait-Key
+            }
+        }
+        "15" {
+            $minioScript = Join-Path $PSScriptRoot "easy-setup-minio.ps1"
+            if (Test-Path $minioScript) {
+                try {
+                    & $minioScript
+                    Wait-Key
+                } catch {
+                    Write-Host "[ERROR] Gagal menjalankan easy-setup-minio: $_" -ForegroundColor Red
+                    Wait-Key
+                }
+            } else {
+                Write-Host "Script easy-setup-minio.ps1 tidak ditemukan di $PSScriptRoot" -ForegroundColor Red
                 Wait-Key
             }
         }

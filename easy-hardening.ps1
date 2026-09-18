@@ -1,3 +1,11 @@
+param (
+    [string]$TargetIP,
+    [string]$TargetUser,
+    [string]$KeyPath,
+    [string]$SudoPass = "1",
+    [switch]$Silent
+)
+
 $ErrorActionPreference = "Stop"
 
 function Show-Log {
@@ -8,38 +16,58 @@ function Show-Log {
 
 function Show-Header {
     param ($Title)
-    Clear-Host
-    Write-Host "==========================================================" -ForegroundColor Cyan
-    Write-Host "      $Title" -ForegroundColor Yellow -Bold
-    Write-Host "==========================================================" -ForegroundColor Cyan
+    if (-not $Silent) {
+        Clear-Host
+        Write-Host "==========================================================" -ForegroundColor Cyan
+        Write-Host "      $Title" -ForegroundColor Yellow
+        Write-Host "==========================================================" -ForegroundColor Cyan
+    }
 }
 
 $LOG_FILE = "$PSScriptRoot\hardening-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').log"
 Start-Transcript -Path $LOG_FILE -Append -Force | Out-Null
 
 Show-Header "LINUX SERVER HARDENING (IDEMPOTENT)"
-Write-Host "Script ini akan menerapkan standar keamanan tingkat lanjut di VPS:"
-Write-Host "- Mengaktifkan UFW Firewall (Hanya buka port 22, 80, 443, 51820)"
-Write-Host "- Memasang dan mengkonfigurasi Fail2Ban (Proteksi Brute-force)"
-Write-Host "- Mematikan akses Login Root via Password"
-Write-Host "- Menonaktifkan otentikasi Password di SSH"
-Write-Host "Aman dijalankan berkali-kali (Idempotent)." -ForegroundColor Green
-Write-Host "----------------------------------------------------------"
+if (-not $Silent) {
+    Write-Host "Script ini akan menerapkan standar keamanan tingkat lanjut di VPS:"
+    Write-Host "- Mengaktifkan UFW Firewall (Hanya buka port 22, 80, 443, 51820)"
+    Write-Host "- Memasang dan mengkonfigurasi Fail2Ban (Proteksi Brute-force)"
+    Write-Host "- Mematikan akses Login Root via Password"
+    Write-Host "- Menonaktifkan otentikasi Password di SSH"
+    Write-Host "Aman dijalankan berkali-kali (Idempotent)." -ForegroundColor Green
+    Write-Host "----------------------------------------------------------"
+}
 
-$TARGET_IP = (Read-Host "Masukkan IP VPS Target (Contoh: 103.129.148.127)").Trim()
-$TARGET_USER = "asepsuryadi"
+$TARGET_IP = if (-not [string]::IsNullOrWhiteSpace($TargetIP)) { $TargetIP.Trim() } else {
+    (Read-Host "Masukkan IP VPS Target (Contoh: 103.129.148.127)").Trim()
+}
 
-Write-Host "Pilih SSH Key untuk VPS tersebut:"
-Write-Host " 1) nginxonly.pem"
-Write-Host " 2) ls-key.pem"
-Write-Host " 3) Input path file manual..."
-$keyChoice = Read-Host "Pilih opsi [1-3]"
+$TARGET_USER = if (-not [string]::IsNullOrWhiteSpace($TargetUser)) { $TargetUser.Trim() } else {
+    $inputUser = (Read-Host "Masukkan Username VPS [Default: asep]").Trim()
+    if ([string]::IsNullOrWhiteSpace($inputUser)) { "asep" } else { $inputUser }
+}
 
 $KEY_FILE = ""
-if ($keyChoice -eq "1") { $KEY_FILE = Join-Path $PSScriptRoot "nginxonly.pem" }
-elseif ($keyChoice -eq "2") { $KEY_FILE = Join-Path $PSScriptRoot "ls-key.pem" }
-elseif ($keyChoice -eq "3") { $KEY_FILE = (Read-Host "Masukkan path absolut file .pem").Trim() }
-else { throw "Pilihan key tidak valid." }
+if (-not [string]::IsNullOrWhiteSpace($KeyPath)) {
+    $KEY_FILE = $KeyPath.Trim()
+    if (-not (Test-Path $KEY_FILE)) {
+        $altKey = Join-Path $PSScriptRoot (Split-Path $KEY_FILE -Leaf)
+        if (Test-Path $altKey) { $KEY_FILE = $altKey }
+    }
+} else {
+    Write-Host "Pilih SSH Key untuk VPS tersebut:"
+    Write-Host " 1) nginxonly.pem"
+    Write-Host " 2) ls-key.pem"
+    Write-Host " 3) Input path file manual..."
+    $keyChoice = Read-Host "Pilih opsi [1-3] (Default: 1)"
+
+    if ([string]::IsNullOrWhiteSpace($keyChoice) -or $keyChoice -eq "1") { $KEY_FILE = Join-Path $PSScriptRoot "nginxonly.pem" }
+    elseif ($keyChoice -eq "2") { $KEY_FILE = Join-Path $PSScriptRoot "ls-key.pem" }
+    elseif ($keyChoice -eq "3") { $KEY_FILE = (Read-Host "Masukkan path absolut file .pem").Trim() }
+    else { throw "Pilihan key tidak valid." }
+}
+
+$SUDO_PASS = if (-not [string]::IsNullOrWhiteSpace($SudoPass)) { $SudoPass } else { "1" }
 
 if (-not (Test-Path $KEY_FILE)) {
     throw "SSH Key tidak ditemukan di: $KEY_FILE"
@@ -159,7 +187,7 @@ check_wireguard() {
 }
 check_pm2() {
   if ! pgrep -f "pm2" &>/dev/null; then
-    log "⚠️  PM2 mati - resurrect..."; su - asepsuryadi -c "pm2 resurrect" 2>/dev/null || true; sleep 5
+    log "⚠️  PM2 mati - resurrect..."; su - $TARGET_USER -c "pm2 resurrect" 2>/dev/null || true; sleep 5
     pgrep -f "pm2" &>/dev/null && log "✅ PM2 hidup" || log "❌ PM2 gagal"
   fi
 }
@@ -228,7 +256,7 @@ Invoke-Expression "$SCPCmd $tempScript ${TARGET_USER}@${TARGET_IP}:/tmp/remote_h
 if ($LASTEXITCODE -ne 0) { throw "Gagal mengirim script ke VPS." }
 
 Show-Log "Mengeksekusi proses Hardening di VPS..."
-$runCmd = "$SSHCmd ${TARGET_USER}@${TARGET_IP} `"chmod +x /tmp/remote_hardening.sh && /tmp/remote_hardening.sh`""
+$runCmd = "$SSHCmd ${TARGET_USER}@${TARGET_IP} `"chmod +x /tmp/remote_hardening.sh && echo '$SUDO_PASS' | sudo -S bash /tmp/remote_hardening.sh`""
 Invoke-Expression $runCmd
 if ($LASTEXITCODE -ne 0) {
     throw "Hardening gagal dengan Exit Code $LASTEXITCODE"

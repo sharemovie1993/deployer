@@ -108,7 +108,90 @@ function handleFixPortConflict(req, res, parsedUrl) {
     });
 }
 
+function handleCheckDomainConfig(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const preset = presets.find(p => p.id === presetId);
+
+    if (!preset) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Preset tidak ditemukan.' }));
+        return;
+    }
+
+    const rawKey = preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem';
+    const remoteCmd = [
+        'echo "===CHECK_DOMAIN_START===";',
+        'if [ -f "/var/www/project-absenta/absenta_backend/.env" ]; then',
+        '    echo "APP_URL:$(grep -E \'^APP_URL=\' /var/www/project-absenta/absenta_backend/.env | cut -d\'=\' -f2-)";',
+        '    echo "MAIN_DOMAIN:$(grep -E \'^MAIN_DOMAIN=\' /var/www/project-absenta/absenta_backend/.env | cut -d\'=\' -f2-)";',
+        '    echo "EASY_TUNNEL_BASE_DOMAIN:$(grep -E \'^EASY_TUNNEL_BASE_DOMAIN=\' /var/www/project-absenta/absenta_backend/.env | cut -d\'=\' -f2-)";',
+        '    echo "PUBLIC_DOMAIN_BASE:$(grep -E \'^PUBLIC_DOMAIN_BASE=\' /var/www/project-absenta/absenta_backend/.env | cut -d\'=\' -f2-)";',
+        '    echo "TENANT_BASE_DOMAIN:$(grep -E \'^TENANT_BASE_DOMAIN=\' /var/www/project-absenta/absenta_backend/.env | cut -d\'=\' -f2-)";',
+        '    echo "FRONTEND_URL:$(grep -E \'^FRONTEND_URL=\' /var/www/project-absenta/absenta_backend/.env | cut -d\'=\' -f2-)";',
+        '    echo "LICENSE_KEY:$(grep -E \'^LICENSE_KEY=\' /var/www/project-absenta/absenta_backend/.env | cut -d\'=\' -f2-)";',
+        '    echo "LICENSE_SERVER_URL:$(grep -E \'^LICENSE_SERVER_URL=\' /var/www/project-absenta/absenta_backend/.env | cut -d\'=\' -f2-)";',
+        'fi;',
+        'if [ -f "/var/www/project-absenta/absenta_frontend/.env" ]; then',
+        '    echo "VITE_MAIN_DOMAIN:$(grep -E \'^VITE_MAIN_DOMAIN=\' /var/www/project-absenta/absenta_frontend/.env | cut -d\'=\' -f2-)";',
+        'fi;',
+        'if [ -d "/var/www/project-absenta/absenta_backend" ]; then',
+        '    cd /var/www/project-absenta/absenta_backend;',
+        '    node -e "const { PrismaClient } = require(\'@prisma/client\'); const prisma = new PrismaClient(); prisma.tenant.findFirst({ where: { id: { not: \'system\' } }, select: { name: true, subdomain: true, custom_domain: true } }).then(t => { if (t) { console.log(\'TENANT_NAME:\' + (t.name || \'\')); console.log(\'TENANT_SUBDOMAIN:\' + (t.subdomain || \'\')); console.log(\'TENANT_CUSTOM_DOMAIN:\' + (t.custom_domain || \'\')); } }).catch(() => {}).finally(() => prisma.\\$disconnect());" 2>/dev/null;',
+        'fi;',
+        'echo "===CHECK_DOMAIN_END===";'
+    ].join(' ');
+
+    executeSshCommand({
+        rawKeyPath: rawKey,
+        user: preset.vpsUser || 'asepsuryadi',
+        ip: preset.vpsIp,
+        command: remoteCmd,
+        timeoutMs: 12000
+    }).then(result => {
+        if (!result.success || !result.stdout.includes('===CHECK_DOMAIN_START===')) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                message: result.stderr || 'Gagal terhubung ke VPS untuk membaca konfigurasi .env.'
+            }));
+            return;
+        }
+
+        const parse = (key) => {
+            const m = result.stdout.match(new RegExp(key + ':(.*)'));
+            return m ? m[1].trim() : '';
+        };
+
+        const configData = {
+            appUrl: parse('APP_URL'),
+            mainDomain: parse('MAIN_DOMAIN'),
+            easyTunnelBaseDomain: parse('EASY_TUNNEL_BASE_DOMAIN'),
+            publicDomainBase: parse('PUBLIC_DOMAIN_BASE'),
+            tenantBaseDomain: parse('TENANT_BASE_DOMAIN'),
+            frontendUrl: parse('FRONTEND_URL'),
+            viteMainDomain: parse('VITE_MAIN_DOMAIN'),
+            licenseKey: parse('LICENSE_KEY'),
+            licenseServerUrl: parse('LICENSE_SERVER_URL'),
+            tenantName: parse('TENANT_NAME'),
+            tenantSubdomain: parse('TENANT_SUBDOMAIN'),
+            tenantCustomDomain: parse('TENANT_CUSTOM_DOMAIN')
+        };
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            data: configData,
+            ...configData
+        }));
+    }).catch(err => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: err.message }));
+    });
+}
+
 module.exports = {
     handleTestConnection,
-    handleFixPortConflict
+    handleFixPortConflict,
+    handleCheckDomainConfig
 };

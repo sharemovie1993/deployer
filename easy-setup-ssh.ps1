@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param (
     [Parameter(Mandatory = $false)]
     [string]$TargetIP = "",
@@ -49,6 +49,11 @@ if ([string]::IsNullOrWhiteSpace($TargetIP)) {
     exit 1
 }
 
+if ([string]::IsNullOrWhiteSpace($TargetUser) -or $TargetUser -eq "asepsuryadi") {
+    $inputUser = (Read-Host "Masukkan Username VPS Target [Default: asep]").Trim()
+    $TargetUser = if ([string]::IsNullOrWhiteSpace($inputUser)) { "asep" } else { $inputUser }
+}
+
 $KEY_FILE = Join-Path $PSScriptRoot "nginxonly.pem"
 if (-not (Test-Path $KEY_FILE)) {
     throw "Kunci private nginxonly.pem tidak ditemukan di: $KEY_FILE"
@@ -72,13 +77,13 @@ $acl.AddAccessRule($rule)
 Set-Acl -Path $SAFE_KEY -AclObject $acl
 
 # 3. Jalankan perintah append remote
-Show-Log "Menghubungkan ke VPS via password untuk mendaftarkan public key..."
-Show-Log "Silakan masukkan password SSH VPS Anda saat diminta oleh sistem:" -ForegroundColor Yellow
+Show-Log "Menghubungkan ke VPS ($TargetUser@$TargetIP) via password untuk mendaftarkan public key..."
+Show-Log "Silakan masukkan password SSH user '$TargetUser' saat diminta:" -ForegroundColor Yellow
 
 $remoteCmd = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 
 # Jalankan secara interaktif agar user bisa memasukkan password secara langsung
-& ssh -o StrictHostKeyChecking=no "${TARGET_USER}@${TARGET_IP}" $remoteCmd
+& ssh -o StrictHostKeyChecking=no "${TargetUser}@${TargetIP}" "$remoteCmd"
 
 if ($LASTEXITCODE -ne 0) {
     throw "Registrasi SSH Key gagal. Pastikan password yang Anda masukkan benar."

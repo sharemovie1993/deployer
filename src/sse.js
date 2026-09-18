@@ -259,6 +259,8 @@ function handleStreamInstall(req, res, installParams) {
             '-InstallPostgres', installParams.postgresMode || 'Y',
             '-RedisMode', installParams.redisMode || 'Y',
             '-RedisUrl', installParams.redisUrl || 'redis://localhost:6379',
+            '-InstallMinio', installParams.installMinio || 'Y',
+            '-InstallCoturn', installParams.installCoturn || 'Y',
             '-DefaultTimezone', installParams.defaultTimezone || 'Asia/Jakarta',
             '-LicenseKey', installParams.licenseKey || '',
             '-SchoolName', installParams.schoolName || '',
@@ -626,6 +628,264 @@ function handleStreamUndanganInstall(req, res, installParams) {
     });
 }
 
+function handleStreamHardening(req, res, parsedUrl) {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const preset = presets.find(p => p.id === presetId);
+
+    const targetIp = preset ? preset.vpsIp : (parsedUrl.searchParams.get('ip') || '10.10.10.99');
+    const targetUser = preset ? (preset.vpsUser || 'asep') : (parsedUrl.searchParams.get('user') || 'asep');
+    const rawKey = preset ? (preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem') : (parsedUrl.searchParams.get('key') || 'nginxonly.pem');
+    const sudoPass = preset ? (preset.vpsSudoPass || '1') : (parsedUrl.searchParams.get('sudoPass') || '1');
+
+    let keyPath;
+    try {
+        keyPath = createSafeKeyFile(rawKey);
+    } catch (err) {
+        res.write(`data: [HARDENING_FAILED] Gagal membaca SSH key: ${err.message}\n\n`);
+        res.end();
+        return;
+    }
+
+    const psArgs = [
+        '-ExecutionPolicy', 'Bypass',
+        '-File', path.join(ROOT_DIR, 'easy-hardening.ps1'),
+        '-Silent',
+        '-TargetIP', targetIp,
+        '-TargetUser', targetUser,
+        '-KeyPath', keyPath,
+        '-SudoPass', sudoPass
+    ];
+
+    const logMsg = `[START] Memulai Hardening Server Produksi (${targetUser}@${targetIp})\nCommand: powershell.exe ${psArgs.join(' ')}\n\n`;
+    res.write(`data: ${logMsg.replace(/\n/g, '\ndata: ')}\n\n`);
+
+    const heartbeat = setInterval(() => {
+        res.write(': heartbeat\n\n');
+    }, 10000);
+
+    const proc = spawn('powershell.exe', psArgs);
+
+    proc.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    proc.stderr.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: [WARN] ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    proc.on('close', (code) => {
+        clearInterval(heartbeat);
+        if (keyPath) cleanupSafeKey(keyPath);
+        if (code === 0) {
+            res.write(`data: [HARDENING_COMPLETE] Server berhasil di-hardening penuh!\n\n`);
+        } else {
+            res.write(`data: [HARDENING_FAILED] Proses selesai dengan kode error: ${code}\n\n`);
+        }
+        res.end();
+    });
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        if (keyPath) cleanupSafeKey(keyPath);
+        try { proc.kill(); } catch (e) {}
+    });
+}
+
+function handleStreamTuning(req, res, parsedUrl) {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const preset = presets.find(p => p.id === presetId);
+
+    const targetIp = preset ? preset.vpsIp : (parsedUrl.searchParams.get('ip') || '10.10.10.99');
+    const targetUser = preset ? (preset.vpsUser || 'asep') : (parsedUrl.searchParams.get('user') || 'asep');
+    const rawKey = preset ? (preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem') : (parsedUrl.searchParams.get('key') || 'nginxonly.pem');
+    const sudoPass = preset ? (preset.vpsSudoPass || '1') : (parsedUrl.searchParams.get('sudoPass') || '1');
+    const tz = parsedUrl.searchParams.get('tz') || 'UTC';
+    const role = parsedUrl.searchParams.get('role') || 'all-in-one';
+
+    let keyPath;
+    try {
+        keyPath = createSafeKeyFile(rawKey);
+    } catch (err) {
+        res.write(`data: [TUNING_FAILED] Gagal membaca SSH key: ${err.message}\n\n`);
+        res.end();
+        return;
+    }
+
+    const psArgs = [
+        '-ExecutionPolicy', 'Bypass',
+        '-File', path.join(ROOT_DIR, 'easy-tuning.ps1'),
+        '-Silent',
+        '-TargetIP', targetIp,
+        '-TargetUser', targetUser,
+        '-KeyPath', keyPath,
+        '-SudoPass', sudoPass,
+        '-Timezone', tz,
+        '-Role', role
+    ];
+
+    const logMsg = `[START] Memulai Tuning Kernel & Sistem Linux (${targetUser}@${targetIp})\nZona Waktu: ${tz} | Role: ${role}\nCommand: powershell.exe ${psArgs.join(' ')}\n\n`;
+    res.write(`data: ${logMsg.replace(/\n/g, '\ndata: ')}\n\n`);
+
+    const heartbeat = setInterval(() => {
+        res.write(': heartbeat\n\n');
+    }, 10000);
+
+    const proc = spawn('powershell.exe', psArgs);
+
+    proc.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    proc.stderr.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: [WARN] ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    proc.on('close', (code) => {
+        clearInterval(heartbeat);
+        if (keyPath) cleanupSafeKey(keyPath);
+        if (code === 0) {
+            res.write(`data: [TUNING_COMPLETE] Tuning kernel dan sistem sukses diterapkan!\n\n`);
+        } else {
+            res.write(`data: [TUNING_FAILED] Proses selesai dengan kode error: ${code}\n\n`);
+        }
+        res.end();
+    });
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        if (keyPath) cleanupSafeKey(keyPath);
+        try { proc.kill(); } catch (e) {}
+    });
+}
+
+function handleStreamUpdateDomain(req, res, parsedUrl) {
+    const presetId = parsedUrl.searchParams.get('id');
+    const oldSubdomain = parsedUrl.searchParams.get('oldSubdomain') || '';
+    const newSubdomain = parsedUrl.searchParams.get('newSubdomain') || '';
+    const baseDomain = parsedUrl.searchParams.get('baseDomain') || 'absenta.id';
+    const customDomain = parsedUrl.searchParams.get('customDomain') || '';
+
+    const presets = getPresets();
+    const preset = presets.find(p => p.id === presetId);
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    if (!preset) {
+        res.write(`data: [DOMAIN_UPDATE_FAILED] Preset dengan ID ${presetId} tidak ditemukan.\n\n`);
+        res.end();
+        return;
+    }
+
+    cancelProcess(presetId);
+
+    let keyPath;
+    try {
+        keyPath = createSafeKeyFile(preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem');
+    } catch (err) {
+        res.write(`data: [DOMAIN_UPDATE_FAILED] Gagal membaca kunci SSH: ${err.message}\n\n`);
+        res.end();
+        return;
+    }
+
+    const psArgs = [
+        '-ExecutionPolicy', 'Bypass',
+        '-File', path.join(ROOT_DIR, 'easy-update-config.ps1'),
+        '-Silent',
+        '-TargetIP', preset.vpsIp || '',
+        '-TargetUser', preset.vpsUser || 'asepsuryadi',
+        '-KeyPath', keyPath,
+        '-SudoPass', preset.vpsSudoPass || '',
+        '-OldSubdomain', oldSubdomain,
+        '-NewSubdomain', newSubdomain,
+        '-NewBaseDomain', baseDomain,
+        '-CustomDomain', customDomain
+    ];
+
+    const targetDesc = customDomain ? customDomain : (newSubdomain ? `${newSubdomain}.${baseDomain}` : baseDomain);
+    const logMsg = `[DOMAIN_UPDATE] Memulai guided domain update untuk server: ${preset.name} (${preset.vpsIp})\nDomain Baru: https://${targetDesc}\nSubdomain: ${oldSubdomain || '(default)'} -> ${newSubdomain || '(default)'}\n\n`;
+    res.write(`data: ${logMsg.replace(/\n/g, '\ndata: ')}\n\n`);
+
+    const heartbeat = setInterval(() => {
+        res.write(': heartbeat\n\n');
+    }, 10000);
+
+    const psProcess = spawn('powershell.exe', psArgs);
+    activeProcesses.set(presetId, psProcess);
+
+    psProcess.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    psProcess.stderr.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: [ERROR] ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    psProcess.on('close', (code) => {
+        clearInterval(heartbeat);
+        activeProcesses.delete(presetId);
+        if (keyPath) cleanupSafeKey(keyPath);
+        if (code === 0) {
+            res.write(`data: [DOMAIN_UPDATE_COMPLETE] Domain berhasil diperbarui ke: https://${targetDesc}\n\n`);
+        } else {
+            res.write(`data: [DOMAIN_UPDATE_FAILED] Proses selesai dengan kode error: ${code}\n\n`);
+        }
+        res.end();
+    });
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        if (keyPath) cleanupSafeKey(keyPath);
+    });
+}
+
 module.exports = {
     handleStreamQuickUpdate,
     handleStreamSeedWilayah,
@@ -634,5 +894,8 @@ module.exports = {
     handleStreamClusterInstall,
     handleStreamSetupSsh,
     handleStreamPm2Logs,
+    handleStreamHardening,
+    handleStreamTuning,
+    handleStreamUpdateDomain,
     cancelProcess
 };

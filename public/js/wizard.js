@@ -6,15 +6,16 @@ let installConfig = {
     vpsKeyChoice: 'nginxonly.pem',
     vpsKeyPath: '',
     vpsSudoPass: '1',
-    deployScenario: 'hybrid',
+    deployScenario: 'saas',
     targetDomain: 'absenta.sekolah.sch.id',
     backendPort: '3003',
     frontendPort: '5175',
+    defaultTimezone: 'Asia/Jakarta',
     sslScenario: 'internal',
     cfToken: '',
     postgresMode: 'Y',
-    dbUrl: 'postgresql://postgres:postgres@localhost:5432/absenta_db',
-    redisMode: 'N',
+    dbUrl: 'postgresql://postgres:123123123@localhost:5432/absensi',
+    redisMode: 'Y',
     redisUrl: 'redis://localhost:6379',
     licenseKey: '',
     schoolName: '',
@@ -36,14 +37,28 @@ function handleKeySelection() {
 
 function selectScenario(scenario) {
     installConfig.deployScenario = scenario;
-    document.getElementById('card-mode-hybrid').classList.toggle('selected', scenario === 'hybrid');
-    document.getElementById('card-mode-onprem').classList.toggle('selected', scenario === 'onprem');
+    const saasCard = document.getElementById('card-mode-saas');
+    const hybridCard = document.getElementById('card-mode-hybrid');
+    const onpremCard = document.getElementById('card-mode-onprem');
+    if (saasCard) saasCard.classList.toggle('selected', scenario === 'saas');
+    if (hybridCard) hybridCard.classList.toggle('selected', scenario === 'hybrid');
+    if (onpremCard) onpremCard.classList.toggle('selected', scenario === 'onprem');
 }
 
 function setPostgresMode(mode) {
     installConfig.postgresMode = mode;
     document.getElementById('card-pg-yes').classList.toggle('selected', mode === 'Y');
     document.getElementById('card-pg-no').classList.toggle('selected', mode === 'N');
+}
+
+function setRedisMode(mode) {
+    installConfig.redisMode = mode;
+    const yesCard = document.getElementById('card-redis-yes');
+    const noCard = document.getElementById('card-redis-no');
+    const urlGroup = document.getElementById('redis-url-group');
+    if (yesCard) yesCard.classList.toggle('selected', mode === 'Y');
+    if (noCard) noCard.classList.toggle('selected', mode === 'N');
+    if (urlGroup) urlGroup.style.display = mode === 'N' ? 'block' : 'none';
 }
 
 function testSSHConnection() {
@@ -88,7 +103,7 @@ function testDatabaseConnection() {
     fetch('/api/test-db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dbUrl)
+        body: JSON.stringify({ dbUrl })
     })
     .then(res => res.json())
     .then(data => {
@@ -103,6 +118,130 @@ function testDatabaseConnection() {
     .catch(err => {
         alertBox.className = 'alert-box error';
         alertBox.innerHTML = '❌ Gagal melakukan tes DB: ' + err.message;
+    });
+}
+
+function createDatabaseAuto() {
+    const alertBox = document.getElementById('db-test-alert');
+    alertBox.className = 'alert-box warning';
+    alertBox.innerHTML = '🔄 Menghubungi PostgreSQL dan membuat database baru... Silakan tunggu.';
+
+    const dbUrl = document.getElementById('db-url').value;
+
+    fetch('/api/create-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dbUrl })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alertBox.className = 'alert-box success';
+            alertBox.innerHTML = data.message;
+        } else {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = data.message;
+        }
+    })
+    .catch(err => {
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Gagal membuat database: ' + err.message;
+    });
+}
+
+function toggleLicenseMode(mode) {
+    const cardExisting = document.getElementById('card-lic-existing');
+    const cardRegister = document.getElementById('card-lic-register');
+    const formExisting = document.getElementById('form-lic-existing');
+    const formRegister = document.getElementById('form-lic-register');
+    const alertBox = document.getElementById('license-test-alert');
+
+    if (alertBox) alertBox.className = 'alert-box';
+
+    if (mode === 'register') {
+        if (cardExisting) cardExisting.classList.remove('selected');
+        if (cardRegister) cardRegister.classList.add('selected');
+        if (formExisting) formExisting.style.display = 'none';
+        if (formRegister) formRegister.style.display = 'block';
+    } else {
+        if (cardExisting) cardExisting.classList.add('selected');
+        if (cardRegister) cardRegister.classList.remove('selected');
+        if (formExisting) formExisting.style.display = 'block';
+        if (formRegister) formRegister.style.display = 'none';
+    }
+}
+
+function requestNewLicense() {
+    const alertBox = document.getElementById('license-test-alert');
+    const schoolName = document.getElementById('reg-school-name').value.trim();
+    const waNumber = document.getElementById('reg-wa-number').value.trim();
+    const requestedSlug = document.getElementById('reg-slug').value.trim();
+
+    if (!schoolName) {
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Masukkan Nama Resmi Sekolah / Lembaga.';
+        return;
+    }
+    if (!waNumber) {
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Masukkan Nomor WhatsApp untuk menerima kunci lisensi.';
+        return;
+    }
+    if (!requestedSlug) {
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Masukkan Subdomain / Slug pilihan Anda.';
+        return;
+    }
+
+    alertBox.className = 'alert-box warning';
+    alertBox.innerHTML = '🔄 Mengirim permohonan registrasi lisensi baru ke api.absenta.id... Silakan tunggu.';
+
+    fetch('/api/register-license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolName, waNumber, requestedSlug })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success && data.licenseKey) {
+            document.getElementById('license-key').value = data.licenseKey;
+            const schoolNameInput = document.getElementById('school-name');
+            if (schoolNameInput) schoolNameInput.value = data.schoolName;
+            installConfig.licenseKey = data.licenseKey;
+            installConfig.schoolName = data.schoolName;
+
+            if (installConfig.deployScenario === 'hybrid' && data.domain) {
+                installConfig.targetDomain = data.domain;
+                const domainInput = document.getElementById('target-domain');
+                if (domainInput) domainInput.value = data.domain;
+            }
+
+            toggleLicenseMode('existing');
+
+            alertBox.className = 'alert-box success';
+            alertBox.style.background = 'rgba(16, 185, 129, 0.1)';
+            alertBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+            alertBox.style.padding = '16px';
+            alertBox.style.borderRadius = '12px';
+            alertBox.innerHTML = `
+                <div style="font-weight: 700; font-size: 15px; color: #34d399; margin-bottom: 8px;">
+                    🎉 Registrasi Berhasil! Kunci Lisensi Baru Telah Diterbitkan
+                </div>
+                <div style="font-size: 13px; color: #e2e8f0; line-height: 1.6;">
+                    <strong>Serial Key:</strong> <code style="color: #6ee7b7; font-weight: bold; font-size: 14px;">${data.licenseKey}</code><br>
+                    <strong>Sekolah:</strong> ${data.schoolName}<br>
+                    <strong>Domain Portal:</strong> <span style="color: #38bdf8;">${data.domain}</span><br>
+                    <span style="color: #a78bfa;">Detail lisensi dan rincian aktivasi juga telah dikirimkan ke WhatsApp Anda (${waNumber}).</span>
+                </div>
+            `;
+        } else {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = '❌ ' + (data.message || 'Gagal melakukan registrasi lisensi.');
+        }
+    })
+    .catch(err => {
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Gagal menghubungi server registrasi: ' + err.message;
     });
 }
 
@@ -221,8 +360,14 @@ function nextStep() {
         installConfig.targetDomain = document.getElementById('target-domain').value;
         installConfig.backendPort = document.getElementById('backend-port').value;
         installConfig.frontendPort = document.getElementById('frontend-port').value;
+        const tzEl = document.getElementById('platform-timezone');
+        if (tzEl) installConfig.defaultTimezone = tzEl.value;
     } else if (currentStep === 3) {
         installConfig.dbUrl = document.getElementById('db-url').value;
+        const redisUrlEl = document.getElementById('redis-url');
+        if (redisUrlEl && installConfig.redisMode === 'N') {
+            installConfig.redisUrl = redisUrlEl.value;
+        }
     } else if (currentStep === 4) {
         installConfig.licenseKey = document.getElementById('license-key').value;
         installConfig.schoolName = document.getElementById('school-name').value;
@@ -251,11 +396,21 @@ function renderSummary() {
     const summary = document.getElementById('summary-container');
     if (!summary) return;
 
+    let scenarioLabel = '🌐 SaaS / Cloud Direct (Domain Publik Mandiri)';
+    if (installConfig.deployScenario === 'hybrid') {
+        scenarioLabel = '🔗 Hybrid (Lokal Sekolah + Easy-Tunnel WireGuard)';
+    } else if (installConfig.deployScenario === 'onprem') {
+        scenarioLabel = '🏫 On-Premise Intranet Murni (Tanpa Internet Publik)';
+    }
+
     summary.innerHTML =
         '<strong>📌 Target Server:</strong> ' + installConfig.targetOS.toUpperCase() + ' (' + (installConfig.targetOS === 'linux' ? installConfig.vpsIp : 'Localhost') + ')<br>' +
+        '<strong>🚀 Skenario Akses:</strong> ' + scenarioLabel + '<br>' +
         '<strong>🌐 Domain Sekolah:</strong> ' + installConfig.targetDomain + '<br>' +
         '<strong>🔌 Port Aplikasi:</strong> Backend ' + installConfig.backendPort + ' | Frontend ' + installConfig.frontendPort + '<br>' +
-        '<strong>🗄️ Database PostgreSQL:</strong> ' + (installConfig.postgresMode === 'Y' ? 'Otomatis Install Lokal' : 'Database Eksisting') + '<br>' +
+        '<strong>🕒 Zona Waktu:</strong> ' + (installConfig.defaultTimezone || 'Asia/Jakarta') + '<br>' +
+        '<strong>🗄️ Database PostgreSQL:</strong> ' + (installConfig.postgresMode === 'Y' ? 'Otomatis Install Lokal' : 'Database Eksisting') + ' (' + installConfig.dbUrl + ')<br>' +
+        '<strong>⚡ Redis Cache:</strong> ' + (installConfig.redisMode === 'Y' ? 'Otomatis Install Lokal di VPS' : 'Lewati / Eksternal (' + installConfig.redisUrl + ')') + '<br>' +
         '<strong>🛡️ Serial Key Lisensi:</strong> ' + (installConfig.licenseKey || 'Belum diisi (Trial Mode)');
 }
 

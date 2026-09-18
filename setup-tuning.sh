@@ -196,6 +196,35 @@ EOF
 
 echo -e "${GREEN}✓ Konfigurasi Postgres (Shared Buffers: ${PG_SHARED_BUFFERS_MB}MB, Conn: ${PG_MAX_CONN}) & Redis (MaxMem: ${REDIS_MAX_MEM_MB}MB, Policy: allkeys-lru) ter-generate di /etc/absenta/config/!${NC}"
 
+# Otomatis terapkan ke PostgreSQL bawaan sistem Linux jika sudah terpasang
+PG_APPLIED=false
+for conf_dir in /etc/postgresql/*/main/conf.d; do
+    if [ -d "$conf_dir" ]; then
+        cp /etc/absenta/config/postgresql.conf "$conf_dir/99-absenta-tuning.conf"
+        chown -R postgres:postgres "$conf_dir/99-absenta-tuning.conf" 2>/dev/null || true
+        chmod 644 "$conf_dir/99-absenta-tuning.conf"
+        PG_APPLIED=true
+        echo -e "${GREEN}✓ Konfigurasi Postgres (${PG_SHARED_BUFFERS_MB}MB RAM) berhasil di-link ke $conf_dir/99-absenta-tuning.conf!${NC}"
+    fi
+done
+
+if [ "$PG_APPLIED" = true ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl reload postgresql 2>/dev/null || systemctl restart postgresql 2>/dev/null || true
+fi
+
+# Otomatis terapkan ke Redis bawaan sistem Linux jika sudah terpasang
+if [ -f /etc/redis/redis.conf ]; then
+    if ! grep -q "include /etc/absenta/config/redis.conf" /etc/redis/redis.conf; then
+        echo "" >> /etc/redis/redis.conf
+        echo "# Project Absenta Production Redis Tuning" >> /etc/redis/redis.conf
+        echo "include /etc/absenta/config/redis.conf" >> /etc/redis/redis.conf
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl restart redis-server 2>/dev/null || systemctl restart redis 2>/dev/null || true
+    fi
+    echo -e "${GREEN}✓ Konfigurasi Redis (MaxMem: ${REDIS_MAX_MEM_MB}MB) berhasil di-link ke /etc/redis/redis.conf & di-restart!${NC}"
+fi
+
 # 7. Waktu & Zona Waktu (NTP Synchronization)
 TARGET_TZ="${1:-UTC}"
 echo -e "${CYAN}[5/6] Mengonfigurasi Zona Waktu ($TARGET_TZ) & Synchronisasi Waktu (NTP)...${NC}"

@@ -1,4 +1,4 @@
-﻿# easy-swap.ps1 - Skrip Konfigurasi SWAP Linux VPS Jarak Jauh
+# easy-swap.ps1 - Skrip Konfigurasi SWAP Linux VPS Jarak Jauh
 # Berfungsi mengaktifkan 4GB SWAP Space secara remote via SSH
 
 $ErrorActionPreference = "Stop"
@@ -28,7 +28,8 @@ Write-Host "Membantu mencegah crash karena Out of Memory (OOM) saat kompilasi." 
 Write-Host "----------------------------------------------------------"
 
 $TARGET_IP = (Read-Host "Masukkan IP VPS Target (Contoh: 103.129.148.127)").Trim()
-$TARGET_USER = "asepsuryadi"
+$inputUser = (Read-Host "Masukkan Username VPS [Default: asep]").Trim()
+$TARGET_USER = if ([string]::IsNullOrWhiteSpace($inputUser)) { "asep" } else { $inputUser }
 
 if ([string]::IsNullOrWhiteSpace($TARGET_IP)) {
     Write-Host "Error: IP Target tidak boleh kosong!" -ForegroundColor Red

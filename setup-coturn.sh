@@ -18,7 +18,8 @@ fi
 REALM="${TURN_REALM:-absenta.id}"
 SECRET_KEY="${TURN_SECRET:-${EXISTING_SECRET:-$(openssl rand -hex 32)}}"
 LISTENING_IP=$(hostname -I | awk '{print $1}')
-PUBLIC_IP=$(curl -s4 https://api.ipify.org || echo "${LISTENING_IP}")
+PUBLIC_IP=$(curl -s4 --connect-timeout 3 -m 5 https://api.ipify.org 2>/dev/null || echo "${LISTENING_IP}")
+[ -z "$PUBLIC_IP" ] && PUBLIC_IP="${LISTENING_IP}"
 
 echo "======================================================================"
 echo "  PEMASANGAN COTURN STUN/TURN RELAY SERVER FOR ABSENTA VIDEO MEETING"
@@ -33,8 +34,9 @@ echo "======================================================================"
 
 # 1. Update Repository & Install Coturn
 echo "📥 Menginstall paket coturn..."
+rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
 apt-get update -yqq
-apt-get install -yqq coturn
+DEBIAN_FRONTEND=noninteractive apt-get install -yqq coturn
 
 # 2. Aktifkan Coturn di /etc/default/coturn
 echo "⚙️ Mengaktifkan daemon Coturn di /etc/default/coturn..."

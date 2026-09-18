@@ -57,44 +57,112 @@ function handleTestSsh(req, res) {
 function handleTestDb(req, res) {
     let body = '';
     req.on('data', chunk => body += chunk);
-    req.on('end', () => {
+    req.on('end', async () => {
         try {
             const data = JSON.parse(body);
-            let dbHost = '127.0.0.1';
-            let dbPort = 5432;
+            let rawUrl = '';
 
             if (typeof data === 'string') {
+                rawUrl = data;
+            } else if (data && typeof data === 'object') {
+                rawUrl = data.dbUrl || data.url || '';
+            }
+
+            let dbHost = '127.0.0.1';
+            let dbPort = 5432;
+            let dbName = 'absensi';
+            let dbUser = 'postgres';
+
+            if (rawUrl) {
                 try {
-                    const u = new URL(data);
+                    const u = new URL(rawUrl);
                     dbHost = u.hostname || '127.0.0.1';
                     dbPort = parseInt(u.port || '5432', 10);
+                    dbName = u.pathname.replace(/^\//, '') || 'absensi';
+                    dbUser = u.username || 'postgres';
                 } catch (e) {
-                    const match = data.match(/@([^:/]+)(?::(\d+))?/);
+                    const match = rawUrl.match(/:\/\/([^:]+):([^@]+)@([^:/]+)(?::(\d+))?\/([^?]+)/);
                     if (match) {
-                        dbHost = match[1];
-                        dbPort = parseInt(match[2] || '5432', 10);
+                        dbUser = match[1];
+                        dbHost = match[3];
+                        dbPort = parseInt(match[4] || '5432', 10);
+                        dbName = match[5] || 'absensi';
                     }
                 }
             } else if (data && typeof data === 'object') {
-                const urlStr = data.dbUrl || data.url;
-                if (urlStr) {
-                    try {
-                        const u = new URL(urlStr);
-                        dbHost = u.hostname || '127.0.0.1';
-                        dbPort = parseInt(u.port || '5432', 10);
-                    } catch (e) {
-                        const match = String(urlStr).match(/@([^:/]+)(?::(\d+))?/);
-                        if (match) {
-                            dbHost = match[1];
-                            dbPort = parseInt(match[2] || '5432', 10);
-                        }
+                dbHost = data.host || '127.0.0.1';
+                dbPort = parseInt(data.port || '5432', 10);
+            }
+
+            // Coba gunakan modul pg untuk pengujian database mendalam
+            let pgModule = null;
+            const candidatePaths = [
+                'pg',
+                path.join(__dirname, '..', '..', '..', 'Project Absenta', 'absenta_backend', 'node_modules', 'pg'),
+                path.join(__dirname, '..', '..', 'node_modules', 'pg')
+            ];
+            for (const p of candidatePaths) {
+                try {
+                    pgModule = require(p);
+                    if (pgModule && pgModule.Client) break;
+                } catch (e) {}
+            }
+
+            if (pgModule && rawUrl) {
+                const client = new pgModule.Client({
+                    connectionString: rawUrl,
+                    connectionTimeoutMillis: 5000
+                });
+
+                try {
+                    await client.connect();
+                    const result = await client.query("SELECT count(*)::int as tbl_count FROM information_schema.tables WHERE table_schema = 'public'");
+                    const tblCount = result.rows[0] ? result.rows[0].tbl_count : 0;
+                    await client.end();
+
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({
+                        success: true,
+                        message: `✅ Sukses Terhubung! Database '${dbName}' DITEMUKAN di ${dbHost}:${dbPort} (Tabel saat ini: ${tblCount} - Siap migrasi).`
+                    }));
+                } catch (pgErr) {
+                    try { await client.end(); } catch (e) {}
+
+                    if (pgErr.code === '3D000') {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({
+                            success: false,
+                            message: `⚠️ Port Terbuka & Login Berhasil, tetapi Database '${dbName}' BELUM DIBUAT di PostgreSQL! Silakan buat database '${dbName}' via pgAdmin terlebih dahulu.`
+                        }));
+                    } else if (pgErr.code === '28P01') {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({
+                            success: false,
+                            message: `❌ Port 5432 Terbuka, tetapi Password atau User '${dbUser}' SALAH!`
+                        }));
+                    } else if (pgErr.code === '28000') {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({
+                            success: false,
+                            message: `❌ Akses user '${dbUser}' ditolak oleh pg_hba.conf server PostgreSQL!`
+                        }));
+                    } else if (pgErr.message && pgErr.message.includes('timeout')) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({
+                            success: false,
+                            message: `❌ Timeout koneksi ke Database ${dbHost}:${dbPort}. Pastikan firewall/port 5432 terbuka.`
+                        }));
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({
+                            success: false,
+                            message: `❌ Gagal koneksi database: ${pgErr.message}`
+                        }));
                     }
-                } else {
-                    dbHost = data.host || '127.0.0.1';
-                    dbPort = parseInt(data.port || '5432', 10);
                 }
             }
 
+            // Fallback ke pengecekan TCP socket jika pg driver tidak tersedia
             const net = require('net');
             const socket = new net.Socket();
             let responded = false;
@@ -128,6 +196,176 @@ function handleTestDb(req, res) {
         } catch (e) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: false, message: e.message }));
+        }
+    });
+}
+
+function handleCreateDb(req, res) {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const data = JSON.parse(body);
+            const rawUrl = (typeof data === 'string') ? data : (data.dbUrl || data.url || '');
+
+            if (!rawUrl) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'URL Database tidak boleh kosong.' }));
+            }
+
+            let dbHost = '127.0.0.1';
+            let dbPort = 5432;
+            let targetDbName = 'absensi';
+            let dbUser = 'postgres';
+            let dbPass = '';
+
+            try {
+                const u = new URL(rawUrl);
+                dbHost = u.hostname || '127.0.0.1';
+                dbPort = parseInt(u.port || '5432', 10);
+                targetDbName = u.pathname.replace(/^\//, '') || 'absensi';
+                dbUser = u.username || 'postgres';
+                dbPass = u.password || '';
+            } catch (e) {
+                const match = rawUrl.match(/:\/\/([^:]+):([^@]+)@([^:/]+)(?::(\d+))?\/([^?]+)/);
+                if (match) {
+                    dbUser = match[1];
+                    dbPass = match[2];
+                    dbHost = match[3];
+                    dbPort = parseInt(match[4] || '5432', 10);
+                    targetDbName = match[5] || 'absensi';
+                }
+            }
+
+            if (!/^[a-zA-Z0-9_]+$/.test(targetDbName)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: `Nama database '${targetDbName}' tidak valid. Hanya huruf, angka, dan underscore yang diperbolehkan.` }));
+            }
+
+            let pgModule = null;
+            const candidatePaths = [
+                'pg',
+                path.join(__dirname, '..', '..', '..', 'Project Absenta', 'absenta_backend', 'node_modules', 'pg'),
+                path.join(__dirname, '..', '..', 'node_modules', 'pg')
+            ];
+            for (const p of candidatePaths) {
+                try {
+                    pgModule = require(p);
+                    if (pgModule && pgModule.Client) break;
+                } catch (e) {}
+            }
+
+            if (!pgModule) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Driver PostgreSQL (pg) tidak ditemukan di sistem.' }));
+            }
+
+            // Hubungkan ke database pemeliharaan (postgres)
+            const maintenanceUrl = `postgresql://${encodeURIComponent(dbUser)}:${encodeURIComponent(dbPass)}@${dbHost}:${dbPort}/postgres`;
+            const client = new pgModule.Client({
+                connectionString: maintenanceUrl,
+                connectionTimeoutMillis: 6000
+            });
+
+            try {
+                await client.connect();
+
+                // Cek apakah database sudah ada
+                const checkRes = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [targetDbName]);
+                if (checkRes.rows && checkRes.rows.length > 0) {
+                    await client.end();
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({
+                        success: true,
+                        message: `ℹ️ Database '${targetDbName}' sudah ada sebelumnya di server ${dbHost}:${dbPort}. Siap digunakan!`
+                    }));
+                }
+
+                // Buat database baru
+                await client.query(`CREATE DATABASE "${targetDbName}" WITH OWNER "${dbUser}" ENCODING 'UTF8'`);
+                await client.end();
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({
+                    success: true,
+                    message: `🎉 SUKSES! Database '${targetDbName}' BERHASIL DIBUAT di server ${dbHost}:${dbPort} dengan owner '${dbUser}'.`
+                }));
+            } catch (err) {
+                try { await client.end(); } catch (e) {}
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({
+                    success: false,
+                    message: `Gagal membuat database otomatis: ${err.message}`
+                }));
+            }
+        } catch (e) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: e.message }));
+        }
+    });
+}
+
+function handleRegisterLicense(req, res) {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const data = JSON.parse(body);
+            const schoolName = (data.schoolName || '').trim();
+            const waNumber = (data.waNumber || '').trim();
+            let slug = (data.requestedSlug || '').trim().toLowerCase();
+
+            if (!schoolName) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Nama sekolah wajib diisi.' }));
+            }
+            if (!waNumber) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Nomor WhatsApp wajib diisi untuk menerima lisensi.' }));
+            }
+            if (!slug) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Subdomain pilihan wajib diisi.' }));
+            }
+
+            if (slug.endsWith('.absenta.id')) {
+                slug = slug.substring(0, slug.length - '.absenta.id'.length);
+            }
+
+            const regPayload = {
+                school_name: schoolName,
+                wa_number: waNumber,
+                requested_slug: slug
+            };
+
+            const response = await fetch('https://api.absenta.id/api/license/request-local-free', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(regPayload),
+                signal: AbortSignal.timeout(12000)
+            });
+
+            const json = await response.json();
+            if (json.success && json.license_key) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({
+                    success: true,
+                    message: json.message || 'Registrasi lisensi berhasil!',
+                    licenseKey: json.license_key,
+                    schoolName: schoolName,
+                    slug: slug,
+                    domain: `${slug}.absenta.id`
+                }));
+            } else {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({
+                    success: false,
+                    message: json.message || 'Gagal melakukan registrasi lisensi.'
+                }));
+            }
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: `Kesalahan server registrasi: ${e.message}` }));
         }
     });
 }
@@ -255,6 +493,8 @@ module.exports = {
     handleBrowseFile,
     handleTestSsh,
     handleTestDb,
+    handleCreateDb,
+    handleRegisterLicense,
     handleVerifyLicense,
     handleSaveConfig,
     handleTestClusterNodes

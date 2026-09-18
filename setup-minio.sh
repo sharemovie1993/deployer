@@ -16,18 +16,28 @@ echo "======================================================================"
 echo "  PEMASANGAN MINIO SELF-HOSTED S3 STORAGE SERVER FOR ABSENTA ON-PREM"
 echo "======================================================================"
 
-# 1. Unduh Binary MinIO jika belum ada
-if [ ! -f /usr/local/bin/minio ]; then
+# 1. Pasang Binary MinIO (Cek offline lokal terlebih dahulu)
+if [ -f /tmp/minio_offline ] && [ $(wc -c < /tmp/minio_offline 2>/dev/null || echo 0) -gt 1000000 ]; then
+  echo "📦 Memasang binary MinIO dari offline package..."
+  cp /tmp/minio_offline /usr/local/bin/minio
+  chmod +x /usr/local/bin/minio
+  echo "✅ Binary MinIO berhasil dipasang ke /usr/local/bin/minio"
+elif [ ! -f /usr/local/bin/minio ] || [ $(wc -c < /usr/local/bin/minio 2>/dev/null || echo 0) -lt 1000000 ]; then
   echo "📥 Mengunduh binary MinIO Server..."
-  curl -sSL "https://dl.min.io/server/minio/release/linux-amd64/minio" -o /usr/local/bin/minio
+  curl -sSL --connect-timeout 10 --retry 3 "https://dl.min.io/server/minio/release/linux-amd64/minio" -o /usr/local/bin/minio
   chmod +x /usr/local/bin/minio
   echo "✅ Binary MinIO berhasil diunduh ke /usr/local/bin/minio"
 fi
 
-# 2. Unduh MinIO Client (mc) untuk manajemen & backup
-if [ ! -f /usr/local/bin/mc ]; then
+# 2. Pasang MinIO Client (mc)
+if [ -f /tmp/mc_offline ] && [ $(wc -c < /tmp/mc_offline 2>/dev/null || echo 0) -gt 1000000 ]; then
+  echo "📦 Memasang MinIO Client (mc) dari offline package..."
+  cp /tmp/mc_offline /usr/local/bin/mc
+  chmod +x /usr/local/bin/mc
+  echo "✅ MinIO Client (mc) berhasil dipasang."
+elif [ ! -f /usr/local/bin/mc ] || [ $(wc -c < /usr/local/bin/mc 2>/dev/null || echo 0) -lt 1000000 ]; then
   echo "📥 Mengunduh MinIO Client (mc)..."
-  curl -sSL "https://dl.min.io/client/mc/release/linux-amd64/mc" -o /usr/local/bin/mc
+  curl -sSL --connect-timeout 10 --retry 3 "https://dl.min.io/client/mc/release/linux-amd64/mc" -o /usr/local/bin/mc
   chmod +x /usr/local/bin/mc
   echo "✅ MinIO Client (mc) berhasil diunduh."
 fi
@@ -67,11 +77,12 @@ echo "🟢 Service MinIO berhasil diaktifkan & dijalankan."
 sleep 3
 
 # 6. Konfigurasi Client mc & Buat Bucket Otomatis
-echo "📦 Inisialisasi Bucket '${BUCKET_NAME}' di MinIO..."
+echo "📦 Inisialisasi Bucket di MinIO..."
 /usr/local/bin/mc alias set local http://127.0.0.1:${MINIO_API_PORT} "${MINIO_USER}" "${MINIO_PASS}" --api s3v4 || true
 /usr/local/bin/mc mb local/"${BUCKET_NAME}" --ignore-existing || true
+/usr/local/bin/mc mb local/absenta-platform-backups --ignore-existing || true
 /usr/local/bin/mc anonymous set download local/"${BUCKET_NAME}" || true
-echo "✅ Bucket '${BUCKET_NAME}' siap digunakan!"
+echo "✅ Bucket '${BUCKET_NAME}' dan 'absenta-platform-backups' siap digunakan!"
 
 # 7. Buat Script 1-Click Backup untuk Admin Sekolah
 cat <<EOF > /usr/local/bin/absenta-backup-minio

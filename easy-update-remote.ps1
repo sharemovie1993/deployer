@@ -58,7 +58,7 @@ if ($Silent) {
     if ([string]::IsNullOrWhiteSpace($NEW_KEY_SOURCE)) { $NEW_KEY_SOURCE = Join-Path $PSScriptRoot "nginxonly.pem" }
     $SUDO_PASS = $SudoPass
     # Sudo password bersifat opsional — jika kosong, perintah sudo tidak akan disertakan password
-    $projChoice = if ($Project -eq "licensing" -or $Project -eq "2") { "2" } elseif ($Project -eq "undangan" -or $Project -eq "3") { "3" } else { "1" }
+    $projChoice = if ($Project -eq "licensing" -or $Project -eq "2") { "2" } elseif ($Project -eq "undangan" -or $Project -eq "3") { "3" } elseif ($Project -eq "rekber" -or $Project -eq "4") { "4" } else { "1" }
     $BUILD_MODE = if ($SkipBuild -or $BuildMode -eq "skip") { "skip" } elseif ($BuildMode -eq "local") { "local" } else { "remote" }
 } else {
     $NEW_IP = (Read-Host "Masukkan IP VPS Target [10.10.10.163]").Trim()
@@ -102,14 +102,16 @@ if (-not $Silent) {
     Write-Host " 1) Project Absenta (Full Stack)"
     Write-Host " 2) Server Lisensi (Licensing Server VPS)"
     Write-Host " 3) Project Undangan Digital (Multi-Event & Print Studio)"
+    Write-Host " 4) Project Rekening Bersama (B-Pay Gateway & Billing)"
     Write-Host ""
-    $projChoice = Read-Host "Pilih proyek [1-3]"
+    $projChoice = Read-Host "Pilih proyek [1-4]"
 }
 
 $TARGET_SUBDIR = ""
 $IS_ABSENTA = $false
 $IS_SERVER_LISENSI = $false
 $IS_UNDANGAN = $false
+$IS_REKBER = $false
 
 if ($projChoice -eq "2") {
     $TARGET_SUBDIR = "licensing-server"
@@ -117,6 +119,9 @@ if ($projChoice -eq "2") {
 } elseif ($projChoice -eq "3") {
     $TARGET_SUBDIR = "undangan-digital"
     $IS_UNDANGAN = $true
+} elseif ($projChoice -eq "4") {
+    $TARGET_SUBDIR = "project-rekber"
+    $IS_REKBER = $true
 } else {
     $TARGET_SUBDIR = "project-absenta"
     $IS_ABSENTA = $true
@@ -193,9 +198,8 @@ if ! command -v wg-quick &> /dev/null; then
     rm -f /tmp/90-wireguard
 fi
 
-# Stop Caddy terlebih dahulu agar tidak serve versi lama saat proses build
-echo "Menghentikan Caddy sementara..."
-echo '$SUDO_PASS' | sudo -S systemctl stop caddy || true
+# Biarkan Caddy tetap melayani website lain (Zero-Downtime Multi-App)
+echo "Caddy tetap aktif melayani trafik selama proses build..."
 
 OLD_COMMIT=`$(git rev-parse HEAD 2>/dev/null)
 
@@ -340,6 +344,24 @@ if [ -f absenta_backend/.env ]; then
     else
         echo "S3_FORCE_PATH_STYLE=true" >> absenta_backend/.env
     fi
+
+    # Ensure Backend .env has DEFAULT_TIMEZONE variable (Timezone-Aware Engine)
+    if ! grep -q "^DEFAULT_TIMEZONE=" absenta_backend/.env; then
+        echo "Menambahkan DEFAULT_TIMEZONE=Asia/Jakarta ke .env..."
+        echo "DEFAULT_TIMEZONE=Asia/Jakarta" >> absenta_backend/.env
+    fi
+
+    # Pastikan JWT_SECRET terisi minimal 32 karakter (Production Hardened)
+    EXISTING_JWT=`$(grep "^JWT_SECRET=" absenta_backend/.env 2>/dev/null | cut -d'=' -f2- | tr -d ' ' || true)
+    if [ -z "`$EXISTING_JWT" ] || [ `$(echo -n "`$EXISTING_JWT" | wc -c) -lt 32 ] || [ "`$EXISTING_JWT" = "your-super-secret-jwt-key-here" ]; then
+        echo "Membuat JWT_SECRET aman baru (64 hex characters)..."
+        SECURE_JWT=`$(openssl rand -hex 32)
+        if grep -q "^JWT_SECRET=" absenta_backend/.env; then
+            sed -i "s|^JWT_SECRET=.*|JWT_SECRET=`$SECURE_JWT|g" absenta_backend/.env
+        else
+            echo "JWT_SECRET=`$SECURE_JWT" >> absenta_backend/.env
+        fi
+    fi
 fi
 
 # 1. Update Backend
@@ -357,7 +379,7 @@ if [ "`$DO_BUILD_BACKEND" = true ]; then
 
     if [ "`$DO_DB_SEED" = true ]; then
         echo "🌱 Memperbarui database schema & seeding..."
-        npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal."
+        npx prisma db push --skip-generate || echo "Prisma DB push dilewati atau gagal."
         npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
         echo "🌐 Memicu sinkronisasi data wilayah Indonesia di latar belakang..."
         nohup npx ts-node -r tsconfig-paths/register src/scripts/seed_full_wilayah.ts > /tmp/seed_wilayah.log 2>&1 &
@@ -402,7 +424,7 @@ fi
 
 # 3. Reload PM2
 echo "Memuat ulang layanan PM2..."
-pm2 start absenta_backend/ecosystem.config.js || pm2 reload absenta_backend/ecosystem.config.js || pm2 start ecosystem.config.js || pm2 reload ecosystem.config.js || pm2 reload all
+pm2 reload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env || pm2 reload all
 pm2 save
 
 # Pastikan PM2 terdaftar di systemd startup (agar tetap jalan setelah reboot)
@@ -589,10 +611,9 @@ echo '$SUDO_PASS' | sudo -S systemctl daemon-reload
 echo "✅ Watchdog terpasang & aktif (monitor setiap 30 detik)"
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Jalankan kembali Caddy setelah build selesai
-echo "Menjalankan kembali Caddy..."
-echo '$SUDO_PASS' | sudo -S systemctl start caddy
-echo '$SUDO_PASS' | sudo -S systemctl enable caddy
+# Muat ulang konfigurasi Caddy secara graceful
+echo "Memuat ulang Caddy..."
+echo '$SUDO_PASS' | sudo -S systemctl reload caddy 2>/dev/null || echo '$SUDO_PASS' | sudo -S systemctl restart caddy 2>/dev/null || true
 
 echo "============================================="
 echo "   QUICK UPDATE ABSENTA VPS SELESAI SUKSES!  "
@@ -630,8 +651,7 @@ if ! command -v wg-quick &> /dev/null || [ ! -f /etc/sudoers.d/99-easy-tunnel-un
     rm -f /tmp/99-easy-tunnel-undangan
 fi
 
-echo "Menghentikan Caddy sementara..."
-run_sudo systemctl stop caddy
+echo "Caddy tetap aktif melayani trafik selama proses build..."
 
 OLD_COMMIT=`$(git rev-parse HEAD 2>/dev/null || echo "")
 
@@ -681,7 +701,7 @@ fi
 
 npm install --production=false
 npx prisma generate
-npx prisma db push --accept-data-loss || echo "Prisma db push dilewati atau sudah up-to-date."
+npx prisma db push --skip-generate || echo "Prisma db push dilewati atau sudah up-to-date."
 echo "🌱 Menjalankan sinkronisasi seeder tema ke SQLite database..."
 npx tsx prisma/seedThemes.ts || npx prisma db seed || echo "Seeding tema database selesai/dilewati."
 echo "🔨 Membangun Backend..."
@@ -702,12 +722,53 @@ pm2 reload ecosystem.config.js \
     || echo "PM2 reload selesai."
 pm2 save || true
 
-echo "Menjalankan kembali Caddy..."
-run_sudo systemctl start caddy
-run_sudo systemctl enable caddy
+echo "Memuat ulang Caddy..."
+run_sudo systemctl reload caddy 2>/dev/null || run_sudo systemctl restart caddy 2>/dev/null || true
 
 echo "================================================="
 echo "   QUICK UPDATE UNDANGAN DIGITAL SELESAI! 🚀    "
+echo "================================================="
+"@
+} elseif ($IS_REKBER) {
+    $updateScript = @"
+set -e
+echo "==== Memulai Update Cepat Project Rekening Bersama ===="
+cd /var/www/$TARGET_SUBDIR
+
+SUDO_PASS_VAL='$SUDO_PASS'
+run_sudo() {
+    if [ -n "`$SUDO_PASS_VAL" ]; then
+        echo "`$SUDO_PASS_VAL" | sudo -S "`$@" 2>/dev/null || sudo "`$@" 2>/dev/null || true
+    else
+        sudo "`$@" 2>/dev/null || true
+    fi
+}
+
+run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
+export DEBIAN_FRONTEND=noninteractive
+
+echo "Menarik kode terbaru dari git..."
+git fetch origin --quiet
+if git rev-parse --verify origin/main &>/dev/null; then
+    git reset --hard origin/main
+elif git rev-parse --verify origin/master &>/dev/null; then
+    git reset --hard origin/master
+fi
+
+echo "📦 Memasang dependensi & Prisma generate..."
+npm install --legacy-peer-deps
+npx prisma generate
+npx prisma db push --skip-generate
+
+echo "🔨 Membangun Backend & Frontend..."
+npm run build
+
+echo "🔁 Memuat ulang PM2..."
+pm2 restart project-rekber 2>/dev/null || pm2 start dist/server.js --name "project-rekber" --max-memory-restart 500M --time
+pm2 save || true
+
+echo "================================================="
+echo "   QUICK UPDATE REKENING BERSAMA SELESAI! 🚀    "
 echo "================================================="
 "@
 } else {
@@ -785,7 +846,7 @@ fi
 npx prisma generate
 if [ "`$DO_PRISMA_PUSH" = true ]; then
     echo "🗄️ Melakukan prisma db push (schema update ke database produksi)..."
-    npx prisma db push --accept-data-loss || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
+    npx prisma db push --skip-generate || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
 else
     echo "⏩ SMART PRISMA: Melewati prisma db push (schema tidak berubah)."
 fi
@@ -1130,7 +1191,7 @@ if [ -f "prisma/schema.prisma" ]; then
     npx prisma generate
 
     echo "🗄️ Prisma db push (sinkronisasi schema ke database produksi)..."
-    npx prisma db push --accept-data-loss || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
+    npx prisma db push --skip-generate || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
 fi
 
 echo "🔁 Reload PM2 Aplikasi..."

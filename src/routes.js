@@ -2,10 +2,11 @@ const fs = require('fs');
 const path = require('path');
 
 const { handleGetPresets, handleSavePreset, handleDeletePreset } = require('./controllers/preset.controller');
-const { handleTestConnection, handleFixPortConflict } = require('./controllers/connection.controller');
+const { handleTestConnection, handleFixPortConflict, handleCheckDomainConfig } = require('./controllers/connection.controller');
 const { handleServerHealth, handlePm2List, handleRestartService, handleFlushPm2Logs } = require('./controllers/health.controller');
 const { handleAuditTunnels, handleFixTunnels, handleCleanGhostTunnels, handleRemoveSelectedTunnel, handleWatchdogStatus } = require('./controllers/tunnel.controller');
-const { handleBrowseFile, handleTestSsh, handleTestDb, handleVerifyLicense, handleSaveConfig, handleTestClusterNodes } = require('./controllers/installer.controller');
+const { handleBrowseFile, handleTestSsh, handleTestDb, handleCreateDb, handleRegisterLicense, handleVerifyLicense, handleSaveConfig, handleTestClusterNodes } = require('./controllers/installer.controller');
+const { handleAuditHardeningTuning } = require('./controllers/audit.controller');
 
 const {
     handleStreamQuickUpdate,
@@ -15,6 +16,9 @@ const {
     handleStreamClusterInstall,
     handleStreamSetupSsh,
     handleStreamPm2Logs,
+    handleStreamHardening,
+    handleStreamTuning,
+    handleStreamUpdateDomain,
     cancelProcess
 } = require('./sse');
 
@@ -80,6 +84,7 @@ function handleRequest(req, res) {
     // 2. SSH Connection & Port Resolution
     if (pathname === '/api/test-connection' && req.method === 'GET') return handleTestConnection(req, res, parsedUrl);
     if (pathname === '/api/fix-port-conflict' && req.method === 'GET') return handleFixPortConflict(req, res, parsedUrl);
+    if (pathname === '/api/check-domain-config' && req.method === 'GET') return handleCheckDomainConfig(req, res, parsedUrl);
 
     // 3. System Health & PM2 Management
     if (pathname === '/api/server-health' && (req.method === 'GET' || req.method === 'POST')) return handleServerHealth(req, res, parsedUrl);
@@ -98,11 +103,16 @@ function handleRequest(req, res) {
     if (pathname === '/api/browse-file' && req.method === 'GET') return handleBrowseFile(req, res, parsedUrl);
     if (pathname === '/api/test-ssh' && req.method === 'POST') return handleTestSsh(req, res);
     if (pathname === '/api/test-db' && req.method === 'POST') return handleTestDb(req, res);
+    if (pathname === '/api/create-db' && req.method === 'POST') return handleCreateDb(req, res);
+    if (pathname === '/api/register-license' && req.method === 'POST') return handleRegisterLicense(req, res);
     if (pathname === '/api/verify-license' && req.method === 'POST') return handleVerifyLicense(req, res);
     if (pathname === '/api/save-config' && req.method === 'POST') return handleSaveConfig(req, res);
     if (pathname === '/api/test-cluster-nodes' && req.method === 'POST') return handleTestClusterNodes(req, res);
 
-    // 6. SSE Real-Time Stream Handlers
+    // 6. Hardening & Tuning Audit API
+    if (pathname === '/api/audit-hardening-tuning' && (req.method === 'GET' || req.method === 'POST')) return handleAuditHardeningTuning(req, res, parsedUrl);
+
+    // 7. SSE Real-Time Stream Handlers
     if (pathname === '/api/stream-quick-update' && req.method === 'GET') return handleStreamQuickUpdate(req, res, parsedUrl);
     if (pathname === '/api/stream-seed-wilayah' && req.method === 'GET') return handleStreamSeedWilayah(req, res, parsedUrl);
     if (pathname === '/api/stream-install' && req.method === 'GET') return handleStreamInstall(req, res, global.installParams || {});
@@ -110,6 +120,9 @@ function handleRequest(req, res) {
     if (pathname === '/api/stream-cluster-install' && req.method === 'GET') return handleStreamClusterInstall(req, res, parsedUrl);
     if (pathname === '/api/stream-setup-ssh' && req.method === 'GET') return handleStreamSetupSsh(req, res, parsedUrl);
     if (pathname === '/api/stream-pm2-logs' && req.method === 'GET') return handleStreamPm2Logs(req, res, parsedUrl);
+    if (pathname === '/api/stream-hardening' && req.method === 'GET') return handleStreamHardening(req, res, parsedUrl);
+    if (pathname === '/api/stream-tuning' && req.method === 'GET') return handleStreamTuning(req, res, parsedUrl);
+    if (pathname === '/api/stream-update-domain' && req.method === 'GET') return handleStreamUpdateDomain(req, res, parsedUrl);
 
     if (pathname === '/api/quick-update/cancel' && req.method === 'POST') {
         const presetId = parsedUrl.searchParams.get('id');

@@ -1,9 +1,9 @@
-﻿# deploy-absenta-remote.ps1 - Skrip Deploy Project Absenta Terisolasi (VPS Linux)
+# deploy-absenta-remote.ps1 - Skrip Deploy Project Absenta Terisolasi (VPS Linux)
 # Hanya untuk men-deploy Project Absenta (Full Stack) secara remote via SSH
 
 param (
     [string]$TargetIP = "",
-    [string]$TargetUser = "asepsuryadi",
+    [string]$TargetUser = "asep",
     [string]$KeyPath = "",
     [string]$SudoPass = "",
     [string]$DeployScenario = "hybrid",
@@ -20,6 +20,9 @@ param (
     [string]$LicenseServerUrl = "https://api.absenta.id",
     [string]$NodeName = "absenta-node-1",
     [string]$InstallPostgres = "",
+    [string]$InstallMinio = "Y",
+    [string]$InstallCoturn = "Y",
+    [string]$DefaultTimezone = "Asia/Jakarta",
     [switch]$Silent = $false
 )
 
@@ -192,7 +195,8 @@ if ($Silent) {
 } else {
     Show-Header "Konfigurasi Koneksi VPS Target"
     $NEW_IP = (Read-Host "Masukkan IP VPS Target (Contoh: 10.10.10.163)").Trim()
-    $NEW_USER = "asepsuryadi"
+    $inputUser = (Read-Host "Masukkan Username VPS [Default: asep]").Trim()
+    $NEW_USER = if ([string]::IsNullOrWhiteSpace($inputUser)) { "asep" } else { $inputUser }
 
     if ([string]::IsNullOrWhiteSpace($NEW_IP)) {
         Write-Host "IP VPS tidak boleh kosong!" -ForegroundColor Red
@@ -276,6 +280,8 @@ if ($Silent) {
     $INSTALL_POSTGRES = if ($InstallPostgres) { $InstallPostgres } else { if ($DbUrl.Contains("localhost") -or $DbUrl.Contains("127.0.0.1")) { "Y" } else { "N" } }
     $INSTALL_REDIS = $RedisMode
     $REDIS_URL = $RedisUrl
+    $INSTALL_MINIO = if ($InstallMinio) { $InstallMinio } else { "Y" }
+    $INSTALL_COTURN = if ($InstallCoturn) { $InstallCoturn } else { "Y" }
     $TUNNEL_BASE_DOMAIN = $TunnelBaseDomain
     $LICENSE_SERVER_URL = $LicenseServerUrl
     $LICENSE_KEY = $LicenseKey
@@ -294,7 +300,9 @@ if ($Silent) {
         $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS [$defaultDomain]").Trim()
         if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $defaultDomain }
     } else {
-        $TARGET_DOMAIN = ""
+        $suggestedDomain = if (-not [string]::IsNullOrWhiteSpace($defaultDomain) -and $defaultDomain -ne "localhost") { $defaultDomain } else { $NEW_IP }
+        $TARGET_DOMAIN = (Read-Host "Masukkan Domain / IP Akses Hybrid [$suggestedDomain]").Trim()
+        if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $suggestedDomain }
     }
 
     $B_PORT = (Read-Host "Masukkan Port Backend [$defaultBPort]").Trim()
@@ -342,6 +350,12 @@ if ($Silent) {
         $REDIS_URL = (Read-Host "Masukkan REDIS_URL [$defaultRedisUrl]").Trim()
         if ([string]::IsNullOrWhiteSpace($REDIS_URL)) { $REDIS_URL = $defaultRedisUrl }
     }
+
+    $INSTALL_MINIO = (Read-Host "Apakah Anda ingin memasang/memastikan MinIO S3 Storage aktif? [Y/n]").Trim()
+    if ([string]::IsNullOrWhiteSpace($INSTALL_MINIO)) { $INSTALL_MINIO = "Y" }
+
+    $INSTALL_COTURN = (Read-Host "Apakah Anda ingin memasang/memastikan Coturn STUN/TURN Relay aktif? [Y/n]").Trim()
+    if ([string]::IsNullOrWhiteSpace($INSTALL_COTURN)) { $INSTALL_COTURN = "Y" }
 
     $TUNNEL_BASE_DOMAIN = (Read-Host "Masukkan Base Domain Easy Tunnel [$defaultTunnelBaseDomain]").Trim()
     if ([string]::IsNullOrWhiteSpace($TUNNEL_BASE_DOMAIN)) { $TUNNEL_BASE_DOMAIN = $defaultTunnelBaseDomain }
@@ -446,9 +460,29 @@ if ($Silent) {
     } else {
         $NODE_NAME = $NodeName
     }
+    $DEFAULT_TIMEZONE = if ($DefaultTimezone) { $DefaultTimezone } else { "Asia/Jakarta" }
 } else {
     $NODE_NAME = (Read-Host "Masukkan Identitas Node (NODE_NAME) [$defaultNodeName]").Trim()
     if ([string]::IsNullOrWhiteSpace($NODE_NAME)) { $NODE_NAME = $defaultNodeName }
+
+    Write-Host "`n[Konfigurasi Zona Waktu Platform]" -ForegroundColor Cyan
+    Write-Host "Fungsi : Menentukan basis waktu operasional platform & job global (backup DB, billing, dsb)." -ForegroundColor DarkGray
+    Write-Host "Catatan: Presensi KBM sekolah tetap otomatis mengikuti zona waktu lokal masing-masing sekolah." -ForegroundColor DarkGray
+    Write-Host "Pilih Zona Waktu Operasional Platform (DEFAULT_TIMEZONE):" -ForegroundColor White
+    Write-Host " 1) Asia/Jakarta (WIB - Indonesia Barat, UTC+7) [Default]" -ForegroundColor Gray
+    Write-Host " 2) Asia/Makassar (WITA - Indonesia Tengah, UTC+8)" -ForegroundColor Gray
+    Write-Host " 3) Asia/Jayapura (WIT - Indonesia Timur, UTC+9)" -ForegroundColor Gray
+    Write-Host " 4) Asia/Singapore (Singapura / Malaysia, UTC+8)" -ForegroundColor Gray
+    Write-Host " 5) Input manual zona waktu IANA (contoh: Australia/Sydney, Europe/London)..." -ForegroundColor Gray
+    $tzChoice = Read-Host "Pilih [1-5] (Default: 1)"
+    $DEFAULT_TIMEZONE = "Asia/Jakarta"
+    if ($tzChoice -eq "2") { $DEFAULT_TIMEZONE = "Asia/Makassar" }
+    elseif ($tzChoice -eq "3") { $DEFAULT_TIMEZONE = "Asia/Jayapura" }
+    elseif ($tzChoice -eq "4") { $DEFAULT_TIMEZONE = "Asia/Singapore" }
+    elseif ($tzChoice -eq "5") {
+        $customTz = (Read-Host "Masukkan Zona Waktu IANA [Asia/Jakarta]").Trim()
+        if (-not [string]::IsNullOrWhiteSpace($customTz)) { $DEFAULT_TIMEZONE = $customTz }
+    }
 }
 
 # ─── VALIDASI DOMAIN & LISENSI ONLINE (Hybrid Only) ───
@@ -551,6 +585,8 @@ Show-Header "FASE 1: PROVISIONING VPS TARGET"
 Show-Log "Menginstal dependensi sistem di VPS ($NEW_IP)..." "Yellow"
 
 $DB_NAME = "absensi"
+$DB_USER = "postgres"
+$DB_PASS = "123123123"
 try {
     $cleanDbUrl = $DB_URL
     if ($cleanDbUrl.StartsWith("[")) { $cleanDbUrl = $cleanDbUrl.Substring(1) }
@@ -562,6 +598,11 @@ try {
     }
     if ($parsedDbName) {
         $DB_NAME = $parsedDbName
+    }
+    if ($uri.UserInfo) {
+        $uParts = $uri.UserInfo -split ':', 2
+        if ($uParts.Length -ge 1 -and -not [string]::IsNullOrWhiteSpace($uParts[0])) { $DB_USER = $uParts[0] }
+        if ($uParts.Length -ge 2 -and -not [string]::IsNullOrWhiteSpace($uParts[1])) { $DB_PASS = $uParts[1] }
     }
 } catch {}
 
@@ -579,11 +620,13 @@ echo '$SUDO_PASS' | sudo -S apt-get update -y || {
     echo '$SUDO_PASS' | sudo -S dpkg --configure -a
     echo '$SUDO_PASS' | sudo -S apt-get update -y
 }
-echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw build-essential wireguard openresolv
+echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw build-essential wireguard openresolv python3
 
 # Install Node 20
 if ! command -v node &>/dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh
+    echo '$SUDO_PASS' | sudo -S -E bash /tmp/nodesource_setup.sh
+    rm -f /tmp/nodesource_setup.sh
     echo '$SUDO_PASS' | sudo -S apt-get install -y nodejs
 fi
 
@@ -595,8 +638,12 @@ fi
 # Install Caddy
 if [ -f /tmp/caddy_offline ]; then
     echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' -o /tmp/caddy-gpg.key
+    echo '$SUDO_PASS' | sudo -S gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg /tmp/caddy-gpg.key 2>/dev/null || true
+    rm -f /tmp/caddy-gpg.key
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' -o /tmp/caddy-stable.list
+    echo '$SUDO_PASS' | sudo -S cp /tmp/caddy-stable.list /etc/apt/sources.list.d/caddy-stable.list
+    rm -f /tmp/caddy-stable.list
     echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* 2>/dev/null || true
     echo '$SUDO_PASS' | sudo -S apt-get update -y
     echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
@@ -606,8 +653,12 @@ if [ -f /tmp/caddy_offline ]; then
 else
     if ! command -v caddy &>/dev/null; then
         echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg || true
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' -o /tmp/caddy-gpg.key
+        echo '$SUDO_PASS' | sudo -S gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg /tmp/caddy-gpg.key 2>/dev/null || true
+        rm -f /tmp/caddy-gpg.key
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' -o /tmp/caddy-stable.list
+        echo '$SUDO_PASS' | sudo -S cp /tmp/caddy-stable.list /etc/apt/sources.list.d/caddy-stable.list
+        rm -f /tmp/caddy-stable.list
         echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* 2>/dev/null || true
         echo '$SUDO_PASS' | sudo -S apt-get update -y
         echo '$SUDO_PASS' | sudo -S apt-get install -y caddy
@@ -626,9 +677,22 @@ if [[ "$INSTALL_POSTGRES" =~ ^[yY]$ ]]; then
     echo '$SUDO_PASS' | sudo -S apt-get install -y postgresql postgresql-contrib
     echo '$SUDO_PASS' | sudo -S systemctl enable postgresql 2>/dev/null
     echo '$SUDO_PASS' | sudo -S systemctl start postgresql
-    cd / && echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER postgres PASSWORD '123123123';" || true
+    cd / && echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER $DB_USER PASSWORD '$DB_PASS';" || true
     if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
         echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;"
+    fi
+
+    # Terapkan tuning PostgreSQL jika file konfigurasi Absenta tersedia
+    if [ -f /etc/absenta/config/postgresql.conf ]; then
+        for conf_dir in /etc/postgresql/*/main/conf.d; do
+            if [ -d "`$conf_dir" ]; then
+                echo '$SUDO_PASS' | sudo -S cp /etc/absenta/config/postgresql.conf "`$conf_dir/99-absenta-tuning.conf"
+                echo '$SUDO_PASS' | sudo -S chown -R postgres:postgres "`$conf_dir/99-absenta-tuning.conf"
+                echo '$SUDO_PASS' | sudo -S chmod 644 "`$conf_dir/99-absenta-tuning.conf"
+                echo '$SUDO_PASS' | sudo -S systemctl restart postgresql
+                echo "✓ Konfigurasi Tuning PostgreSQL berhasil di-link ke `$conf_dir/99-absenta-tuning.conf \u0026 PostgreSQL di-restart!"
+            fi
+        done
     fi
 fi
 
@@ -639,11 +703,69 @@ if [[ "$INSTALL_REDIS" =~ ^[yY]$ ]]; then
     echo '$SUDO_PASS' | sudo -S apt-get install -y redis-server
     echo '$SUDO_PASS' | sudo -S systemctl enable redis-server 2>/dev/null
     echo '$SUDO_PASS' | sudo -S systemctl start redis-server
+
+    # Terapkan tuning Redis jika file konfigurasi Absenta tersedia
+    if [ -f /etc/absenta/config/redis.conf ] && [ -f /etc/redis/redis.conf ]; then
+        if ! grep -q "include /etc/absenta/config/redis.conf" /etc/redis/redis.conf; then
+            echo "" | echo '$SUDO_PASS' | sudo -S tee -a /etc/redis/redis.conf > /dev/null
+            echo "# Project Absenta Production Redis Tuning" | echo '$SUDO_PASS' | sudo -S tee -a /etc/redis/redis.conf > /dev/null
+            echo "include /etc/absenta/config/redis.conf" | echo '$SUDO_PASS' | sudo -S tee -a /etc/redis/redis.conf > /dev/null
+            echo '$SUDO_PASS' | sudo -S systemctl restart redis-server 2>/dev/null || echo '$SUDO_PASS' | sudo -S systemctl restart redis 2>/dev/null || true
+            echo "✓ Konfigurasi Tuning Redis berhasil di-include ke /etc/redis/redis.conf \u0026 Redis di-restart!"
+        fi
+    fi
+fi
+
+# ============================================================
+# Opsi Pemasangan MinIO Self-Hosted S3 Storage Server
+# ============================================================
+if [[ "$INSTALL_MINIO" =~ ^[yY]$ ]]; then
+    echo "Memeriksa status MinIO S3 Storage Server..."
+    if [ ! -f /usr/local/bin/minio ] || [ `$(`wc -c < /usr/local/bin/minio 2>/dev/null || echo 0) -lt 1000000 ]; then
+        echo "MinIO belum terpasang atau binary tidak valid. Menjalankan pemasangan MinIO..."
+        if [ -f /tmp/setup-minio.sh ]; then
+            chmod +x /tmp/setup-minio.sh
+            echo '$SUDO_PASS' | sudo -S bash /tmp/setup-minio.sh || true
+        fi
+    elif ! systemctl is-active --quiet minio 2>/dev/null; then
+        echo "MinIO terpasang namun layanannya belum aktif. Mengaktifkan minio.service..."
+        echo '$SUDO_PASS' | sudo -S systemctl daemon-reload 2>/dev/null || true
+        echo '$SUDO_PASS' | sudo -S systemctl enable minio 2>/dev/null || true
+        echo '$SUDO_PASS' | sudo -S systemctl restart minio 2>/dev/null || true
+    else
+        echo "✓ MinIO S3 Storage sudah terpasang dan aktif."
+    fi
+fi
+
+# ============================================================
+# Opsi Pemasangan Coturn STUN/TURN Relay Server
+# ============================================================
+if [[ "$INSTALL_COTURN" =~ ^[yY]$ ]]; then
+    echo "Memeriksa status Coturn STUN/TURN Relay Server..."
+    if ! command -v turnserver &>/dev/null && [ ! -f /usr/bin/turnserver ]; then
+        echo "Coturn belum terpasang. Menjalankan pemasangan Coturn..."
+        if [ -f /tmp/setup-coturn.sh ]; then
+            chmod +x /tmp/setup-coturn.sh
+            echo '$SUDO_PASS' | sudo -S bash /tmp/setup-coturn.sh || true
+        fi
+    elif ! systemctl is-active --quiet coturn 2>/dev/null; then
+        echo "Coturn terpasang namun layanannya belum aktif. Mengaktifkan coturn.service..."
+        echo '$SUDO_PASS' | sudo -S systemctl unmask coturn 2>/dev/null || true
+        echo '$SUDO_PASS' | sudo -S systemctl daemon-reload 2>/dev/null || true
+        echo '$SUDO_PASS' | sudo -S systemctl enable coturn 2>/dev/null || true
+        echo '$SUDO_PASS' | sudo -S systemctl restart coturn 2>/dev/null || true
+    else
+        echo "✓ Coturn STUN/TURN Relay Server sudah terpasang dan aktif."
+    fi
 fi
 
 # Konfigurasi Sysctl Forwarding & Sudo Passwordless untuk WireGuard
 echo '$SUDO_PASS' | sudo -S sysctl -w net.ipv4.ip_forward=1
-echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+    echo "net.ipv4.ip_forward=1" > /tmp/sysctl_ipf.conf
+    echo '$SUDO_PASS' | sudo -S sh -c "cat /tmp/sysctl_ipf.conf >> /etc/sysctl.conf"
+    rm -f /tmp/sysctl_ipf.conf
+fi
 echo "$NEW_USER ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/bin/wg, /usr/sbin/wg-quick, /usr/sbin/wg" > /tmp/90-wireguard
 echo '$SUDO_PASS' | sudo -S cp /tmp/90-wireguard /etc/sudoers.d/90-wireguard
 echo '$SUDO_PASS' | sudo -S chown root:root /etc/sudoers.d/90-wireguard
@@ -659,6 +781,30 @@ $LOCAL_CADDY = Join-Path $PSScriptRoot "caddy-bin\caddy"
 if (Test-Path $LOCAL_CADDY) {
     Show-Log "Menyalin Caddy offline lokal ke VPS..." "Yellow"
     & scp -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "$LOCAL_CADDY" "${NEW_USER}@${NEW_IP}:/tmp/caddy_offline"
+}
+
+$LOCAL_MINIO = Join-Path $PSScriptRoot "setup-minio.sh"
+if (Test-Path $LOCAL_MINIO) {
+    Show-Log "Menyalin script setup MinIO S3 ke VPS..." "Yellow"
+    & scp -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "$LOCAL_MINIO" "${NEW_USER}@${NEW_IP}:/tmp/setup-minio.sh"
+}
+
+$LOCAL_MINIO_BIN = Join-Path $PSScriptRoot "minio-bin\minio"
+if (Test-Path $LOCAL_MINIO_BIN) {
+    Show-Log "Menyalin binary offline MinIO ke VPS..." "Yellow"
+    & scp -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "$LOCAL_MINIO_BIN" "${NEW_USER}@${NEW_IP}:/tmp/minio_offline"
+}
+
+$LOCAL_MC_BIN = Join-Path $PSScriptRoot "minio-bin\mc"
+if (Test-Path $LOCAL_MC_BIN) {
+    Show-Log "Menyalin binary offline MinIO Client (mc) ke VPS..." "Yellow"
+    & scp -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "$LOCAL_MC_BIN" "${NEW_USER}@${NEW_IP}:/tmp/mc_offline"
+}
+
+$LOCAL_COTURN = Join-Path $PSScriptRoot "setup-coturn.sh"
+if (Test-Path $LOCAL_COTURN) {
+    Show-Log "Menyalin script setup Coturn STUN/TURN ke VPS..." "Yellow"
+    & scp -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "$LOCAL_COTURN" "${NEW_USER}@${NEW_IP}:/tmp/setup-coturn.sh"
 }
 
 Run-RemoteScript -ScriptContent $provisionScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
@@ -723,6 +869,59 @@ if grep -q "^DEPLOY_SCENARIO=" absenta_backend/.env; then
 else
     echo "DEPLOY_SCENARIO=$DEPLOY_SCENARIO" >> absenta_backend/.env
 fi
+if grep -q "^DEFAULT_TIMEZONE=" absenta_backend/.env; then
+    sed -i "s|^DEFAULT_TIMEZONE=.*|DEFAULT_TIMEZONE=$DEFAULT_TIMEZONE|g" absenta_backend/.env
+else
+    echo "DEFAULT_TIMEZONE=$DEFAULT_TIMEZONE" >> absenta_backend/.env
+fi
+
+# Pastikan JWT_SECRET terisi minimal 32 karakter (Production Hardened)
+EXISTING_JWT=`$(grep "^JWT_SECRET=" absenta_backend/.env 2>/dev/null | cut -d'=' -f2- | tr -d ' ' || true)
+if [ -z "`$EXISTING_JWT" ] || [ `$(echo -n "`$EXISTING_JWT" | wc -c) -lt 32 ] || [ "`$EXISTING_JWT" = "your-super-secret-jwt-key-here" ]; then
+    SECURE_JWT=`$(openssl rand -hex 32)
+    if grep -q "^JWT_SECRET=" absenta_backend/.env; then
+        sed -i "s|^JWT_SECRET=.*|JWT_SECRET=`$SECURE_JWT|g" absenta_backend/.env
+    else
+        echo "JWT_SECRET=`$SECURE_JWT" >> absenta_backend/.env
+    fi
+fi
+
+# MinIO S3 Storage Configuration
+if command -v minio &>/dev/null || [ -f /usr/local/bin/minio ] || [ -f /etc/systemd/system/minio.service ]; then
+    sed -i "s|^S3_ENDPOINT=.*|S3_ENDPOINT=http://127.0.0.1:9000|g" absenta_backend/.env 2>/dev/null || true
+    sed -i "s|^S3_BUCKET=.*|S3_BUCKET=absenta-storage|g" absenta_backend/.env 2>/dev/null || true
+    sed -i "s|^S3_ACCESS_KEY=.*|S3_ACCESS_KEY=minioadmin|g" absenta_backend/.env 2>/dev/null || true
+    sed -i "s|^S3_SECRET_KEY=.*|S3_SECRET_KEY=minioadmin|g" absenta_backend/.env 2>/dev/null || true
+    sed -i "s|^S3_FORCE_PATH_STYLE=.*|S3_FORCE_PATH_STYLE=true|g" absenta_backend/.env 2>/dev/null || true
+    if ! grep -q "^S3_ENDPOINT=" absenta_backend/.env; then
+        echo "" >> absenta_backend/.env
+        echo "# MinIO S3 Storage" >> absenta_backend/.env
+        echo "S3_ENDPOINT=http://127.0.0.1:9000" >> absenta_backend/.env
+        echo "S3_BUCKET=absenta-storage" >> absenta_backend/.env
+        echo "S3_ACCESS_KEY=minioadmin" >> absenta_backend/.env
+        echo "S3_SECRET_KEY=minioadmin" >> absenta_backend/.env
+        echo "S3_FORCE_PATH_STYLE=true" >> absenta_backend/.env
+    fi
+fi
+
+# Coturn STUN/TURN Relay Configuration
+if [ -f /etc/turnserver.conf ]; then
+    COTURN_EXT_SEC=`$(grep "^static-auth-secret=" /etc/turnserver.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || true)
+    if [ ! -z "`$COTURN_EXT_SEC" ]; then
+        sed -i "s|^COTURN_ENABLED=.*|COTURN_ENABLED=true|g" absenta_backend/.env 2>/dev/null || true
+        sed -i "s|^COTURN_PORT=.*|COTURN_PORT=3478|g" absenta_backend/.env 2>/dev/null || true
+        sed -i "s|^COTURN_DOMAIN=.*|COTURN_DOMAIN=$TARGET_DOMAIN|g" absenta_backend/.env 2>/dev/null || true
+        sed -i "s|^COTURN_SECRET=.*|COTURN_SECRET=`$COTURN_EXT_SEC|g" absenta_backend/.env 2>/dev/null || true
+        if ! grep -q "^COTURN_ENABLED=" absenta_backend/.env; then
+            echo "" >> absenta_backend/.env
+            echo "# Coturn STUN/TURN Relay" >> absenta_backend/.env
+            echo "COTURN_ENABLED=true" >> absenta_backend/.env
+            echo "COTURN_PORT=3478" >> absenta_backend/.env
+            echo "COTURN_DOMAIN=$TARGET_DOMAIN" >> absenta_backend/.env
+            echo "COTURN_SECRET=`$COTURN_EXT_SEC" >> absenta_backend/.env
+        fi
+    fi
+fi
 
 # Frontend Setup
 cp absenta_frontend/.env.example absenta_frontend/.env || true
@@ -742,9 +941,29 @@ fi
 
 # Install & Build Backend
 cd absenta_backend
-npm install
+node -e '
+const fs = require("fs");
+if (fs.existsSync("package.json")) {
+    const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    if (p.dependencies && p.dependencies["redis-memory-server"]) {
+        delete p.dependencies["redis-memory-server"];
+    }
+    if (p.devDependencies && p.devDependencies["redis-memory-server"]) {
+        delete p.devDependencies["redis-memory-server"];
+    }
+    if (!p.dependencies) p.dependencies = {};
+    p.dependencies["zod"] = "^3.23.8";
+    if (!p.overrides) p.overrides = {};
+    p.overrides["zod"] = "^3.23.8";
+    fs.writeFileSync("package.json", JSON.stringify(p, null, 2));
+}
+' || true
+
+npm install --ignore-scripts
+npm install zod@3.23.8 --save-exact --ignore-scripts || true
 npx prisma generate
-npx prisma db push --accept-data-loss || echo "Prisma DB push dilewati atau gagal."
+npm rebuild bcrypt 2>/dev/null || true
+npx prisma db push --skip-generate || echo "Prisma DB push dilewati atau gagal."
 npx prisma db seed || echo "Prisma DB seed dilewati atau gagal."
 npm run build
 
@@ -761,43 +980,29 @@ echo '$SUDO_PASS' | sudo -S env PATH=`${PATH}:/usr/bin /usr/lib/node_modules/pm2
 echo '$SUDO_PASS' | sudo -S env PATH=`${PATH}:/usr/local/bin pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || true
 pm2 save
 
-# Configure Caddyfile
+# # Configure Caddyfile
 if [ "$DEPLOY_SCENARIO" != "local" ]; then
-    if [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        CADDY_HOSTS="$TARGET_DOMAIN, http://:80"
-    elif [ ! -z "$CF_TOKEN" ]; then
-        CADDY_HOSTS="$TARGET_DOMAIN, *.$TARGET_DOMAIN"
-    else
-        CADDY_HOSTS="$TARGET_DOMAIN"
-    fi
+    echo "=== MENGONFIGURASI CADDY WEB SERVER & REVERSE PROXY ==="
+    echo '$SUDO_PASS' | sudo -S mkdir -p /etc/caddy /etc/caddy/ssl
+    echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /etc/caddy/ssl || true
 
-    echo "`$CADDY_HOSTS {" > /tmp/Caddyfile
-    echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
-    echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
-    echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
-    echo "    encode gzip zstd" >> /tmp/Caddyfile
-    
+    # 1. Sinkronisasi SSL jika skenario sync dipilih
     if [ "$SSL_SCENARIO" = "sync" ]; then
-        echo "    tls /etc/caddy/ssl/cert.pem /etc/caddy/ssl/key.pem" >> /tmp/Caddyfile
-        
-        # Create SSL Sync Script on client
-        echo '$SUDO_PASS' | sudo -S mkdir -p /etc/caddy/ssl
-        echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /etc/caddy/ssl || true
-        
-        cat << 'EOF' > /tmp/sync-ssl.sh
+        echo "Mengunduh sertifikat SSL dari Server Lisensi ($LICENSE_SERVER_URL)..."
+        cat << 'EOF_SYNC_SSL' > /tmp/sync-ssl.sh
 #!/bin/bash
 echo "=== SINKRONISASI SSL DARI SERVER LISENSI ==="
 mkdir -p /etc/caddy/ssl
 if curl -s -f "LICENSE_SERVER_URL_PLACEHOLDER/api/public/download-ssl?domain=TARGET_DOMAIN_PLACEHOLDER&license_key=LICENSE_KEY_PLACEHOLDER" -o /tmp/ssl_response.json && grep -q '"success":true' /tmp/ssl_response.json; then
     node -e "const data = require('/tmp/ssl_response.json'); const fs = require('fs'); fs.writeFileSync('/etc/caddy/ssl/cert.pem', data.cert); fs.writeFileSync('/etc/caddy/ssl/key.pem', data.key);"
     echo "Sertifikat SSL berhasil disinkronkan!"
-    sudo systemctl reload caddy || sudo systemctl restart caddy || true
+    echo '$SUDO_PASS' | sudo -S systemctl reload caddy 2>/dev/null || echo '$SUDO_PASS' | sudo -S systemctl restart caddy 2>/dev/null || true
 else
     echo "Gagal mengunduh sertifikat SSL dari Server Lisensi."
     cat /tmp/ssl_response.json 2>/dev/null || true
 fi
 rm -f /tmp/ssl_response.json
-EOF
+EOF_SYNC_SSL
 
         sed -i "s|TARGET_DOMAIN_PLACEHOLDER|$TARGET_DOMAIN|g" /tmp/sync-ssl.sh
         sed -i "s|LICENSE_KEY_PLACEHOLDER|$LICENSE_KEY|g" /tmp/sync-ssl.sh
@@ -805,26 +1010,118 @@ EOF
         echo '$SUDO_PASS' | sudo -S cp /tmp/sync-ssl.sh /usr/local/bin/sync-ssl.sh
         echo '$SUDO_PASS' | sudo -S chmod +x /usr/local/bin/sync-ssl.sh
         
-        # Run sync-ssl.sh immediately once to get the first certificate
+        # Jalankan sekali untuk mendapatkan sertifikat awal
         /usr/local/bin/sync-ssl.sh || true
         
-        # Set daily cron job
-        echo -e '#!/bin/bash\n/usr/local/bin/sync-ssl.sh >/dev/null 2>&1' | sudo tee /etc/cron.daily/sync-ssl >/dev/null
+        # Jadwalkan cron harian
+        echo '#!/bin/bash' > /tmp/sync-ssl-cron
+        echo '/usr/local/bin/sync-ssl.sh >/dev/null 2>&1' >> /tmp/sync-ssl-cron
+        echo '$SUDO_PASS' | sudo -S cp /tmp/sync-ssl-cron /etc/cron.daily/sync-ssl
         echo '$SUDO_PASS' | sudo -S chmod +x /etc/cron.daily/sync-ssl
-    elif [ "$SSL_SCENARIO" = "cloudflare" ] && [ ! -z "$CF_TOKEN" ]; then
-        echo "    tls {" >> /tmp/Caddyfile
-        echo "        dns cloudflare $CF_TOKEN" >> /tmp/Caddyfile
-        echo "    }" >> /tmp/Caddyfile
-    else
-        echo "    tls internal" >> /tmp/Caddyfile
+        rm -f /tmp/sync-ssl-cron
     fi
-    echo "}" >> /tmp/Caddyfile
 
-    echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
+    # 2. Susun blok konfigurasi Caddy Absenta
+    if [ -z "$TARGET_DOMAIN" ] || [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        HOST_DEF=":80"
+        if [ ! -z "$TARGET_DOMAIN" ]; then
+            HOST_DEF="http://$TARGET_DOMAIN, http://:80"
+        fi
+        cat << EOF_CADDY > /tmp/caddy_absenta_block.conf
+$HOST_DEF {
+    reverse_proxy /api/* 127.0.0.1:$B_PORT
+    reverse_proxy /socket.io/* 127.0.0.1:$B_PORT
+    reverse_proxy /absenta-storage/* 127.0.0.1:9000
+    reverse_proxy 127.0.0.1:$F_PORT
+    encode gzip zstd
+}
+EOF_CADDY
+    else
+        cat << EOF_CADDY > /tmp/caddy_absenta_block.conf
+http://$TARGET_DOMAIN, http://*.$TARGET_DOMAIN, http://:80 {
+    reverse_proxy /api/* 127.0.0.1:$B_PORT
+    reverse_proxy /socket.io/* 127.0.0.1:$B_PORT
+    reverse_proxy /absenta-storage/* 127.0.0.1:9000
+    reverse_proxy 127.0.0.1:$F_PORT
+    encode gzip zstd
+}
+
+https://$TARGET_DOMAIN, https://*.$TARGET_DOMAIN {
+    reverse_proxy /api/* 127.0.0.1:$B_PORT
+    reverse_proxy /socket.io/* 127.0.0.1:$B_PORT
+    reverse_proxy /absenta-storage/* 127.0.0.1:9000
+    reverse_proxy 127.0.0.1:$F_PORT
+    encode gzip zstd
+EOF_CADDY
+
+        if [ "$SSL_SCENARIO" = "sync" ] || [ -f /etc/caddy/ssl/cert.pem ]; then
+            echo "    tls /etc/caddy/ssl/cert.pem /etc/caddy/ssl/key.pem" >> /tmp/caddy_absenta_block.conf
+        elif [ "$SSL_SCENARIO" = "cloudflare" ] && [ ! -z "$CF_TOKEN" ]; then
+            cat << EOF_CF >> /tmp/caddy_absenta_block.conf
+    tls {
+        dns cloudflare $CF_TOKEN
+    }
+EOF_CF
+        else
+            echo "    tls internal" >> /tmp/caddy_absenta_block.conf
+        fi
+        echo "}" >> /tmp/caddy_absenta_block.conf
+    fi
+
+    # 3. Merger Caddyfile multi-app cerdas
+    echo "Menggabungkan konfigurasi Caddyfile dengan Smart Multi-App Merger..."
+    echo '$SUDO_PASS' | sudo -S cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
+
+    echo '$SUDO_PASS' | sudo -S python3 -c "
+import os, re
+
+caddy_file = '/etc/caddy/Caddyfile'
+content = ''
+if os.path.exists(caddy_file):
+    try:
+        with open(caddy_file, 'r') as f:
+            content = f.read()
+    except Exception:
+        content = ''
+
+# Bersihkan template default ubuntu (:80 dengan /usr/share/caddy)
+if '/usr/share/caddy' in content:
+    content = re.sub(r':80\s*\{[^}]*root\s+\*\s+/usr/share/caddy[^}]*file_server[^}]*\}', '', content, flags=re.DOTALL)
+
+# Hapus blok lama absenta
+content = re.sub(r'# === BEGIN PROJECT: absenta ===.*?# === END PROJECT: absenta ===\n?', '', content, flags=re.DOTALL).strip()
+
+# Pastikan header global auto_https off terpasang jika belum ada
+if 'auto_https' not in content:
+    header = '{\n    auto_https off\n}\n\n'
+    content = header + content.lstrip()
+
+with open('/tmp/caddy_base.txt', 'w') as f:
+    f.write(content.strip() + '\n\n' if content.strip() else '')
+" 2>/dev/null || true
+
+    {
+        cat /tmp/caddy_base.txt 2>/dev/null || true
+        echo "# === BEGIN PROJECT: absenta ==="
+        cat /tmp/caddy_absenta_block.conf
+        echo ""
+        echo "# === END PROJECT: absenta ==="
+    } > /tmp/Caddyfile.merged
+
+    echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile.merged /etc/caddy/Caddyfile
+    echo '$SUDO_PASS' | sudo -S rm -f /tmp/caddy_base.txt /tmp/caddy_absenta_block.conf /tmp/Caddyfile.merged 2>/dev/null || true
+
+    echo "Validasi konfigurasi Caddyfile Multi-App..."
+    if echo '$SUDO_PASS' | sudo -S caddy validate --config /etc/caddy/Caddyfile; then
+        echo "✅ Validasi Caddyfile Multi-App BERHASIL!"
+        echo '$SUDO_PASS' | sudo -S systemctl enable caddy 2>/dev/null || true
+        echo '$SUDO_PASS' | sudo -S systemctl reload caddy 2>/dev/null || echo '$SUDO_PASS' | sudo -S systemctl restart caddy 2>/dev/null || true
+    else
+        echo "⚠️ Validasi Caddyfile gagal, memulihkan backup..."
+        echo '$SUDO_PASS' | sudo -S cp /etc/caddy/Caddyfile.bak /etc/caddy/Caddyfile 2>/dev/null || true
+        echo '$SUDO_PASS' | sudo -S systemctl restart caddy 2>/dev/null || true
+    fi
 fi
-
-echo '$SUDO_PASS' | sudo -S systemctl enable caddy
-echo '$SUDO_PASS' | sudo -S systemctl restart caddy
 "@
 
 Run-RemoteScript -ScriptContent $setupScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
@@ -849,7 +1146,7 @@ if systemctl is-active --quiet caddy; then
 else
     echo -e 'Status Caddy: \033[1;31mFAILED (INACTIVE)\033[0m'
     echo -e "\n[LOG DETAIL KESALAHAN CADDY TERBARU]:"
-    sudo systemctl status caddy --no-pager -n 10
+    systemctl status caddy --no-pager -n 10
 fi
 echo -e "==========================================================================\n"
 '@

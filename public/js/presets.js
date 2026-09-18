@@ -106,8 +106,8 @@ function renderPresetsGrid(presets) {
 
     let html = '';
     presets.forEach(p => {
-        const projName = p.project === 'licensing' ? 'Server Lisensi (VPS)' : (p.project === 'undangan' ? 'Undangan Digital (Studio)' : 'Project Absenta (Full Stack)');
-        const projBadgeClass = p.project === 'licensing' ? 'badge-blue' : (p.project === 'undangan' ? 'badge-blue' : 'badge-purple');
+        const projName = p.project === 'licensing' ? 'Server Lisensi (VPS)' : (p.project === 'undangan' ? 'Undangan Digital (Studio)' : (p.project === 'rekber' ? 'Rekening Bersama (B-Pay)' : 'Project Absenta (Full Stack)'));
+        const projBadgeClass = p.project === 'licensing' ? 'badge-blue' : (p.project === 'undangan' ? 'badge-blue' : (p.project === 'rekber' ? 'badge-blue' : 'badge-purple'));
         const keyName = p.sshKeyChoice || 'nginxonly.pem';
         const pName = p.name || ('Server ' + p.vpsIp);
         const pUser = p.vpsUser || 'asepsuryadi';
@@ -161,6 +161,7 @@ function renderPresetsGrid(presets) {
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(59,130,246,0.4); color: #60a5fa; background: rgba(59,130,246,0.08);" onclick="openHealthMatrixForPreset(\'' + safeId + '\')">🩺 System Health</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(167,139,250,0.4); color: #a78bfa; background: rgba(167,139,250,0.08);" onclick="openLogMonitorForPreset(\'' + safeId + '\')">📜 Log PM2</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 130px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(16,185,129,0.4); color: #34d399; background: rgba(16,185,129,0.08);" onclick="runSeedWilayahPreset(\'' + safeId + '\')">🌐 Seed Full Wilayah</button>' +
+                    '<button class="btn btn-secondary" style="flex: 1; min-width: 120px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(56,189,248,0.4); color: #38bdf8; background: rgba(56,189,248,0.08);" onclick="openDomainModal(\'' + safeId + '\')">🌐 Ganti Domain</button>' +
                 '</div>' +
             '</div>' +
         '</div>';
@@ -1094,3 +1095,338 @@ function cancelCurrentQuickUpdate() {
         alert('Error membatalkan proses: ' + err.message);
     });
 }
+
+// ============================================================
+// GUIDED DOMAIN & SUBDOMAIN SWITCHER
+// ============================================================
+
+let currentDomainEventSource = null;
+
+function openDomainModal(presetId) {
+    console.log('[DomainModal] openDomainModal triggered for presetId:', presetId);
+    let p = (globalPresets || []).find(item => item.id === presetId);
+    if (!p && Array.isArray(window.globalPresets)) {
+        p = window.globalPresets.find(item => item.id === presetId);
+    }
+
+    const backdrop = document.getElementById('domain-modal-backdrop');
+    if (!backdrop) {
+        console.error('[DomainModal] Error: Element #domain-modal-backdrop tidak ditemukan di DOM!');
+        alert('Komponen modal domain tidak ditemukan di halaman. Silakan refresh halaman browser Anda.');
+        return;
+    }
+
+    if (!p) {
+        // Fallback: fetch presets if array was empty
+        fetch('/api/presets')
+            .then(res => res.json())
+            .then(res => {
+                if (res.success && res.data) {
+                    globalPresets = res.data;
+                    const found = globalPresets.find(item => item.id === presetId);
+                    if (found) {
+                        openDomainModal(presetId);
+                    } else {
+                        alert('Preset server tidak ditemukan (ID: ' + presetId + ')');
+                    }
+                }
+            })
+            .catch(err => {
+                alert('Gagal mengambil data preset: ' + err.message);
+            });
+        return;
+    }
+
+    const badge = document.getElementById('domain-modal-server-badge');
+    const inputPresetId = document.getElementById('domain-modal-preset-id');
+    const formArea = document.getElementById('domain-modal-form-area');
+    const terminalArea = document.getElementById('domain-modal-terminal-area');
+    const applyBtn = document.getElementById('domain-modal-apply-btn');
+    const linkBtn = document.getElementById('domain-modal-open-link-btn');
+
+    if (inputPresetId) inputPresetId.value = p.id;
+    if (badge) badge.innerHTML = 'Target Server: <strong>' + (p.name || p.vpsIp) + '</strong> (' + p.vpsIp + ') &nbsp;|&nbsp; Proyek: <strong>' + (p.project || 'absenta') + '</strong>';
+
+    // Reset fields
+    const oldSubInput = document.getElementById('domain-modal-old-subdomain');
+    const newSubInput = document.getElementById('domain-modal-new-subdomain');
+    const baseDomInput = document.getElementById('domain-modal-base-domain');
+    const customDomInput = document.getElementById('domain-modal-custom-domain');
+
+    if (oldSubInput) oldSubInput.value = '';
+    if (newSubInput) newSubInput.value = '';
+    if (baseDomInput) baseDomInput.value = 'absenta.id';
+    if (customDomInput) customDomInput.value = '';
+
+    if (formArea) formArea.style.display = 'block';
+    if (terminalArea) terminalArea.style.display = 'none';
+    if (applyBtn) {
+        applyBtn.disabled = false;
+        applyBtn.innerHTML = '🚀 Terapkan Pembaruan Domain';
+    }
+    if (linkBtn) linkBtn.style.display = 'none';
+
+    updateDomainPreview();
+    backdrop.style.display = 'flex';
+    console.log('[DomainModal] Modal successfully opened. Running pre-check...');
+
+    // Automatically run pre-check on VPS config
+    runDomainPrecheck(p.id);
+}
+
+async function runDomainPrecheck(presetId) {
+    if (!presetId) {
+        presetId = document.getElementById('domain-modal-preset-id')?.value;
+    }
+    if (!presetId) return;
+
+    const badge = document.getElementById('domain-precheck-status-badge');
+    const content = document.getElementById('domain-precheck-content');
+
+    if (badge) {
+        badge.innerText = '⏳ Memeriksa...';
+        badge.style.background = 'rgba(59,130,246,0.15)';
+        badge.style.color = '#60a5fa';
+        badge.style.borderColor = 'rgba(59,130,246,0.3)';
+    }
+
+    if (content) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 8px 0; color: #94a3b8;">
+                <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #60a5fa; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
+                Sedang membaca .env backend, .env frontend, dan database tenant di VPS...
+            </div>
+        `;
+    }
+
+    try {
+        const res = await fetch('/api/check-domain-config?id=' + encodeURIComponent(presetId));
+        const json = await res.json();
+
+        if (!json.success) {
+            throw new Error(json.message || 'Gagal membaca konfigurasi dari VPS.');
+        }
+
+        const d = json.data || json;
+
+        if (badge) {
+            badge.innerText = '✅ Terverifikasi';
+            badge.style.background = 'rgba(52,211,153,0.15)';
+            badge.style.color = '#34d399';
+            badge.style.borderColor = 'rgba(52,211,153,0.3)';
+        }
+
+        const activeSub = d.tenantSubdomain || '-';
+        const tenantName = d.tenantName || '-';
+        const appUrl = d.appUrl || '-';
+        const frontendUrl = d.frontendUrl || '-';
+        const viteMain = d.viteMainDomain || '-';
+        const licKey = d.licenseKey || '-';
+        const customDom = d.tenantCustomDomain || '';
+
+        if (content) {
+            content.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 4px;">
+                    <div style="background: rgba(30,41,59,0.7); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Subdomain Aktif (DB)</div>
+                        <div style="font-family: 'Fira Code', monospace; font-size: 13px; font-weight: 700; color: #34d399; margin-top: 2px;">
+                            ${activeSub} <span style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(52,211,153,0.2); color: #34d399; font-weight: normal;">Aktif</span>
+                        </div>
+                    </div>
+                    <div style="background: rgba(30,41,59,0.7); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Nama Tenant (DB)</div>
+                        <div style="font-size: 12px; font-weight: 600; color: #f1f5f9; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${tenantName}">
+                            ${tenantName}
+                        </div>
+                    </div>
+                    <div style="background: rgba(30,41,59,0.7); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">APP_URL (Backend .env)</div>
+                        <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #93c5fd; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${appUrl}">
+                            ${appUrl}
+                        </div>
+                    </div>
+                    <div style="background: rgba(30,41,59,0.7); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">FRONTEND_URL (Backend .env)</div>
+                        <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #93c5fd; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${frontendUrl}">
+                            ${frontendUrl}
+                        </div>
+                    </div>
+                    <div style="background: rgba(30,41,59,0.7); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Base Domain (Frontend .env)</div>
+                        <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #cbd5e1; margin-top: 2px;">
+                            ${viteMain}
+                        </div>
+                    </div>
+                    <div style="background: rgba(30,41,59,0.7); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">License Key</div>
+                        <div style="font-family: 'Fira Code', monospace; font-size: 11px; color: #c4b5fd; margin-top: 2px;">
+                            ${licKey}
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 8px; font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 5px;">
+                    <span>💡</span> Subdomain Lama & Base Domain di bawah telah diisi otomatis dari konfigurasi aktif ini.
+                </div>
+            `;
+        }
+
+        // Auto populate fields
+        const oldSubInput = document.getElementById('domain-modal-old-subdomain');
+        const baseDomInput = document.getElementById('domain-modal-base-domain');
+        const customDomInput = document.getElementById('domain-modal-custom-domain');
+
+        if (oldSubInput && d.tenantSubdomain) {
+            oldSubInput.value = d.tenantSubdomain;
+        }
+
+        const detectedBaseDomain = d.mainDomain || d.easyTunnelBaseDomain || d.tenantBaseDomain || d.viteMainDomain || 'absenta.id';
+        if (baseDomInput) {
+            baseDomInput.value = detectedBaseDomain;
+        }
+
+        if (customDomInput && customDom) {
+            customDomInput.value = customDom;
+        }
+
+        updateDomainPreview();
+
+    } catch (err) {
+        console.error('[DomainPrecheck] Error:', err);
+        if (badge) {
+            badge.innerText = '❌ Gagal Precheck';
+            badge.style.background = 'rgba(239,68,68,0.15)';
+            badge.style.color = '#f87171';
+            badge.style.borderColor = 'rgba(239,68,68,0.3)';
+        }
+        if (content) {
+            content.innerHTML = `
+                <div style="color: #f87171; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 10px 12px; font-size: 12px;">
+                    ⚠️ Gagal membaca konfigurasi VPS: ${err.message || 'Koneksi SSH timeout atau error.'}
+                    <div style="margin-top: 6px; font-size: 11px; color: #fca5a5;">
+                        Anda tetap dapat mengisi formulir secara manual jika ingin melanjutkan pergantian domain.
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+
+function closeDomainModal() {
+    if (currentDomainEventSource) {
+        currentDomainEventSource.close();
+        currentDomainEventSource = null;
+    }
+    const backdrop = document.getElementById('domain-modal-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+}
+
+function updateDomainPreview() {
+    const newSub = (document.getElementById('domain-modal-new-subdomain')?.value || '').trim();
+    const baseDom = (document.getElementById('domain-modal-base-domain')?.value || 'absenta.id').trim();
+    const customDom = (document.getElementById('domain-modal-custom-domain')?.value || '').trim();
+    const previewEl = document.getElementById('domain-modal-preview-url');
+
+    if (!previewEl) return;
+
+    if (customDom) {
+        previewEl.innerText = 'https://' + customDom;
+    } else if (newSub) {
+        previewEl.innerText = 'https://' + newSub + '.' + baseDom;
+    } else {
+        previewEl.innerText = 'https://[subdomain].' + baseDom;
+    }
+}
+
+function startDomainUpdateStream() {
+    const presetId = document.getElementById('domain-modal-preset-id')?.value;
+    const oldSub = (document.getElementById('domain-modal-old-subdomain')?.value || '').trim();
+    const newSub = (document.getElementById('domain-modal-new-subdomain')?.value || '').trim();
+    const baseDom = (document.getElementById('domain-modal-base-domain')?.value || 'absenta.id').trim();
+    const customDom = (document.getElementById('domain-modal-custom-domain')?.value || '').trim();
+
+    if (!newSub && !customDom) {
+        alert('Mohon isi Subdomain Baru (misal: demo) atau Custom Domain Penuh!');
+        return;
+    }
+
+    const formArea = document.getElementById('domain-modal-form-area');
+    const terminalArea = document.getElementById('domain-modal-terminal-area');
+    const terminal = document.getElementById('domain-stream-terminal');
+    const statusText = document.getElementById('domain-stream-status');
+    const spinner = document.getElementById('domain-stream-spinner');
+    const linkBtn = document.getElementById('domain-modal-open-link-btn');
+
+    if (formArea) formArea.style.display = 'none';
+    if (terminalArea) terminalArea.style.display = 'block';
+    if (terminal) terminal.textContent = 'Memulai inisialisasi koneksi stream SSE ke server...\n';
+    if (statusText) {
+        statusText.innerText = '⏳ Menghubungkan ke VPS target...';
+        statusText.style.color = '#60a5fa';
+    }
+    if (spinner) spinner.style.display = 'inline-block';
+    if (linkBtn) linkBtn.style.display = 'none';
+
+    const targetUrl = customDom ? customDom : (newSub ? (newSub + '.' + baseDom) : baseDom);
+
+    const streamUrl = '/api/stream-update-domain?id=' + encodeURIComponent(presetId) +
+        '&oldSubdomain=' + encodeURIComponent(oldSub) +
+        '&newSubdomain=' + encodeURIComponent(newSub) +
+        '&baseDomain=' + encodeURIComponent(baseDom) +
+        '&customDomain=' + encodeURIComponent(customDom);
+
+    if (currentDomainEventSource) {
+        currentDomainEventSource.close();
+    }
+
+    currentDomainEventSource = new EventSource(streamUrl);
+
+    currentDomainEventSource.onmessage = function(e) {
+        const line = e.data;
+        if (!line) return;
+
+        if (terminal) {
+            terminal.textContent += line + '\n';
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        if (line.includes('[DOMAIN_UPDATE_COMPLETE]')) {
+            if (statusText) {
+                statusText.innerText = '✅ Pembaruan Domain Berhasil!';
+                statusText.style.color = '#34d399';
+            }
+            if (spinner) spinner.style.display = 'none';
+            if (linkBtn) {
+                linkBtn.href = 'https://' + targetUrl;
+                linkBtn.style.display = 'inline-flex';
+                linkBtn.innerText = '🌐 Buka https://' + targetUrl + ' ↗';
+            }
+            currentDomainEventSource.close();
+            currentDomainEventSource = null;
+        } else if (line.includes('[DOMAIN_UPDATE_FAILED]')) {
+            if (statusText) {
+                statusText.innerText = '❌ Pembaruan Domain Gagal!';
+                statusText.style.color = '#f87171';
+            }
+            if (spinner) spinner.style.display = 'none';
+            currentDomainEventSource.close();
+            currentDomainEventSource = null;
+        }
+    };
+
+    currentDomainEventSource.onerror = function() {
+        if (terminal) {
+            terminal.textContent += '\n[SSE INFO] Aliran log selesai atau terputus.\n';
+        }
+        if (spinner) spinner.style.display = 'none';
+        if (currentDomainEventSource) {
+            currentDomainEventSource.close();
+            currentDomainEventSource = null;
+        }
+    };
+}
+
+window.openDomainModal = openDomainModal;
+window.closeDomainModal = closeDomainModal;
+window.updateDomainPreview = updateDomainPreview;
+window.startDomainUpdateStream = startDomainUpdateStream;
+window.runDomainPrecheck = runDomainPrecheck;

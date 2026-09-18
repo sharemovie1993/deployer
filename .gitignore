@@ -2,5 +2,7 @@
 logs/
 *.log
 
-# Offline Caddy Binaries
+# Offline Binaries
 caddy-bin/
+minio-bin/
+
