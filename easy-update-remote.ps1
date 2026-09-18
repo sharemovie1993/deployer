@@ -370,7 +370,9 @@ if [ "`$DO_BUILD_BACKEND" = true ]; then
     cd absenta_backend
     if [ "`$DO_NPM_INSTALL_BACKEND" = true ]; then
         echo "📦 Memperbarui npm packages backend..."
-        npm install
+        export REDISMS_DISABLE_POSTINSTALL=1
+        export PUPPETEER_SKIP_DOWNLOAD=true
+        npm install --no-audit
     else
         echo "⏩ SMART INSTALL: Melewati npm install Backend (package.json tidak berubah)."
     fi

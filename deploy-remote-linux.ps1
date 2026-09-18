@@ -795,7 +795,9 @@ if [ "$IS_ABSENTA" = "True" ]; then
 
     # Install & Build Backend
     cd absenta_backend
-    npm install
+    export REDISMS_DISABLE_POSTINSTALL=1
+    export PUPPETEER_SKIP_DOWNLOAD=true
+    npm install --no-audit
     npx prisma generate
 
     # Jalankan prisma db push & seed (jika database postgresql sudah siap)
