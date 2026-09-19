@@ -47,51 +47,118 @@ function parseFioJson(stdout) {
         let grade = 'C';
         let rating = 'Standard';
         let badgeColor = '#f59e0b';
-        let singleInstanceStatus = 'CUKUP';
-        let singleInstanceDesc = 'Cukup untuk 10-30 kelas. Untuk 55 kelas serentak disarankan tuning buffer.';
+
+        // Skenario Spesifik
+        let guruStatus = 'CUKUP';
+        let guruDesc = '55 Guru login & input sesi aman jika bertahap, delay ~1-2 detik saat submit bersamaan.';
+        let siswaStatus = 'CUKUP';
+        let siswaDesc = 'Akses portal 2.000 siswa stabil, cache Redis membantu meringankan query disk.';
+        let ortuStatus = 'CUKUP';
+        let ortuDesc = 'Pengecekan notifikasi 2.000+ ortu lancar, disarankan batasi polling riwayat.';
+        let terminalStatus = 'AMAN';
+        let terminalDesc = 'Tapping RFID 10-55 perangkat lancar dengan queue database wajar.';
         let saasStatus = 'TERBATAS';
-        let saasDesc = 'Hanya cocok untuk 1-2 sekolah kecil. Potensi I/O wait tinggi pada jam sibuk.';
+        let saasDesc = 'Hanya cocok untuk 1-2 sekolah kecil. Tidak disarankan multi-tenant skala besar.';
 
         if (totalIops >= 25000 || (totalIops >= 15000 && avgLatMs <= 3.0)) {
             grade = 'S';
             rating = 'Enterprise Superfast (NVMe / High-End SSD)';
             badgeColor = '#10b981';
-            singleInstanceStatus = 'SANGAT PRIMA (100% Recommended)';
-            singleInstanceDesc = 'Sangat sanggup melayani 55+ kelas & ribuan tapping RFID serentak tanpa antrean I/O (Disk Latency ultra rendah).';
+            
+            guruStatus = 'SANGAT INSTAN (Zero Delay)';
+            guruDesc = '55 Guru buka sesi & update 2.000 status siswa serentak dalam 1 menit selesai tanpa ada I/O lock (<10ms).';
+            
+            siswaStatus = 'SANGAT PRIMA';
+            siswaDesc = '2.000 - 5.000 Siswa login & buka portal akademik bersamaan tanpa antrean disk.';
+            
+            ortuStatus = 'SANGAT PRIMA';
+            ortuDesc = '3.000+ Orang tua menerima & memantau notifikasi real-time saat jam masuk tanpa latency.';
+            
+            terminalStatus = 'ULTRA CEPAT';
+            terminalDesc = '55 Perangkat RFID tapping serentak (30-50 tap/detik) tercatat instan di PostgreSQL direct write.';
+            
             saasStatus = 'ENTERPRISE READY (Multi-Tenant)';
-            saasDesc = 'Sangat siap melayani 15-30+ sekolah / puluhan ribu siswa aktif serentak (SaaS High Load & CBT Ready).';
+            saasDesc = 'Sangat siap untuk 15-30+ Sekolah / 25.000+ Siswa aktif serentak (CBT & High Load Ready).';
+
         } else if (totalIops >= 8000) {
             grade = 'A';
             rating = 'Very Good (Fast Dedicated SSD)';
             badgeColor = '#3b82f6';
-            singleInstanceStatus = 'SANGAT SIAP (Recommended)';
-            singleInstanceDesc = 'Lancar jaya untuk 55 kelas absensi sesi pergantian jam & database PostgreSQL write traffic.';
+
+            guruStatus = 'SANGAT SIAP';
+            guruDesc = '55 Guru membuka sesi & submit absensi lancar jaya dengan response time < 50ms.';
+
+            siswaStatus = 'SANGAT SIAP';
+            siswaDesc = '2.000 Siswa login lancar, session JWT di Redis dan query database terlayani cepat.';
+
+            ortuStatus = 'SANGAT SIAP';
+            ortuDesc = '2.000+ Ortu cek presensi serentak di pagi hari terlayani dengan throughput stabil.';
+
+            terminalStatus = 'SANGAT CEPAT';
+            terminalDesc = 'Tapping RFID dari puluhan terminal tersimpan tanpa lag ke storage.';
+
             saasStatus = 'SIAP (5-10 Sekolah)';
             saasDesc = 'Mampu melayani 5 hingga 10 sekolah skala menengah dengan latensi database stabil.';
+
         } else if (totalIops >= 2500) {
             grade = 'B';
             rating = 'Good (Standard Cloud SSD / Fast VPS)';
             badgeColor = '#06b6d4';
-            singleInstanceStatus = 'SIAP (Standar Produksi)';
-            singleInstanceDesc = 'Memenuhi standar minimum produksi untuk 55 kelas. Disarankan PostgreSQL shared_buffers & WAL di-tuning.';
+
+            guruStatus = 'SIAP (Standar)';
+            guruDesc = '55 Guru submit absensi sesi KBM aman. Disarankan PostgreSQL shared_buffers dioptimalkan.';
+
+            siswaStatus = 'SIAP';
+            siswaDesc = '1.000 - 2.000 Siswa login normal. Cache Redis sangat membantu menekan disk read.';
+
+            ortuStatus = 'SIAP';
+            ortuDesc = 'Ortu memantau kehadiran siswa dengan response time wajar (~100-200ms).';
+
+            terminalStatus = 'SIAP';
+            terminalDesc = 'Tapping RFID berjalan normal untuk alur gerbang sekolah harian.';
+
             saasStatus = 'CUKUP (2-4 Sekolah)';
-            saasDesc = 'Cukup untuk 2-4 tenant sekolah. Monitor I/O wait jika ada jadwal absensi yang bersamaan persis.';
+            saasDesc = 'Cukup untuk 2-4 tenant sekolah. Monitor I/O wait jika jadwal KBM bersamaan persis.';
+
         } else if (totalIops >= 1000) {
             grade = 'C';
             rating = 'Minimum Entry (Budget Cloud VPS)';
             badgeColor = '#f59e0b';
-            singleInstanceStatus = 'MINIMUM (Perlu Monitoring I/O)';
-            singleInstanceDesc = 'Bisa jalan, namun jika 55 kelas submit serentak dalam 3 menit, query database mungkin mengalami delay antrean 1-3 detik.';
-            saasStatus = 'TIDAK DIREKOMENDASIKAN (Multi-Tenant)';
-            saasDesc = 'Tidak disarankan untuk multi-tenant SaaS karena throughput disk akan menjadi bottleneck utama.';
+
+            guruStatus = 'MINIMUM (Delay Ringan)';
+            guruDesc = 'Jika 55 guru submit serentak dalam 3 menit, query database bisa antre 1-3 detik.';
+
+            siswaStatus = 'CUKUP';
+            siswaDesc = 'Siswa login lancar jika tersebar, namun rawan lambat jika ribuan siswa buka bersamaan.';
+
+            ortuStatus = 'CUKUP';
+            ortuDesc = 'Notifikasi terkirim namun rekap presensi di aplikasi wali murid bisa delay beberapa detik.';
+
+            terminalStatus = 'CUKUP (Prioritas Buffer)';
+            terminalDesc = 'Aman untuk 10 terminal, namun perlu antrean buffer jika lonjakan tapping sangat padat.';
+
+            saasStatus = 'TIDAK DIREKOMENDASIKAN';
+            saasDesc = 'Tidak disarankan untuk multi-tenant SaaS karena write disk akan menjadi bottleneck utama.';
+
         } else {
             grade = 'D';
-            rating = 'Critical / Bottleneck (Slow Disk / HDD / Shared VPS Throttle)';
+            rating = 'Critical / Bottleneck (Slow Disk / HDD / Shared Throttle)';
             badgeColor = '#ef4444';
-            singleInstanceStatus = 'TIDAK DIREKOMENDASIKAN';
-            singleInstanceDesc = 'Risiko tinggi request timeout 504 saat 55 kelas membuka sesi absensi serentak karena disk I/O queue overload.';
+
+            guruStatus = 'RISIKO TINGGI (504 Timeout)';
+            guruDesc = 'Risiko tinggi request timeout 504 saat 55 guru membuka sesi absensi serentak karena I/O queue overload.';
+
+            siswaStatus = 'RAWAN ERROR';
+            siswaDesc = 'Login massal siswa dapat menyebabkan antrean database terkunci (lock contention).';
+
+            ortuStatus = 'DELAY TINGGI';
+            ortuDesc = 'Notifikasi dan monitoring ortu mengalami antrean panjang.';
+
+            terminalStatus = 'RAWAN PENDING';
+            terminalDesc = 'Tapping RFID rawan pending atau delay verifikasi kartu di terminal.';
+
             saasStatus = 'TIDAK LAYAK';
-            saasDesc = 'Disk storage terlalu lambat untuk arsitektur SaaS.';
+            saasDesc = 'Disk storage terlalu lambat untuk arsitektur SaaS produksi.';
         }
 
         return {
@@ -110,10 +177,37 @@ function parseFioJson(stdout) {
                 writeLatMs,
                 avgLatMs
             },
+            scenarios: {
+                guru: {
+                    title: '👨‍🏫 Guru Login & Input Sesi KBM (55 Kelas Serentak)',
+                    status: guruStatus,
+                    description: guruDesc
+                },
+                siswa: {
+                    title: '🎓 Siswa Login & Akses Portal Rekap (~2.000 Siswa)',
+                    status: siswaStatus,
+                    description: siswaDesc
+                },
+                ortu: {
+                    title: '👨‍👩‍👦 Orang Tua (Ortu) Login & Pantau Notifikasi (~2.000+ Ortu)',
+                    status: ortuStatus,
+                    description: ortuDesc
+                },
+                terminal: {
+                    title: '📟 Terminal RFID & Tapping Gerbang Masuk (10 - 55 Perangkat)',
+                    status: terminalStatus,
+                    description: terminalDesc
+                },
+                saas: {
+                    title: '🌐 Platform SaaS Multi-Tenant (Multi-Sekolah / Puluhan Ribu Siswa)',
+                    status: saasStatus,
+                    description: saasDesc
+                }
+            },
             evaluation: {
                 singleInstance: {
-                    status: singleInstanceStatus,
-                    description: singleInstanceDesc
+                    status: totalIops >= 8000 ? 'SANGAT PRIMA (100% Recommended)' : totalIops >= 2500 ? 'SIAP (Standar Produksi)' : 'MINIMUM (Perlu Monitoring)',
+                    description: totalIops >= 8000 ? 'Sangat sanggup melayani 55+ kelas, 2.000 siswa, ribuan ortu & terminal serentak.' : 'Cukup untuk 10-30 kelas. Untuk 55 kelas serentak disarankan tuning buffer.'
                 },
                 saas: {
                     status: saasStatus,

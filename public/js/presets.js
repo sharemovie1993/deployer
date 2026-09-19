@@ -1806,25 +1806,62 @@ function runIopsBenchmark() {
             const tpEl = document.getElementById('iops-val-throughput');
             if (tpEl) tpEl.innerText = (m.totalThroughputMb || 0) + ' MB/s';
 
-            // Populate Evaluations
-            const singleStatus = document.getElementById('iops-single-status');
-            const singleDesc = document.getElementById('iops-single-desc');
-            if (e.singleInstance) {
-                if (singleStatus) {
-                    singleStatus.innerText = e.singleInstance.status;
-                    singleStatus.style.color = data.badgeColor || '#10b981';
+            // Populate Scenario Evaluations
+            const s = data.scenarios || {};
+
+            // 1. Guru
+            const guruStatus = document.getElementById('iops-guru-status');
+            const guruDesc = document.getElementById('iops-guru-desc');
+            if (s.guru) {
+                if (guruStatus) {
+                    guruStatus.innerText = s.guru.status;
+                    guruStatus.style.color = data.badgeColor || '#10b981';
                 }
-                if (singleDesc) singleDesc.innerText = e.singleInstance.description;
+                if (guruDesc) guruDesc.innerText = s.guru.description;
             }
 
+            // 2. Siswa
+            const siswaStatus = document.getElementById('iops-siswa-status');
+            const siswaDesc = document.getElementById('iops-siswa-desc');
+            if (s.siswa) {
+                if (siswaStatus) {
+                    siswaStatus.innerText = s.siswa.status;
+                    siswaStatus.style.color = data.badgeColor || '#10b981';
+                }
+                if (siswaDesc) siswaDesc.innerText = s.siswa.description;
+            }
+
+            // 3. Ortu
+            const ortuStatus = document.getElementById('iops-ortu-status');
+            const ortuDesc = document.getElementById('iops-ortu-desc');
+            if (s.ortu) {
+                if (ortuStatus) {
+                    ortuStatus.innerText = s.ortu.status;
+                    ortuStatus.style.color = data.badgeColor || '#10b981';
+                }
+                if (ortuDesc) ortuDesc.innerText = s.ortu.description;
+            }
+
+            // 4. Terminal RFID
+            const termStatus = document.getElementById('iops-terminal-status');
+            const termDesc = document.getElementById('iops-terminal-desc');
+            if (s.terminal) {
+                if (termStatus) {
+                    termStatus.innerText = s.terminal.status;
+                    termStatus.style.color = data.badgeColor || '#10b981';
+                }
+                if (termDesc) termDesc.innerText = s.terminal.description;
+            }
+
+            // 5. SaaS Multi-Tenant
             const saasStatus = document.getElementById('iops-saas-status');
             const saasDesc = document.getElementById('iops-saas-desc');
-            if (e.saas) {
+            if (s.saas) {
                 if (saasStatus) {
-                    saasStatus.innerText = e.saas.status;
+                    saasStatus.innerText = s.saas.status;
                     saasStatus.style.color = data.badgeColor || '#10b981';
                 }
-                if (saasDesc) saasDesc.innerText = e.saas.description;
+                if (saasDesc) saasDesc.innerText = s.saas.description;
             }
 
             if (resultContainer) resultContainer.style.display = 'flex';

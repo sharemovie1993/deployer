@@ -1040,29 +1040,65 @@
 
             <!-- Detailed Workload Suitability Assessment -->
             <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 18px;">
-                <h4 style="font-size: 13.5px; font-weight: 700; color: #fff; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                    📊 Evaluasi Kelayakan Beban Kerja Platform Absenta
-                </h4>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <h4 style="font-size: 13.5px; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                        📊 Evaluasi Kelayakan Beban Skenario Nyata Platform Absenta
+                    </h4>
+                    <span style="font-size: 11px; color: var(--text-muted);">Berdasarkan uji direct I/O random read/write 4K database PostgreSQL & Redis</span>
+                </div>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
-                    <!-- Single Instance Evaluation -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">🏫 Single Instance (1 Sekolah / 55 Kelas)</span>
-                            <span id="iops-single-status" style="font-size: 11px; font-weight: 700; color: #10b981;">SANGAT PRIMA</span>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px;">
+                    <!-- Skenario 1: Guru -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">👨‍🏫 Guru Login & Sesi KBM (55 Kelas Serentak)</span>
+                            <span id="iops-guru-status" style="font-size: 11px; font-weight: 700; color: #10b981;">SANGAT INSTAN</span>
                         </div>
-                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.6; margin: 0;" id="iops-single-desc">
-                            Sangat sanggup melayani 55+ kelas & ribuan tapping RFID serentak tanpa antrean I/O (Disk Latency ultra rendah).
+                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-guru-desc">
+                            55 Guru buka sesi & update 2.000 status siswa serentak dalam 1 menit selesai tanpa ada I/O lock (&lt;10ms).
                         </p>
                     </div>
 
-                    <!-- SaaS Multi-Tenant Evaluation -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">🌐 SaaS Multi-Tenant (Multi-Sekolah)</span>
+                    <!-- Skenario 2: Siswa -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">🎓 Siswa Login & Akses Rekap (~2.000 Siswa)</span>
+                            <span id="iops-siswa-status" style="font-size: 11px; font-weight: 700; color: #10b981;">SANGAT PRIMA</span>
+                        </div>
+                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-siswa-desc">
+                            2.000 - 5.000 Siswa login & buka portal akademik bersamaan tanpa antrean disk.
+                        </p>
+                    </div>
+
+                    <!-- Skenario 3: Ortu -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">👨‍👩‍👦 Orang Tua (Ortu) Login & Notifikasi (~2.000+ Ortu)</span>
+                            <span id="iops-ortu-status" style="font-size: 11px; font-weight: 700; color: #10b981;">SANGAT PRIMA</span>
+                        </div>
+                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-ortu-desc">
+                            3.000+ Orang tua menerima & memantau notifikasi real-time saat jam masuk tanpa latency.
+                        </p>
+                    </div>
+
+                    <!-- Skenario 4: Terminal RFID -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">📟 Terminal RFID Tapping Gerbang (10 - 55 Mesin)</span>
+                            <span id="iops-terminal-status" style="font-size: 11px; font-weight: 700; color: #10b981;">ULTRA CEPAT</span>
+                        </div>
+                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-terminal-desc">
+                            55 Perangkat RFID tapping serentak (30-50 tap/detik) tercatat instan di PostgreSQL direct write.
+                        </p>
+                    </div>
+
+                    <!-- Skenario 5: SaaS Multi-Tenant -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px; grid-column: 1 / -1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">🌐 Platform SaaS Multi-Tenant (Multi-Sekolah / Puluhan Ribu Siswa)</span>
                             <span id="iops-saas-status" style="font-size: 11px; font-weight: 700; color: #10b981;">ENTERPRISE READY</span>
                         </div>
-                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.6; margin: 0;" id="iops-saas-desc">
+                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-saas-desc">
                             Sangat siap melayani 15-30+ sekolah / puluhan ribu siswa aktif serentak (SaaS High Load & CBT Ready).
                         </p>
                     </div>
@@ -1077,44 +1113,54 @@
             </h4>
 
             <div style="overflow-x: auto; margin-bottom: 14px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; min-width: 680px;">
                     <thead>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
                             <th style="padding: 6px 8px;">Tingkat IOPS</th>
                             <th style="padding: 6px 8px;">Kategori Storage</th>
-                            <th style="padding: 6px 8px;">Latensi Rata-rata</th>
-                            <th style="padding: 6px 8px;">Kelayakan Single Instance</th>
-                            <th style="padding: 6px 8px;">Kelayakan Multi-Tenant SaaS</th>
+                            <th style="padding: 6px 8px;">Disk Latency</th>
+                            <th style="padding: 6px 8px;">👨‍🏫 Guru (55 Kelas)</th>
+                            <th style="padding: 6px 8px;">🎓 Siswa & 👨‍👩‍👦 Ortu (2k+)</th>
+                            <th style="padding: 6px 8px;">📟 RFID Terminal</th>
+                            <th style="padding: 6px 8px;">🌐 SaaS Multi-Tenant</th>
                         </tr>
                     </thead>
                     <tbody style="color: #cbd5e1;">
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
                             <td style="padding: 8px;"><strong style="color: #ef4444;">&lt; 1.500 IOPS</strong></td>
-                            <td style="padding: 8px;">HDD / Budget Shared VPS</td>
+                            <td style="padding: 8px;">HDD / Shared VPS</td>
                             <td style="padding: 8px; color: #ef4444;">&gt; 50 ms</td>
-                            <td style="padding: 8px; color: #ef4444;">🔴 Kritis (&lt; 10 Kelas)</td>
+                            <td style="padding: 8px; color: #ef4444;">🔴 Rawan Timeout 504</td>
+                            <td style="padding: 8px; color: #ef4444;">🔴 Delay Antrean &gt;5s</td>
+                            <td style="padding: 8px; color: #ef4444;">🔴 Rawan Pending</td>
                             <td style="padding: 8px; color: #ef4444;">❌ Tidak Layak</td>
                         </tr>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
                             <td style="padding: 8px;"><strong style="color: #f59e0b;">1.500 - 5.000 IOPS</strong></td>
-                            <td style="padding: 8px;">Standard Cloud SSD VPS</td>
+                            <td style="padding: 8px;">Cloud SSD Standard</td>
                             <td style="padding: 8px; color: #f59e0b;">20 - 50 ms</td>
-                            <td style="padding: 8px; color: #f59e0b;">🟡 Cukup (10 - 30 Kelas)</td>
+                            <td style="padding: 8px; color: #f59e0b;">🟡 Cukup (Delay ~1-2s)</td>
+                            <td style="padding: 8px; color: #f59e0b;">🟡 Aman dgn Redis Cache</td>
+                            <td style="padding: 8px; color: #f59e0b;">🟡 10 - 20 Mesin</td>
                             <td style="padding: 8px; color: #f59e0b;">⚠️ Terbatas (1 - 2 Sekolah)</td>
                         </tr>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
                             <td style="padding: 8px;"><strong style="color: #3b82f6;">5.000 - 15.000 IOPS</strong></td>
-                            <td style="padding: 8px;">Fast Dedicated SATA SSD</td>
+                            <td style="padding: 8px;">Fast Dedicated SSD</td>
                             <td style="padding: 8px; color: #3b82f6;">5 - 20 ms</td>
-                            <td style="padding: 8px; color: #34d399;">🟢 Sangat Siap (55+ Kelas)</td>
+                            <td style="padding: 8px; color: #34d399;">🟢 Sangat Siap (&lt;50ms)</td>
+                            <td style="padding: 8px; color: #34d399;">🟢 Lancar 2.000 Siswa/Ortu</td>
+                            <td style="padding: 8px; color: #34d399;">🟢 55 Terminal Serentak</td>
                             <td style="padding: 8px; color: #3b82f6;">✔️ Siap (5 - 10 Sekolah)</td>
                         </tr>
                         <tr>
                             <td style="padding: 8px;"><strong style="color: #10b981;">&gt; 15.000 - 60.000+ IOPS</strong></td>
-                            <td style="padding: 8px;">Samsung EVO / Enterprise NVMe</td>
+                            <td style="padding: 8px;">Samsung EVO / NVMe</td>
                             <td style="padding: 8px; color: #10b981;">&lt; 3 ms</td>
-                            <td style="padding: 8px; color: #10b981;">🏆 Ultra Prima (Zero Bottleneck)</td>
-                            <td style="padding: 8px; color: #10b981;">🚀 Enterprise Ready (30+ Sekolah)</td>
+                            <td style="padding: 8px; color: #10b981;">🏆 Zero Delay (&lt;10ms)</td>
+                            <td style="padding: 8px; color: #10b981;">🏆 5.000+ Siswa/Ortu Instan</td>
+                            <td style="padding: 8px; color: #10b981;">🏆 55+ Mesin 50 tap/dtk</td>
+                            <td style="padding: 8px; color: #10b981;">🚀 Enterprise (30+ Sekolah)</td>
                         </tr>
                     </tbody>
                 </table>
