@@ -1205,88 +1205,23 @@
             </div>
         </div>
 
-        <!-- Standar Acuan & Best Practices Guide (Always Visible Full-Width) -->
-        <div style="background: rgba(30,41,59,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 22px;">
-            <h4 style="font-size: 13.5px; font-weight: 800; color: #f8fafc; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
-                📖 STANDAR ACUAN MINIMUM & BEST PRACTICES IOPS SERVER PRODUKSI
-            </h4>
-
-            <div style="overflow-x: auto; margin-bottom: 14px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left; min-width: 760px;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
-                            <th style="padding: 8px 10px;">Tingkat IOPS</th>
-                            <th style="padding: 8px 10px;">Kategori Storage</th>
-                            <th style="padding: 8px 10px;">Disk Latency</th>
-                            <th style="padding: 8px 10px;">👨‍🏫 Guru (55 Kelas)</th>
-                            <th style="padding: 8px 10px;">🎓 Siswa & 👨‍👩‍👦 Ortu (2k+)</th>
-                            <th style="padding: 8px 10px;">📟 RFID Terminal</th>
-                            <th style="padding: 8px 10px;">🌐 SaaS Multi-Tenant</th>
-                        </tr>
-                    </thead>
-                    <tbody style="color: #cbd5e1;">
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
-                            <td style="padding: 10px;"><strong style="color: #ef4444;">&lt; 1.500 IOPS</strong></td>
-                            <td style="padding: 10px;">HDD / Shared VPS</td>
-                            <td style="padding: 10px; color: #ef4444;">&gt; 50 ms</td>
-                            <td style="padding: 10px; color: #ef4444;">🔴 Rawan Timeout 504</td>
-                            <td style="padding: 10px; color: #ef4444;">🔴 Delay Antrean &gt;5s</td>
-                            <td style="padding: 10px; color: #ef4444;">🔴 Rawan Pending</td>
-                            <td style="padding: 10px; color: #ef4444;">❌ Tidak Layak</td>
-                        </tr>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
-                            <td style="padding: 10px;"><strong style="color: #f59e0b;">1.500 - 5.000 IOPS</strong></td>
-                            <td style="padding: 10px;">Cloud SSD Standard</td>
-                            <td style="padding: 10px; color: #f59e0b;">20 - 50 ms</td>
-                            <td style="padding: 10px; color: #f59e0b;">🟡 Cukup (Delay ~1-2s)</td>
-                            <td style="padding: 10px; color: #f59e0b;">🟡 Aman dgn Redis Cache</td>
-                            <td style="padding: 10px; color: #f59e0b;">🟡 10 - 20 Mesin</td>
-                            <td style="padding: 10px; color: #f59e0b;">⚠️ Terbatas (1 - 2 Sekolah)</td>
-                        </tr>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
-                            <td style="padding: 10px;"><strong style="color: #3b82f6;">5.000 - 15.000 IOPS</strong></td>
-                            <td style="padding: 10px;">Fast Dedicated SSD</td>
-                            <td style="padding: 10px; color: #3b82f6;">5 - 20 ms</td>
-                            <td style="padding: 10px; color: #34d399;">🟢 Sangat Siap (&lt;50ms)</td>
-                            <td style="padding: 10px; color: #34d399;">🟢 Lancar 2.000 Siswa/Ortu</td>
-                            <td style="padding: 10px; color: #34d399;">🟢 55 Terminal Serentak</td>
-                            <td style="padding: 10px; color: #3b82f6;">✔️ Siap (5 - 10 Sekolah)</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px;"><strong style="color: #10b981;">&gt; 15.000 - 60.000+ IOPS</strong></td>
-                            <td style="padding: 10px;">Samsung EVO / NVMe</td>
-                            <td style="padding: 10px; color: #10b981;">&lt; 3 ms</td>
-                            <td style="padding: 10px; color: #10b981;">🏆 Zero Delay (&lt;10ms)</td>
-                            <td style="padding: 10px; color: #10b981;">🏆 5.000+ Siswa/Ortu Instan</td>
-                            <td style="padding: 10px; color: #10b981;">🏆 55+ Mesin 50 tap/dtk</td>
-                            <td style="padding: 10px; color: #10b981;">🚀 Enterprise (30+ Sekolah)</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.6;">
-                💡 <strong>Tips Best Practice:</strong> Absenta mengandalkan database PostgreSQL untuk pencatatan transaksi absensi dan Redis untuk session caching. Pada saat pergantian jam KBM (55 kelas submit serentak dalam 3 menit), kecepatan write direct storage mencegah antrean request lock (I/O wait) sehingga response time aplikasi tetap instan &lt; 50ms.
-            </div>
-        </div>
-
         <!-- Footer Action -->
-        <div style="display: flex; justify-content: flex-end; padding-top: 10px;">
-            <button class="btn btn-secondary" type="button" onclick="closeIopsModal()" style="padding: 10px 24px; font-weight: 700; font-size: 13px;">
-                Tutup Layar Penuh
+        <div style="display: flex; justify-content: flex-end; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
+            <button class="btn btn-secondary" type="button" onclick="closeIopsModal()" style="padding: 11px 28px; font-weight: 700; font-size: 13.5px;">
+                ✕ Tutup Layar Penuh
             </button>
         </div>
     </div>
 </div>
 
-<script src="/js/preset-picker.js?v=20260919_fullpage"></script>
-<script src="/js/app.js?v=20260919_fullpage"></script>
-<script src="/js/wizard.js?v=20260919_fullpage"></script>
-<script src="/js/presets.js?v=20260919_fullpage"></script>
-<script src="/js/cluster.js?v=20260919_fullpage"></script>
-<script src="/js/logs.js?v=20260919_fullpage"></script>
-<script src="/js/health.js?v=20260919_fullpage"></script>
-<script src="/js/audit.js?v=20260919_fullpage"></script>
+<script src="/js/preset-picker.js?v=20260919_cleanui"></script>
+<script src="/js/app.js?v=20260919_cleanui"></script>
+<script src="/js/wizard.js?v=20260919_cleanui"></script>
+<script src="/js/presets.js?v=20260919_cleanui"></script>
+<script src="/js/cluster.js?v=20260919_cleanui"></script>
+<script src="/js/logs.js?v=20260919_cleanui"></script>
+<script src="/js/health.js?v=20260919_cleanui"></script>
+<script src="/js/audit.js?v=20260919_cleanui"></script>
 
 </body>
 </html>
