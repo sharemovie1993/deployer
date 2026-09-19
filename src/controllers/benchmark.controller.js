@@ -269,6 +269,68 @@ function parseHardwareInfo(stdout) {
     };
 }
 
+function parseNetworkTest(stdout) {
+    let pingLatencyMs = 20.0;
+    let packetLossPct = 0;
+    let measuredSpeedMbps = 100.0;
+    let iface = 'eth0';
+    let status = 'STABIL & CEPAT';
+    let grade = 'A';
+
+    // 1. Iface
+    const ifaceMatch = stdout.match(/IFACE:\s*([^\r\n]+)/);
+    if (ifaceMatch && ifaceMatch[1].trim()) {
+        iface = ifaceMatch[1].trim();
+    }
+
+    // 2. Parse Ping
+    const pingSection = stdout.match(/--- NET_PING ---\s*([\s\S]*?)\s*--- NET_SPEED ---/);
+    if (pingSection) {
+        const pingText = pingSection[1];
+        const rttMatch = pingText.match(/rtt min\/avg\/max\/mdev =\s*[\d\.]+\/([\d\.]+)\//);
+        if (rttMatch) {
+            pingLatencyMs = parseFloat(parseFloat(rttMatch[1]).toFixed(1));
+        }
+        const lossMatch = pingText.match(/(\d+)%\s+packet loss/);
+        if (lossMatch) {
+            packetLossPct = parseInt(lossMatch[1], 10);
+        }
+    }
+
+    // 3. Parse Speed
+    const speedBytesMatch = stdout.match(/SPEED_BYTES:\s*([\d\.]+)/);
+    if (speedBytesMatch) {
+        const bytesPerSec = parseFloat(speedBytesMatch[1]) || 0;
+        if (bytesPerSec > 0) {
+            measuredSpeedMbps = parseFloat(((bytesPerSec * 8) / 1000000).toFixed(1));
+        }
+    }
+
+    // 4. Network Evaluation Status
+    if (packetLossPct > 5 || pingLatencyMs > 200) {
+        status = 'BURUK (Packet Loss / Kongesti)';
+        grade = 'D';
+    } else if (pingLatencyMs > 90 || packetLossPct > 0) {
+        status = 'WASPADA (Latensi Jam Sibuk)';
+        grade = 'C';
+    } else if (measuredSpeedMbps >= 50 && pingLatencyMs <= 35) {
+        status = 'SANGAT PRIMA & CEPAT';
+        grade = 'S';
+    } else {
+        status = 'STABIL & NORMAL';
+        grade = 'A';
+    }
+
+    return {
+        iface,
+        pingLatencyMs,
+        packetLossPct,
+        measuredSpeedMbps,
+        status,
+        grade
+    };
+}
+
 function parseDiskInfo(stdout) {
     const diskMatch = stdout.match(/--- DISK_INFO ---\s*([\s\S]*?)\s*--- FIO_RESULT ---/);
     const diskRaw = diskMatch ? diskMatch[1].trim() : '';
@@ -314,7 +376,7 @@ function handleBenchmarkIops(req, res, parsedUrl) {
         sudoPass = preset.vpsSudoPass || '1';
     } else if (!targetIp) {
         targetIp = '10.10.10.116';
-        targetUser = 'asepsuryadi';
+        targetUser = 'asep';
         keyChoice = 'nginxonly.pem';
     }
 
@@ -337,6 +399,13 @@ function handleBenchmarkIops(req, res, parsedUrl) {
         'echo CPU_MODEL: $(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || echo "Standard Processor")',
         'echo --- MEM_INFO ---',
         'free -m 2>/dev/null || cat /proc/meminfo',
+        'echo --- NET_INFO ---',
+        'DEFAULT_IFACE=$(ip route 2>/dev/null | awk \'/default/ {print $5}\' | head -n1)',
+        'echo "IFACE: ${DEFAULT_IFACE:-eth0}"',
+        'echo --- NET_PING ---',
+        'ping -c 3 -W 2 1.1.1.1 2>/dev/null || ping -c 3 -W 2 8.8.8.8 2>/dev/null || echo "PING_FAILED"',
+        'echo --- NET_SPEED ---',
+        'curl -s -w "SPEED_BYTES: %{speed_download}\\nTIME_TOTAL: %{time_total}\\nHTTP_CODE: %{http_code}\\n" -o /dev/null --max-time 4 "https://speed.cloudflare.com/__down?bytes=10000000" 2>/dev/null || echo "SPEED_FAILED"',
         'echo --- DISK_INFO ---',
         'lsblk -dn -e 7,11 -o NAME,SIZE,MODEL 2>/dev/null || df -h /',
         'df -h / 2>/dev/null | awk \'NR==2 {print "Root: " $3 " / " $2 " (" $5 " terpakai)"}\'',
@@ -369,6 +438,7 @@ function handleBenchmarkIops(req, res, parsedUrl) {
         const stdout = result.stdout || '';
         const diskInfo = parseDiskInfo(stdout);
         const hardwareInfo = parseHardwareInfo(stdout);
+        const networkInfo = parseNetworkTest(stdout);
 
         if (stdout.includes('FIO_NOT_INSTALLED')) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -400,7 +470,8 @@ function handleBenchmarkIops(req, res, parsedUrl) {
                 ip: targetIp,
                 user: targetUser,
                 diskInfo: diskInfo,
-                hardware: hardwareInfo
+                hardware: hardwareInfo,
+                network: networkInfo
             },
             ...parsedFio,
             timestamp: new Date().toISOString()
