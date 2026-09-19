@@ -1707,17 +1707,23 @@ window.startTuningStream = startTuningStream;
 window.runTuningPrecheck = runTuningPrecheck;
 
 // ==========================================
+// ==========================================
 // IOPS CHECKER & STORAGE BENCHMARK
 // ==========================================
 let currentIopsPresetId = null;
+let lastIopsMetrics = { totalIops: 60000, readIops: 40000, writeIops: 20000, avgLatMs: 1.0 };
+let lastIopsGrade = 'S';
+let lastHardwareInfo = { cpuCores: 4, cpuModel: 'Intel Xeon E-2224G', ramTotalMb: 16000, ramUsedMb: 2400, ramAvailableMb: 13600 };
 
 function openIopsModal(presetId) {
     currentIopsPresetId = presetId;
     const modal = document.getElementById('iops-modal-backdrop');
     const targetLabel = document.getElementById('iops-target-server-label');
-    const diskLabel = document.getElementById('iops-target-disk-label');
     const resultContainer = document.getElementById('iops-result-container');
     const loadingContainer = document.getElementById('iops-loading-container');
+    const chipCpu = document.getElementById('iops-chip-cpu');
+    const chipRam = document.getElementById('iops-chip-ram');
+    const chipDisk = document.getElementById('iops-chip-disk');
 
     if (!modal) return;
 
@@ -1728,7 +1734,10 @@ function openIopsModal(presetId) {
         if (targetLabel) targetLabel.innerText = presetId || '10.10.10.116';
     }
 
-    if (diskLabel) diskLabel.innerText = 'Hardware Disk: Memuat data info storage...';
+    if (chipCpu) chipCpu.innerText = '🖥️ CPU: Memuat...';
+    if (chipRam) chipRam.innerText = '🧠 RAM: Memuat...';
+    if (chipDisk) chipDisk.innerText = '💽 Disk: Memuat...';
+
     if (resultContainer) resultContainer.style.display = 'none';
     if (loadingContainer) loadingContainer.style.display = 'none';
 
@@ -1748,7 +1757,9 @@ function runIopsBenchmark() {
     const btn = document.getElementById('iops-run-btn');
     const loadingContainer = document.getElementById('iops-loading-container');
     const resultContainer = document.getElementById('iops-result-container');
-    const diskLabel = document.getElementById('iops-target-disk-label');
+    const chipCpu = document.getElementById('iops-chip-cpu');
+    const chipRam = document.getElementById('iops-chip-ram');
+    const chipDisk = document.getElementById('iops-chip-disk');
 
     if (loadingContainer) loadingContainer.style.display = 'block';
     if (resultContainer) resultContainer.style.display = 'none';
@@ -1773,16 +1784,30 @@ function runIopsBenchmark() {
                 return;
             }
 
-            // Disk info update
-            if (diskLabel && data.server) {
-                const cleanDisk = data.server.diskInfo || 'Standard Linux SSD';
-                diskLabel.innerText = '💽 Drive: ' + cleanDisk;
+            // Hardware info chips
+            if (data.server) {
+                const s = data.server;
+                const hw = s.hardware || {};
+                lastHardwareInfo = {
+                    cpuCores: hw.cpuCores || 2,
+                    cpuModel: hw.cpuModel || 'Standard Processor',
+                    ramTotalMb: hw.ramTotalMb || 2048,
+                    ramUsedMb: hw.ramUsedMb || 512,
+                    ramAvailableMb: hw.ramAvailableMb || 1536
+                };
+
+                const cleanDisk = s.diskInfo || 'Standard Linux SSD';
+                if (chipDisk) chipDisk.innerText = '💽 Disk: ' + cleanDisk;
+                if (chipCpu) chipCpu.innerText = '🖥️ CPU: ' + lastHardwareInfo.cpuCores + ' Core (' + lastHardwareInfo.cpuModel.split('@')[0].trim() + ')';
+                if (chipRam) {
+                    const ramGb = (lastHardwareInfo.ramTotalMb / 1024).toFixed(1);
+                    const freeGb = (lastHardwareInfo.ramAvailableMb / 1024).toFixed(1);
+                    chipRam.innerText = '🧠 RAM: ' + ramGb + ' GB (Free ~' + freeGb + ' GB)';
+                }
             }
 
             // Populate Metrics
             const m = data.metrics || {};
-            const e = data.evaluation || {};
-
             const totalEl = document.getElementById('iops-val-total');
             if (totalEl) totalEl.innerText = (m.totalIops || 0).toLocaleString('id-ID');
 
@@ -1881,10 +1906,6 @@ function runIopsBenchmark() {
         });
 }
 
-// State untuk kalkulator kapasitas
-let lastIopsMetrics = { totalIops: 60000, readIops: 40000, writeIops: 20000, avgLatMs: 1.0 };
-let lastIopsGrade = 'S';
-
 function onScenarioModeChange() {
     const elMode = document.getElementById('calc-scenario-mode');
     const elDesc = document.getElementById('calc-scenario-desc');
@@ -1912,7 +1933,18 @@ function calculateServerCapacity() {
     const elSiswa = document.getElementById('calc-input-siswa');
     const elOrtu = document.getElementById('calc-input-ortu');
 
+    // 3 Pilar Elements
+    const elCapDisk = document.getElementById('calc-cap-disk');
+    const elCapDiskSub = document.getElementById('calc-cap-disk-sub');
+    const elCapRam = document.getElementById('calc-cap-ram');
+    const elCapRamSub = document.getElementById('calc-cap-ram-sub');
+    const elCapCpu = document.getElementById('calc-cap-cpu');
+    const elCapCpuSub = document.getElementById('calc-cap-cpu-sub');
+    const elBottleneckBadge = document.getElementById('calc-val-bottleneck-badge');
+
+    // Summary Elements
     const elMaxCap = document.getElementById('calc-val-max-capacity');
+    const elMaxSub = document.getElementById('calc-val-max-sub');
     const elPeakNeed = document.getElementById('calc-val-peak-needed');
     const elLoadPct = document.getElementById('calc-val-load-percent');
     const elVerdict = document.getElementById('calc-val-verdict-tag');
@@ -1929,19 +1961,17 @@ function calculateServerCapacity() {
     const jmlGuru = Math.max(1, parseInt(elGuru.value, 10) || 55);
     const jmlSiswa = Math.max(0, parseInt(elSiswa.value, 10) || 2000);
 
+    // 1. Hitung Kebutuhan Puncak (Peak Concurrent Needed)
     let totalPeakNeeded = 0;
     let modeText = '';
 
     if (mode === 'operational-only') {
-        // Skenario 1: Operational Only (Terminal Gerbang + Kelas KBM)
-        // Concurrency hanya berasal dari perangkat terminal dan guru yang buka sesi
         const peakTerminal = Math.round(jmlTerminal * 1.0);
         const peakKelas = Math.round(jmlGuru * 1.0);
         totalPeakNeeded = Math.max(5, peakTerminal + peakKelas);
         modeText = 'Operational Only (' + jmlTerminal + ' Terminal + ' + jmlGuru + ' Kelas)';
         if (elOrtu) elOrtu.value = 'Nonaktif (Internal Only)';
     } else {
-        // Skenario 2: Full Ecosystem (Terminal + Guru + Siswa + Ortu)
         const peakTerminal = Math.round(jmlTerminal * 1.0);
         const peakSiswa = Math.round(jmlSiswa * 0.25);
         const peakOrtu = Math.round(jmlSiswa * 0.40);
@@ -1951,32 +1981,89 @@ function calculateServerCapacity() {
         if (elOrtu) elOrtu.value = jmlSiswa.toLocaleString('id-ID') + ' Akun Ortu';
     }
 
-    // 2. Hitung Kapasitas Maksimal Server Berdasarkan Hasil Audit IOPS & Latensi
+    // 2. Multi-Faktor 3 Pilar Kapasitas Komponen Server
+
+    // A. Pilar 1: Storage Disk IOPS & Latency
     const totalIops = lastIopsMetrics.totalIops || 2000;
     const avgLatMs = lastIopsMetrics.avgLatMs || 25.0;
+    let capDisk = 300;
 
-    let maxSafeCapacity = 300; // default minimum
     if (totalIops >= 25000 || (totalIops >= 15000 && avgLatMs <= 3.0)) {
-        // Grade S: Enterprise NVMe / High-End SSD (Dell T40 + Samsung EVO)
-        maxSafeCapacity = Math.round(Math.min(10000, totalIops * 0.11)); // ~6.500 - 8.000 user
+        capDisk = Math.round(Math.min(12000, totalIops * 0.11)); // ~6.500 - 8.000 user
     } else if (totalIops >= 8000) {
-        // Grade A: Fast Dedicated SSD
-        maxSafeCapacity = Math.round(totalIops * 0.14); // ~1.200 - 3.000 user
+        capDisk = Math.round(totalIops * 0.14); // ~1.200 - 3.000 user
     } else if (totalIops >= 2500) {
-        // Grade B: Standard Cloud SSD VPS
-        maxSafeCapacity = Math.round(totalIops * 0.18); // ~500 - 1.200 user
+        capDisk = Math.round(totalIops * 0.18); // ~500 - 1.200 user
     } else if (totalIops >= 1000) {
-        // Grade C: Budget Cloud VPS (Biznet Lisensi)
-        maxSafeCapacity = Math.round(Math.max(200, totalIops * 0.22)); // ~250 - 400 user
+        capDisk = Math.round(Math.max(200, totalIops * 0.22)); // ~250 - 450 user
     } else {
-        // Grade D: Slow Disk / HDD
-        maxSafeCapacity = Math.round(Math.max(80, totalIops * 0.15)); // < 150 user
+        capDisk = Math.round(Math.max(80, totalIops * 0.15)); // < 150 user
+    }
+
+    // B. Pilar 2: RAM Memory
+    const ramTotalMb = lastHardwareInfo.ramTotalMb || 2048;
+    const ramAvailMb = lastHardwareInfo.ramAvailableMb || (ramTotalMb * 0.75);
+    const usableRamMb = Math.max(400, ramTotalMb - 1500); // 1.5GB base OS + PostgreSQL + Redis
+    const capRam = Math.round(usableRamMb / 2.5); // ~2.5 MB per active connection
+
+    // C. Pilar 3: CPU Compute Core
+    const cpuCores = lastHardwareInfo.cpuCores || 2;
+    const capCpu = Math.round(cpuCores * 1000); // ~1.000 concurrent per core
+
+    // D. Hukum Rantai Terlemah (Bottleneck Identifier)
+    const maxSafeCapacity = Math.min(capDisk, capRam, capCpu);
+
+    let bottleneckType = 'DISK';
+    let bottleneckName = 'Storage Disk IOPS';
+    let bottleneckDetail = totalIops.toLocaleString('id-ID') + ' IOPS (' + avgLatMs + ' ms)';
+    let bottleneckAdvice = 'Upgrade storage ke NVMe SSD atau optimalkan shared_buffers.';
+
+    if (maxSafeCapacity === capCpu && capCpu < capDisk && capCpu < capRam) {
+        bottleneckType = 'CPU';
+        bottleneckName = 'CPU Compute Core';
+        bottleneckDetail = cpuCores + ' Cores';
+        bottleneckAdvice = 'Tambah jumlah core CPU VPS atau terapkan clustering PM2.';
+    } else if (maxSafeCapacity === capRam && capRam < capDisk && capRam < capCpu) {
+        bottleneckType = 'RAM';
+        bottleneckName = 'RAM Memory';
+        bottleneckDetail = (ramTotalMb / 1024).toFixed(1) + ' GB RAM';
+        bottleneckAdvice = 'Tambah kapasitas RAM server minimal 8-16 GB.';
+    } else if (Math.abs(capDisk - capCpu) / Math.max(capDisk, capCpu) < 0.15 && Math.abs(capDisk - capRam) / Math.max(capDisk, capRam) < 0.15) {
+        bottleneckType = 'BALANCED';
+        bottleneckName = 'Seimbang (Balanced)';
+        bottleneckDetail = 'Disk, RAM & CPU proporsional';
+        bottleneckAdvice = 'Konfigurasi hardware sudah sangat optimal dan proporsional.';
+    }
+
+    // Update 3-Pilar UI Elements
+    if (elCapDisk) elCapDisk.innerText = '~' + capDisk.toLocaleString('id-ID') + ' User';
+    if (elCapDiskSub) elCapDiskSub.innerText = totalIops.toLocaleString('id-ID') + ' IOPS (' + avgLatMs + 'ms)';
+
+    if (elCapRam) elCapRam.innerText = '~' + capRam.toLocaleString('id-ID') + ' User';
+    if (elCapRamSub) elCapRamSub.innerText = (ramTotalMb / 1024).toFixed(1) + ' GB RAM';
+
+    if (elCapCpu) elCapCpu.innerText = '~' + capCpu.toLocaleString('id-ID') + ' User';
+    if (elCapCpuSub) elCapCpuSub.innerText = cpuCores + ' CPU Cores';
+
+    if (elBottleneckBadge) {
+        if (bottleneckType === 'BALANCED') {
+            elBottleneckBadge.innerText = '⚖️ Hardware Seimbang (Balanced)';
+            elBottleneckBadge.style.color = '#10b981';
+            elBottleneckBadge.style.borderColor = 'rgba(16,185,129,0.3)';
+            elBottleneckBadge.style.background = 'rgba(16,185,129,0.15)';
+        } else {
+            elBottleneckBadge.innerText = '⚠️ Pembatas: ' + bottleneckName;
+            elBottleneckBadge.style.color = '#f59e0b';
+            elBottleneckBadge.style.borderColor = 'rgba(245,158,11,0.3)';
+            elBottleneckBadge.style.background = 'rgba(245,158,11,0.15)';
+        }
     }
 
     // 3. Hitung Persentase Utilisasi Beban
     const loadPercent = parseFloat(((totalPeakNeeded / maxSafeCapacity) * 100).toFixed(1));
 
     if (elMaxCap) elMaxCap.innerText = '~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent';
+    if (elMaxSub) elMaxSub.innerText = 'Dibatasi: ' + bottleneckName;
     if (elPeakNeed) elPeakNeed.innerText = '~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent';
     if (elLoadPct) elLoadPct.innerText = loadPercent + '%';
 
@@ -1985,7 +2072,7 @@ function calculateServerCapacity() {
         elLoadBar.style.width = Math.min(100, loadPercent) + '%';
     }
     if (elBarLabel) {
-        elBarLabel.innerText = loadPercent + '% dari Total Kapasitas Maksimal I/O';
+        elBarLabel.innerText = loadPercent + '% dari Batas Aman Terpadu (' + bottleneckName + ')';
     }
 
     if (loadPercent <= 50) {
@@ -2008,9 +2095,9 @@ function calculateServerCapacity() {
         if (elRecDesc) {
             if (mode === 'operational-only') {
                 elRecDesc.innerHTML = 'Pada mode <strong>Operational Only</strong>, server hanya menangani <strong>' + jmlTerminal + ' Terminal RFID</strong> & <strong>' + jmlGuru + ' Kelas KBM</strong> (puncak hanya <strong>~' + totalPeakNeeded + ' Concurrent</strong>).<br/>' +
-                    'Server ini menggunakan hanya <strong>' + loadPercent + '%</strong> kapasitas I/O dan sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> dengan jumlah terminal yang sama secara simultan!';
+                    'Server ini menggunakan hanya <strong>' + loadPercent + '%</strong> dari batas aman server (<strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong> dibatasi oleh <em>' + bottleneckName + '</em>). Sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> dengan skala yang sama!';
             } else {
-                elRecDesc.innerHTML = 'Pada mode <strong>Full Ecosystem</strong>, kebutuhan puncak (' + jmlSiswa.toLocaleString('id-ID') + ' Siswa + Ortu + Guru) hanya menyerap <strong>' + loadPercent + '%</strong> kapasitas I/O server.<br/>' +
+                elRecDesc.innerHTML = 'Pada mode <strong>Full Ecosystem</strong>, kebutuhan puncak (' + jmlSiswa.toLocaleString('id-ID') + ' Siswa + Ortu + Guru) hanya menyerap <strong>' + loadPercent + '%</strong> kapasitas server (<strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent</strong> dibatasi oleh <em>' + bottleneckName + '</em>).<br/>' +
                     '💡 <em>Kapasitas Multi-Tenant: Server sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> skala ini secara bersamaan (SaaS Ready).</em>';
             }
         }
@@ -2031,7 +2118,7 @@ function calculateServerCapacity() {
             elRecTitle.style.color = '#38bdf8';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Server ini beroperasi stabil pada beban <strong>' + loadPercent + '%</strong> saat jam sibuk masuk sekolah. Response time database PostgreSQL dan Redis cache berada pada rentang optimal.';
+            elRecDesc.innerHTML = 'Server ini beroperasi stabil pada beban <strong>' + loadPercent + '%</strong> saat jam sibuk masuk sekolah (Batas aman: <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' User</strong>, faktor pembatas: <em>' + bottleneckName + '</em>). Response time database PostgreSQL dan Redis cache berada pada rentang optimal.';
         }
     } else if (loadPercent <= 100) {
         // Batas Maksimum
@@ -2050,12 +2137,14 @@ function calculateServerCapacity() {
             elRecTitle.style.color = '#fbbf24';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Kebutuhan puncak (' + modeText + ') menyerap <strong>' + loadPercent + '%</strong> daya tampung storage (maks <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong>). Saat jam masuk/pergantian KBM serentak, mungkin terjadi delay query 1-2 detik.';
+            elRecDesc.innerHTML = 'Kebutuhan puncak (' + modeText + ') menyerap <strong>' + loadPercent + '%</strong> daya tampung server (maks <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong>).<br/>' +
+                '🔍 <strong>Bottleneck Utama:</strong> <em>' + bottleneckName + ' (' + bottleneckDetail + ')</em>.<br/>' +
+                '💡 <em>Saran: ' + bottleneckAdvice + '</em>';
         }
     } else {
         // Overload
         if (elVerdict) {
-            elVerdict.innerText = 'OVERLOAD (Disk I/O Bottleneck)';
+            elVerdict.innerText = 'OVERLOAD (' + bottleneckName + ' Bottleneck)';
             elVerdict.style.color = '#ef4444';
         }
         if (elLoadPct) elLoadPct.style.color = '#ef4444';
@@ -2069,8 +2158,8 @@ function calculateServerCapacity() {
             elRecTitle.style.color = '#f87171';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Kapasitas maksimal server ini hanya <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong>, sedangkan estimasi beban puncak skenario Anda mencapai <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (Beban <strong>' + loadPercent + '%</strong>).<br/>' +
-                '🚨 <em>Saran: Jika ingin mengaktifkan login siswa & orang tua secara massal, disarankan upgrade storage ke Dedicated NVMe SSD atau gunakan mode Operational Only.</em>';
+            elRecDesc.innerHTML = 'Kapasitas maksimal terpadu server ini hanya <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong> (dibatasi oleh <strong>' + bottleneckName + '</strong>), sedangkan estimasi beban puncak skenario Anda mencapai <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (Beban <strong>' + loadPercent + '%</strong>).<br/>' +
+                '🚨 <strong>Solusi Upgrade:</strong> ' + bottleneckAdvice + ' Atau gunakan skenario <strong>Operational Only</strong> untuk menghemat resource.';
         }
     }
 }

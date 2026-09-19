@@ -992,8 +992,12 @@
                     <div style="font-size: 16px; font-weight: 800; color: #38bdf8;" id="iops-target-server-label">10.10.10.116 (asep)</div>
                 </div>
                 <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
-                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 2px;">Hardware & Storage Terdeteksi</div>
-                    <div style="font-size: 13px; color: #cbd5e1; font-family: monospace;" id="iops-target-disk-label">Hardware Disk: Memuat info...</div>
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 4px;">Hardware & Storage Terdeteksi</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;" id="iops-hardware-chips">
+                        <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #cbd5e1; font-family: monospace;" id="iops-chip-cpu">🖥️ CPU: Memuat...</span>
+                        <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #cbd5e1; font-family: monospace;" id="iops-chip-ram">🧠 RAM: Memuat...</span>
+                        <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #cbd5e1; font-family: monospace;" id="iops-chip-disk">💽 Disk: Memuat...</span>
+                    </div>
                 </div>
             </div>
             <div>
@@ -1061,7 +1065,7 @@
                                 🧮 KALKULATOR KAPASITAS CONCURRENT USER
                             </h4>
                             <p style="font-size: 12px; color: var(--text-muted); margin: 3px 0 0 0;">
-                                Hitung daya tampung riil terhadap jumlah Siswa, Guru, & Ortu
+                                Multi-Faktor: Storage Disk IOPS + RAM Memory + CPU Compute
                             </p>
                         </div>
                         <span style="font-size: 11px; background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); padding: 4px 10px; border-radius: 6px; font-weight: 600;">
@@ -1114,12 +1118,44 @@
                         </div>
                     </div>
 
+                    <!-- 3 Pilar Daya Tampung Komponen Server (Multi-Faktor) -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 11px; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em;">
+                                ⚖️ Daya Tampung Per Komponen (Hukum Bottleneck)
+                            </span>
+                            <span id="calc-val-bottleneck-badge" style="font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);">
+                                Deteksi Komponen...
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                            <!-- Disk Pillar -->
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px; text-align: center;">
+                                <div style="font-size: 10px; color: var(--text-muted); font-weight: 600;">💽 Storage Disk</div>
+                                <div style="font-size: 15px; font-weight: 800; color: #38bdf8; margin: 2px 0;" id="calc-cap-disk">~6.500 User</div>
+                                <div style="font-size: 9.5px; color: var(--text-muted);" id="calc-cap-disk-sub">65.903 IOPS</div>
+                            </div>
+                            <!-- RAM Pillar -->
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px; text-align: center;">
+                                <div style="font-size: 10px; color: var(--text-muted); font-weight: 600;">🧠 RAM Memory</div>
+                                <div style="font-size: 15px; font-weight: 800; color: #a78bfa; margin: 2px 0;" id="calc-cap-ram">~5.800 User</div>
+                                <div style="font-size: 9.5px; color: var(--text-muted);" id="calc-cap-ram-sub">16 GB RAM</div>
+                            </div>
+                            <!-- CPU Pillar -->
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px; text-align: center;">
+                                <div style="font-size: 10px; color: var(--text-muted); font-weight: 600;">⚡ CPU Compute</div>
+                                <div style="font-size: 15px; font-weight: 800; color: #34d399; margin: 2px 0;" id="calc-cap-cpu">~4.000 User</div>
+                                <div style="font-size: 9.5px; color: var(--text-muted);" id="calc-cap-cpu-sub">4 Cores</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Metrics Summary 3 Cards -->
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
                         <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
-                            <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Batas Maks Server</div>
-                            <div style="font-size: 17px; font-weight: 800; color: #38bdf8; margin: 4px 0;" id="calc-val-max-capacity">~6.500 User</div>
-                            <div style="font-size: 10px; color: var(--text-muted);">Aman antrean I/O</div>
+                            <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Batas Aman Terpadu</div>
+                            <div style="font-size: 17px; font-weight: 800; color: #38bdf8; margin: 4px 0;" id="calc-val-max-capacity">~4.000 User</div>
+                            <div style="font-size: 10px; color: var(--text-muted);" id="calc-val-max-sub">Komponen Terendah</div>
                         </div>
 
                         <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
@@ -1130,7 +1166,7 @@
 
                         <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
                             <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Beban Puncak</div>
-                            <div style="font-size: 17px; font-weight: 800; color: #10b981; margin: 4px 0;" id="calc-val-load-percent">20.8%</div>
+                            <div style="font-size: 17px; font-weight: 800; color: #10b981; margin: 4px 0;" id="calc-val-load-percent">33.9%</div>
                             <div style="font-size: 10px; color: #10b981; font-weight: 600;" id="calc-val-verdict-tag">SANGAT LEGA</div>
                         </div>
                     </div>
@@ -1138,11 +1174,11 @@
                     <!-- Progress Bar -->
                     <div>
                         <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 5px;">
-                            <span style="color: var(--text-muted);">Utilisasi Kapasitas Disk I/O:</span>
-                            <span id="calc-bar-label" style="font-weight: 700; color: #10b981;">20.8% dari Kapasitas Maksimal</span>
+                            <span style="color: var(--text-muted);">Utilisasi Terhadap Batas Aman Server:</span>
+                            <span id="calc-bar-label" style="font-weight: 700; color: #10b981;">33.9% dari Kapasitas Terpadu</span>
                         </div>
                         <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden;">
-                            <div id="calc-load-bar" style="width: 20.8%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 5px; transition: width 0.4s ease, background 0.4s ease;"></div>
+                            <div id="calc-load-bar" style="width: 33.9%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 5px; transition: width 0.4s ease, background 0.4s ease;"></div>
                         </div>
                     </div>
 
@@ -1152,7 +1188,7 @@
                             ✅ Rekomendasi: Server Sangat Ideal untuk Kebutuhan Sekolah Ini
                         </div>
                         <div style="font-size: 12px; color: #e2e8f0; line-height: 1.6;" id="calc-recommendation-desc">
-                            Server memiliki daya tampung hingga <strong>~6.500 Concurrent User</strong>. Beban puncak sekolah Anda diperkirakan hanya menyerap <strong>20.8%</strong> kapasitas I/O. Server ini bahkan sanggup menampung hingga <strong>4 - 5 sekolah serupa</strong> jika Anda ingin mengoperasikannya sebagai platform SaaS multi-tenant.
+                            Server memiliki daya tampung hingga <strong>~4.000 Concurrent User</strong>. Beban puncak sekolah Anda diperkirakan hanya menyerap <strong>33.9%</strong> kapasitas.
                         </div>
                     </div>
                 </div>

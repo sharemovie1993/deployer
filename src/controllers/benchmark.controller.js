@@ -1,4 +1,4 @@
-﻿const { getPresets } = require('../preset-store');
+const { getPresets } = require('../preset-store');
 const { executeSshCommand } = require('../ssh-helper');
 
 function parseFioJson(stdout) {
@@ -223,6 +223,52 @@ function parseFioJson(stdout) {
     }
 }
 
+function parseHardwareInfo(stdout) {
+    let cpuCores = 2;
+    let cpuModel = 'Standard CPU';
+    let ramTotalMb = 2048;
+    let ramUsedMb = 512;
+    let ramAvailableMb = 1536;
+
+    // CPU Cores
+    const coresMatch = stdout.match(/CPU_CORES:\s*(\d+)/);
+    if (coresMatch) {
+        cpuCores = parseInt(coresMatch[1], 10) || 2;
+    }
+
+    // CPU Model
+    const modelMatch = stdout.match(/CPU_MODEL:\s*([^\r\n]+)/);
+    if (modelMatch && modelMatch[1].trim()) {
+        cpuModel = modelMatch[1].trim();
+    }
+
+    // RAM Free -m
+    const memSectionMatch = stdout.match(/--- MEM_INFO ---\s*([\s\S]*?)\s*--- DISK_INFO ---/);
+    if (memSectionMatch) {
+        const memText = memSectionMatch[1];
+        // Format free -m: Mem: total used free shared buff/cache available
+        const memLineMatch = memText.match(/Mem:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/);
+        if (memLineMatch) {
+            ramTotalMb = parseInt(memLineMatch[1], 10);
+            ramUsedMb = parseInt(memLineMatch[2], 10);
+            ramAvailableMb = parseInt(memLineMatch[6], 10);
+        } else {
+            const totalKb = memText.match(/MemTotal:\s+(\d+)/);
+            const availKb = memText.match(/MemAvailable:\s+(\d+)/);
+            if (totalKb) ramTotalMb = Math.round(parseInt(totalKb[1], 10) / 1024);
+            if (availKb) ramAvailableMb = Math.round(parseInt(availKb[1], 10) / 1024);
+        }
+    }
+
+    return {
+        cpuCores,
+        cpuModel,
+        ramTotalMb,
+        ramUsedMb,
+        ramAvailableMb
+    };
+}
+
 function parseDiskInfo(stdout) {
     const diskMatch = stdout.match(/--- DISK_INFO ---\s*([\s\S]*?)\s*--- FIO_RESULT ---/);
     const diskRaw = diskMatch ? diskMatch[1].trim() : '';
@@ -233,7 +279,7 @@ function parseDiskInfo(stdout) {
     let rootUsage = '';
 
     lines.forEach(line => {
-        if (line.startsWith('Storage /:') || line.startsWith('Root:')) {
+        if (line.startsWith('Root:')) {
             rootUsage = line;
             return;
         }
@@ -274,7 +320,6 @@ function handleBenchmarkIops(req, res, parsedUrl) {
 
     const testFile = '/tmp/absenta_iops_bench_' + Math.floor(Math.random() * 10000) + '.dat';
 
-    // Perintah bersih mengecualikan loop device (7) & cdrom (11)
     const benchScript = [
         'export DEBIAN_FRONTEND=noninteractive',
         'if ! which fio >/dev/null 2>&1; then',
@@ -287,9 +332,14 @@ function handleBenchmarkIops(req, res, parsedUrl) {
         '    echo ' + sudoPass + ' | sudo -S dnf install -y -q fio >/dev/null 2>&1',
         '  fi',
         'fi',
+        'echo --- HARDWARE_INFO ---',
+        'echo CPU_CORES: $(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 2)',
+        'echo CPU_MODEL: $(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || echo "Standard Processor")',
+        'echo --- MEM_INFO ---',
+        'free -m 2>/dev/null || cat /proc/meminfo',
         'echo --- DISK_INFO ---',
         'lsblk -dn -e 7,11 -o NAME,SIZE,MODEL 2>/dev/null || df -h /',
-        'df -h / 2>/dev/null | awk \'NR==2 {print Root:   /   (   terpakai)}\'',
+        'df -h / 2>/dev/null | awk \'NR==2 {print "Root: " $3 " / " $2 " (" $5 " terpakai)"}\'',
         'echo --- FIO_RESULT ---',
         'if which fio >/dev/null 2>&1; then',
         '  fio --name=iops_test --ioengine=libaio --iodepth=32 --rw=randrw --rwmixread=70 --bs=4k --direct=1 --size=64M --numjobs=2 --runtime=5 --time_based --group_reporting --output-format=json --filename=' + testFile + ' 2>/dev/null',
@@ -318,6 +368,7 @@ function handleBenchmarkIops(req, res, parsedUrl) {
 
         const stdout = result.stdout || '';
         const diskInfo = parseDiskInfo(stdout);
+        const hardwareInfo = parseHardwareInfo(stdout);
 
         if (stdout.includes('FIO_NOT_INSTALLED')) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -348,7 +399,8 @@ function handleBenchmarkIops(req, res, parsedUrl) {
                 presetName: preset ? preset.name : (targetUser + '@' + targetIp),
                 ip: targetIp,
                 user: targetUser,
-                diskInfo: diskInfo
+                diskInfo: diskInfo,
+                hardware: hardwareInfo
             },
             ...parsedFio,
             timestamp: new Date().toISOString()
