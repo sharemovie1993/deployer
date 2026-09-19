@@ -70,14 +70,31 @@ net.core.wmem_max = 16777216
 net.ipv4.tcp_rmem = 4096 87380 16777216
 net.ipv4.tcp_wmem = 4096 65536 16777216
 
-# TCP Keepalive for Long-Lived WebSockets
+# TCP Keepalive for Long-Lived WebSockets & SSE
 net.ipv4.tcp_keepalive_time = 300
 net.ipv4.tcp_keepalive_intvl = 15
 net.ipv4.tcp_keepalive_probes = 5
+
+# WireGuard & NAT Connection Tracking (High Capacity: 3000+ Concurrent Users)
+net.netfilter.nf_conntrack_max = 524288
+net.nf_conntrack_max = 524288
+net.netfilter.nf_conntrack_tcp_timeout_established = 600
+
+# Google TCP BBR Congestion Control (Low Latency & High Throughput via VPN/ISP)
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+
+# IP Packet Forwarding (Required for WireGuard Tunneling & Reverse Proxying)
+net.ipv4.ip_forward = 1
+net.ipv6.conf.all.forwarding = 1
 EOF
 
+# Pastikan modul tcp_bbr dan nf_conntrack termuat
+modprobe tcp_bbr 2>/dev/null || true
+modprobe nf_conntrack 2>/dev/null || true
+
 sysctl --system > /dev/null 2>&1
-echo -e "${GREEN}✓ Sysctl kernel parameters berhasil diperbarui & dimuat!${NC}"
+echo -e "${GREEN}✓ Sysctl kernel parameters (termasuk Conntrack 524k, BBR, dan IP Forwarding) berhasil diperbarui & dimuat!${NC}"
 
 # 4. Security & User Limits Tuning (/etc/security/limits.d/99-absenta-limits.conf)
 echo -e "${CYAN}[2/5] Mengonfigurasi Security & Open File Limits...${NC}"
@@ -232,14 +249,22 @@ timedatectl set-timezone "$TARGET_TZ" || true
 timedatectl set-ntp true || true
 echo -e "${GREEN}✓ Zona waktu di-set ke $TARGET_TZ & NTP sinkronisasi aktif!${NC}"
 
-# 8. Network Firewall Minimalis (UFW)
-echo -e "${CYAN}[6/6] Mengonfigurasi Firewall UFW Minimalis...${NC}"
+# 8. Network Firewall & TCP MSS Clamping (WireGuard MTU Protection)
+echo -e "${CYAN}[6/6] Mengonfigurasi Firewall UFW & TCP MSS Clamping...${NC}"
+if command -v iptables >/dev/null 2>&1; then
+    # Cegah fragmentasi paket TCP dalam tunnel WireGuard
+    iptables -t mangle -C FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
+    iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+fi
+
 if command -v ufw >/dev/null 2>&1; then
     ufw allow 22/tcp >/dev/null 2>&1 || true
     ufw allow 80/tcp >/dev/null 2>&1 || true
     ufw allow 443/tcp >/dev/null 2>&1 || true
+    ufw allow 51820/udp >/dev/null 2>&1 || true
+    ufw allow 51821/udp >/dev/null 2>&1 || true
     echo "y" | ufw enable >/dev/null 2>&1 || true
-    echo -e "${GREEN}✓ UFW Firewall aktif (Port 22, 80, 443 diizinkan)!${NC}"
+    echo -e "${GREEN}✓ UFW Firewall aktif (Port 22, 80, 443, 51820/51821 UDP diizinkan) & TCP MSS Clamping aktif!${NC}"
 else
     echo -e "${YELLOW}Peringatan: UFW tidak terpasang. Melewati konfigurasi firewall.${NC}"
 fi

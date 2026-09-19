@@ -59,8 +59,8 @@ Set-Acl -Path $SAFE_KEY -AclObject $acl
 Write-Host "`nMenghubungkan ke ${TargetUser}@${TargetIP}..." -ForegroundColor Cyan
 
 $remoteCommands = @"
-echo '==================== 1. KERNEL SYSCTL ===================='
-sysctl fs.file-max vm.swappiness vm.overcommit_memory net.core.somaxconn net.ipv4.tcp_tw_reuse net.ipv4.ip_local_port_range
+echo '==================== 1. KERNEL SYSCTL & WIREGUARD ===================='
+sysctl fs.file-max vm.swappiness vm.overcommit_memory net.core.somaxconn net.ipv4.tcp_tw_reuse net.ipv4.ip_forward net.ipv4.tcp_congestion_control net.netfilter.nf_conntrack_max 2>/dev/null || sysctl net.nf_conntrack_max 2>/dev/null || true
 echo ''
 echo '==================== 2. LIMITS (NOFILE / NPROC) ===================='
 cat /etc/security/limits.d/99-absenta-limits.conf 2>/dev/null || echo 'Belum ada /etc/security/limits.d/99-absenta-limits.conf'
