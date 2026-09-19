@@ -1472,6 +1472,144 @@ function openTuningModal(presetId) {
     }
 
     backdrop.style.display = 'flex';
+
+    // Otomatis jalankan inspeksi / pre-check kondisi parameter sistem saat modal dibuka
+    runTuningPrecheck(p.id);
+}
+
+async function runTuningPrecheck(presetId) {
+    if (!presetId) {
+        presetId = document.getElementById('tuning-modal-preset-id')?.value;
+    }
+    if (!presetId) return;
+
+    const badge = document.getElementById('tuning-precheck-badge');
+    const content = document.getElementById('tuning-precheck-content');
+
+    if (badge) {
+        badge.innerText = '⏳ Memeriksa...';
+        badge.style.background = 'rgba(59,130,246,0.15)';
+        badge.style.color = '#60a5fa';
+        badge.style.borderColor = 'rgba(59,130,246,0.3)';
+    }
+
+    if (content) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 10px 0; color: #94a3b8;">
+                <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #f472b6; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
+                Sedang membaca parameter kernel sysctl, conntrack, memory, dan limits di VPS...
+            </div>
+        `;
+    }
+
+    try {
+        const res = await fetch('/api/audit-hardening-tuning?id=' + encodeURIComponent(presetId));
+        const json = await res.json();
+
+        if (!json.success || !json.tuning) {
+            throw new Error(json.message || 'Gagal membaca metrik tuning dari VPS.');
+        }
+
+        const t = json.tuning;
+        const s = t.sysctl || {};
+        const mem = t.memory || {};
+        const tz = t.timezone || {};
+        const pg = t.absentaConfig?.postgres || {};
+        const rd = t.absentaConfig?.redis || {};
+
+        // Evaluasi Kriteria Parameter
+        const isConntrackOk = (s.conntrackMax || 0) >= 262144;
+        const isBbrOk = (s.congestionControl || '').toLowerCase() === 'bbr';
+        const isSomaxOk = (s.somaxconn || 0) >= 32768;
+        const isTwReuseOk = (s.tcpTwReuse || 0) === 1;
+        const isIpFwdOk = (s.ipForward || 0) === 1;
+        const isLimitsOk = t.limits?.passed === true;
+        const isDockerOk = t.docker?.configured === true;
+        const isPgOk = pg.configured === true;
+        const isRdOk = rd.configured === true;
+        const isNtpOk = tz.clockSynced === true || tz.ntpActive === true;
+
+        const checks = [isConntrackOk, isBbrOk, isSomaxOk, isTwReuseOk, isIpFwdOk, isLimitsOk, isDockerOk, (isPgOk && isRdOk), isNtpOk];
+        const passedCount = checks.filter(Boolean).length;
+        const totalChecks = checks.length;
+        const isFullyTuned = passedCount === totalChecks;
+
+        if (badge) {
+            if (isFullyTuned) {
+                badge.innerText = `✅ Optimal (${passedCount}/${totalChecks})`;
+                badge.style.background = 'rgba(52,211,153,0.15)';
+                badge.style.color = '#34d399';
+                badge.style.borderColor = 'rgba(52,211,153,0.3)';
+            } else {
+                badge.innerText = `⚠️ Perlu Tuning (${passedCount}/${totalChecks} Optimal)`;
+                badge.style.background = 'rgba(251,191,36,0.15)';
+                badge.style.color = '#fbbf24';
+                badge.style.borderColor = 'rgba(251,191,36,0.3)';
+            }
+        }
+
+        const renderItem = (label, currentVal, isOk, expectedVal) => `
+            <div style="background: rgba(30,41,59,0.7); padding: 7px 10px; border-radius: 8px; border: 1px solid ${isOk ? 'rgba(52,211,153,0.2)' : 'rgba(239,68,68,0.2)'}; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">${label}</div>
+                    <div style="font-family: 'Fira Code', monospace; font-size: 11.5px; font-weight: 600; color: ${isOk ? '#34d399' : '#f87171'}; margin-top: 1px;">
+                        ${currentVal}
+                    </div>
+                </div>
+                <div>
+                    <span style="font-size: 9.5px; padding: 2px 6px; border-radius: 4px; font-weight: 700; ${isOk ? 'background: rgba(52,211,153,0.2); color: #34d399;' : 'background: rgba(239,68,68,0.2); color: #f87171;'}">
+                        ${isOk ? 'Optimal ✅' : 'Default (Perlu Tuning) ⚠️'}
+                    </span>
+                </div>
+            </div>
+        `;
+
+        if (content) {
+            content.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin-top: 2px;">
+                    ${renderItem('1. WireGuard Conntrack', s.conntrackMax ? s.conntrackMax.toLocaleString() + ' sesi' : 'Default (~65k)', isConntrackOk, '524.288')}
+                    ${renderItem('2. TCP Congestion Control', (s.congestionControl || 'cubic').toUpperCase(), isBbrOk, 'BBR')}
+                    ${renderItem('3. Socket Queue (SOMAXCONN)', s.somaxconn ? s.somaxconn.toLocaleString() : '128', isSomaxOk, '65.535')}
+                    ${renderItem('4. TCP Timewait Reuse', s.tcpTwReuse === 1 ? '1 (Aktif)' : '0 (Off)', isTwReuseOk, '1')}
+                    ${renderItem('5. IP Packet Forwarding', s.ipForward === 1 ? '1 (Aktif)' : '0 (Off)', isIpFwdOk, '1')}
+                    ${renderItem('6. Security File Limits (NOFILE)', isLimitsOk ? '65k - 1M' : '1024 (Default)', isLimitsOk, '65.536')}
+                    ${renderItem('7. Postgres DB & Redis Config', isPgOk && isRdOk ? 'Terkonfigurasi Adaptif' : 'Default Bawaan', isPgOk && isRdOk, 'Adaptive')}
+                    ${renderItem('8. Docker Log Rotation', isDockerOk ? '50MB x 5 file' : 'Default (Tanpa Limit)', isDockerOk, '50MB x 5')}
+                    ${renderItem('9. NTP Clock Sync & Timezone', tz.name ? `${tz.name} (${isNtpOk ? 'Synced' : 'Not Synced'})` : 'UTC', isNtpOk, 'Synced')}
+                </div>
+                <div style="margin-top: 8px; font-size: 11px; color: ${isFullyTuned ? '#34d399' : '#fbbf24'}; display: flex; align-items: center; gap: 5px;">
+                    <span>${isFullyTuned ? '✅' : '💡'}</span> 
+                    ${isFullyTuned ? 'Semua parameter kernel & sistem pada VPS ini sudah dalam kondisi 100% optimal!' : 'Parameter bertanda merah di atas akan otomatis dioptimasi saat Anda mengklik tombol jalankan tuning di bawah.'}
+                </div>
+            `;
+        }
+
+        // Auto select timezone if detected
+        const tzSelect = document.getElementById('tuning-modal-timezone');
+        if (tzSelect && tz.name) {
+            const matchOption = Array.from(tzSelect.options).find(o => o.value === tz.name || tz.name.includes(o.value));
+            if (matchOption) tzSelect.value = matchOption.value;
+        }
+
+    } catch (err) {
+        console.error('[TuningPrecheck] Error:', err);
+        if (badge) {
+            badge.innerText = '❌ Gagal Precheck';
+            badge.style.background = 'rgba(239,68,68,0.15)';
+            badge.style.color = '#f87171';
+            badge.style.borderColor = 'rgba(239,68,68,0.3)';
+        }
+        if (content) {
+            content.innerHTML = `
+                <div style="color: #f87171; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 10px 12px; font-size: 12px;">
+                    ⚠️ Gagal membaca parameter VPS: ${err.message || 'Koneksi SSH timeout atau error.'}
+                    <div style="margin-top: 6px; font-size: 11px; color: #fca5a5;">
+                        Anda tetap dapat melanjutkan tuning server secara langsung.
+                    </div>
+                </div>
+            `;
+        }
+    }
 }
 
 function closeTuningModal() {
@@ -1536,6 +1674,9 @@ function startTuningStream() {
             if (spinner) spinner.style.display = 'none';
             currentTuningEventSource.close();
             currentTuningEventSource = null;
+
+            // Otomatis refresh hasil pre-check
+            runTuningPrecheck(presetId);
         } else if (line.includes('[TUNING_FAILED]') || line.includes('ERROR:')) {
             if (statusText) {
                 statusText.innerText = '❌ Proses Tuning Mengalami Kendala!';
@@ -1562,4 +1703,5 @@ function startTuningStream() {
 window.openTuningModal = openTuningModal;
 window.closeTuningModal = closeTuningModal;
 window.startTuningStream = startTuningStream;
+window.runTuningPrecheck = runTuningPrecheck;
 

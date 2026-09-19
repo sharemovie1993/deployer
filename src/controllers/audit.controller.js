@@ -52,8 +52,16 @@ function parseAuditOutput(stdout) {
     const somaxconn = somaxconnMatch ? parseInt(somaxconnMatch[1], 10) : 128;
     const tcpTwReuseMatch = sysctlRaw.match(/net\.ipv4\.tcp_tw_reuse\s*=\s*(\d+)/);
     const tcpTwReuse = tcpTwReuseMatch ? parseInt(tcpTwReuseMatch[1], 10) : 0;
+    const conntrackMatch = sysctlRaw.match(/net\.(?:netfilter\.)?nf_conntrack_max\s*=\s*(\d+)/);
+    const conntrackMax = conntrackMatch ? parseInt(conntrackMatch[1], 10) : 0;
+    const ccMatch = sysctlRaw.match(/net\.ipv4\.tcp_congestion_control\s*=\s*([a-zA-Z0-9_-]+)/);
+    const congestionControl = ccMatch ? ccMatch[1].trim() : 'cubic';
+    const ipForwardMatch = sysctlRaw.match(/net\.ipv4\.ip_forward\s*=\s*(\d+)/);
+    const ipForward = ipForwardMatch ? parseInt(ipForwardMatch[1], 10) : 0;
+    const netdevBacklogMatch = sysctlRaw.match(/net\.core\.netdev_max_backlog\s*=\s*(\d+)/);
+    const netdevBacklog = netdevBacklogMatch ? parseInt(netdevBacklogMatch[1], 10) : 1000;
 
-    const sysctlPassed = fileMax >= 2000000 && swappiness <= 20 && overcommit === 1 && somaxconn >= 32768 && tcpTwReuse === 1;
+    const sysctlPassed = fileMax >= 2000000 && swappiness <= 20 && overcommit === 1 && somaxconn >= 32768 && tcpTwReuse === 1 && conntrackMax >= 262144 && congestionControl === 'bbr';
 
     // 6. Tuning - Limits
     const limitsMatch = stdout.match(/--- LIMITS ---\s*([\s\S]*?)\s*--- DOCKER_DAEMON ---/);
@@ -149,7 +157,11 @@ function parseAuditOutput(stdout) {
                 swappiness,
                 overcommit,
                 somaxconn,
-                tcpTwReuse
+                tcpTwReuse,
+                conntrackMax,
+                congestionControl,
+                ipForward,
+                netdevBacklog
             },
             limits: {
                 passed: limitsPassed
@@ -220,7 +232,7 @@ function handleAuditHardeningTuning(req, res, parsedUrl) {
         'echo "--- WATCHDOG ---"',
         'systemctl is-active absenta-tunnel-watchdog 2>/dev/null || echo "inactive"',
         'echo "--- SYSCTL ---"',
-        'sysctl fs.file-max vm.swappiness vm.overcommit_memory net.core.somaxconn net.ipv4.tcp_tw_reuse 2>/dev/null || true',
+        'sysctl fs.file-max vm.swappiness vm.overcommit_memory net.core.somaxconn net.ipv4.tcp_tw_reuse net.ipv4.ip_forward net.ipv4.tcp_congestion_control net.core.netdev_max_backlog net.netfilter.nf_conntrack_max net.nf_conntrack_max 2>/dev/null || true',
         'echo "--- LIMITS ---"',
         'cat /etc/security/limits.d/99-absenta-limits.conf 2>/dev/null || echo "NO_LIMITS"',
         'echo "--- DOCKER_DAEMON ---"',
@@ -236,6 +248,7 @@ function handleAuditHardeningTuning(req, res, parsedUrl) {
         'echo "--- MEMORY_SWAP ---"',
         'free -m 2>/dev/null || true',
         'swapon --show 2>/dev/null || true',
+        'nproc 2>/dev/null || echo "1"',
         'echo "=== AUDIT_END ==="'
     ].join('\n');
 
