@@ -7,6 +7,7 @@ const { handleServerHealth, handlePm2List, handleRestartService, handleFlushPm2L
 const { handleAuditTunnels, handleFixTunnels, handleCleanGhostTunnels, handleRemoveSelectedTunnel, handleWatchdogStatus } = require('./controllers/tunnel.controller');
 const { handleBrowseFile, handleTestSsh, handleTestDb, handleCreateDb, handleRegisterLicense, handleVerifyLicense, handleSaveConfig, handleTestClusterNodes } = require('./controllers/installer.controller');
 const { handleAuditHardeningTuning } = require('./controllers/audit.controller');
+const { handleBenchmarkIops } = require('./controllers/benchmark.controller');
 
 const {
     handleStreamQuickUpdate,
@@ -111,6 +112,7 @@ function handleRequest(req, res) {
 
     // 6. Hardening & Tuning Audit API
     if (pathname === '/api/audit-hardening-tuning' && (req.method === 'GET' || req.method === 'POST')) return handleAuditHardeningTuning(req, res, parsedUrl);
+    if (pathname === '/api/benchmark-iops' && (req.method === 'GET' || req.method === 'POST')) return handleBenchmarkIops(req, res, parsedUrl);
 
     // 7. SSE Real-Time Stream Handlers
     if (pathname === '/api/stream-quick-update' && req.method === 'GET') return handleStreamQuickUpdate(req, res, parsedUrl);

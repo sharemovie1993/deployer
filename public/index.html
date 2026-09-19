@@ -963,14 +963,182 @@
     </div>
 </div>
 
-<script src="/js/preset-picker.js?v=20260919_tuning"></script>
-<script src="/js/app.js?v=20260919_tuning"></script>
-<script src="/js/wizard.js?v=20260919_tuning"></script>
-<script src="/js/presets.js?v=20260919_tuning"></script>
-<script src="/js/cluster.js?v=20260919_tuning"></script>
-<script src="/js/logs.js?v=20260919_tuning"></script>
-<script src="/js/health.js?v=20260919_tuning"></script>
-<script src="/js/audit.js?v=20260919_tuning"></script>
+<!-- MODAL: IOPS CHECKER & STORAGE BENCHMARK -->
+<div id="iops-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #0b1120; border: 1px solid rgba(255,255,255,0.12); border-radius: 20px; width: 100%; max-width: 860px; max-height: 90vh; overflow-y: auto; padding: 26px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8); position: relative;">
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px;">
+            <div>
+                <h3 style="font-size: 19px; font-weight: 800; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                    ⚡ DISK IOPS & STORAGE BENCHMARK CHECKER
+                </h3>
+                <p style="font-size: 12.5px; color: var(--text-muted);">Uji Performa Kecepatan Disk Real-Time & Evaluasi Kelayakan Single Instance vs SaaS Multi-Tenant</p>
+            </div>
+            <button type="button" onclick="closeIopsModal()" style="background: transparent; border: none; font-size: 22px; color: var(--text-muted); cursor: pointer; padding: 4px 8px; border-radius: 6px;">&times;</button>
+        </div>
+
+        <!-- Target Info & Action Bar -->
+        <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+            <div>
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 2px;">Target Server VPS</div>
+                <div style="font-size: 14px; font-weight: 700; color: #38bdf8;" id="iops-target-server-label">10.10.10.116 (asep)</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="iops-target-disk-label">Hardware Disk: Memuat info...</div>
+            </div>
+            <div>
+                <button class="btn btn-primary" id="iops-run-btn" type="button" onclick="runIopsBenchmark()" style="background: linear-gradient(135deg, #0284c7, #2563eb); border: none; padding: 10px 20px; font-weight: 700;">
+                    ⚡ Jalankan Uji IOPS (5 Detik)
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="iops-loading-container" style="display: none; text-align: center; padding: 40px 20px;">
+            <span class="spinner" style="width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; margin-bottom: 14px;"></span>
+            <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 6px;">Sedang Menjalankan Benchmark I/O Direct Random 4K...</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Menguji Direct I/O (libaio, iodepth=32, randrw 70/30) via fio di server target. Mohon tunggu ~5-7 detik.</div>
+        </div>
+
+        <!-- Benchmark Result Display Container -->
+        <div id="iops-result-container" style="display: none; flex-direction: column; gap: 20px;">
+            <!-- Score Cards Grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+                <!-- Total IOPS Card -->
+                <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Total Random IOPS</div>
+                    <div style="font-size: 26px; font-weight: 800; color: #fff; margin: 8px 0;" id="iops-val-total">0</div>
+                    <div>
+                        <span id="iops-badge-grade" style="display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3);">
+                            GRADE S
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Read vs Write IOPS -->
+                <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Read vs Write IOPS</div>
+                    <div style="font-size: 13px; color: var(--text-main); margin: 8px 0; line-height: 1.6;">
+                        <div>📖 Read: <strong style="color: #38bdf8;" id="iops-val-read">0</strong> IOPS</div>
+                        <div>✍️ Write: <strong style="color: #f472b6;" id="iops-val-write">0</strong> IOPS</div>
+                    </div>
+                    <div style="font-size: 10.5px; color: var(--text-muted);">4K Random Mix (70/30)</div>
+                </div>
+
+                <!-- Average Latency -->
+                <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Disk Latency</div>
+                    <div style="font-size: 26px; font-weight: 800; color: #a78bfa; margin: 8px 0;" id="iops-val-latency">0 ms</div>
+                    <div style="font-size: 10.5px; color: var(--text-muted);" id="iops-desc-latency">Rata-rata waktu tunggu I/O</div>
+                </div>
+
+                <!-- Throughput Bandwidth -->
+                <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Total Throughput</div>
+                    <div style="font-size: 26px; font-weight: 800; color: #34d399; margin: 8px 0;" id="iops-val-throughput">0 MB/s</div>
+                    <div style="font-size: 10.5px; color: var(--text-muted);" id="iops-desc-throughput">R/W speed kombinasi</div>
+                </div>
+            </div>
+
+            <!-- Detailed Workload Suitability Assessment -->
+            <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 18px;">
+                <h4 style="font-size: 13.5px; font-weight: 700; color: #fff; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                    📊 Evaluasi Kelayakan Beban Kerja Platform Absenta
+                </h4>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
+                    <!-- Single Instance Evaluation -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">🏫 Single Instance (1 Sekolah / 55 Kelas)</span>
+                            <span id="iops-single-status" style="font-size: 11px; font-weight: 700; color: #10b981;">SANGAT PRIMA</span>
+                        </div>
+                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.6; margin: 0;" id="iops-single-desc">
+                            Sangat sanggup melayani 55+ kelas & ribuan tapping RFID serentak tanpa antrean I/O (Disk Latency ultra rendah).
+                        </p>
+                    </div>
+
+                    <!-- SaaS Multi-Tenant Evaluation -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">🌐 SaaS Multi-Tenant (Multi-Sekolah)</span>
+                            <span id="iops-saas-status" style="font-size: 11px; font-weight: 700; color: #10b981;">ENTERPRISE READY</span>
+                        </div>
+                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.6; margin: 0;" id="iops-saas-desc">
+                            Sangat siap melayani 15-30+ sekolah / puluhan ribu siswa aktif serentak (SaaS High Load & CBT Ready).
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Standar Acuan & Best Practices Guide (Always Visible) -->
+        <div style="background: rgba(30,41,59,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px; margin-top: 20px;">
+            <h4 style="font-size: 13px; font-weight: 700; color: #f8fafc; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                📖 Standar Acuan Minimum & Best Practices IOPS Server Produksi
+            </h4>
+
+            <div style="overflow-x: auto; margin-bottom: 14px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
+                            <th style="padding: 6px 8px;">Tingkat IOPS</th>
+                            <th style="padding: 6px 8px;">Kategori Storage</th>
+                            <th style="padding: 6px 8px;">Latensi Rata-rata</th>
+                            <th style="padding: 6px 8px;">Kelayakan Single Instance</th>
+                            <th style="padding: 6px 8px;">Kelayakan Multi-Tenant SaaS</th>
+                        </tr>
+                    </thead>
+                    <tbody style="color: #cbd5e1;">
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                            <td style="padding: 8px;"><strong style="color: #ef4444;">&lt; 1.500 IOPS</strong></td>
+                            <td style="padding: 8px;">HDD / Budget Shared VPS</td>
+                            <td style="padding: 8px; color: #ef4444;">&gt; 50 ms</td>
+                            <td style="padding: 8px; color: #ef4444;">🔴 Kritis (&lt; 10 Kelas)</td>
+                            <td style="padding: 8px; color: #ef4444;">❌ Tidak Layak</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                            <td style="padding: 8px;"><strong style="color: #f59e0b;">1.500 - 5.000 IOPS</strong></td>
+                            <td style="padding: 8px;">Standard Cloud SSD VPS</td>
+                            <td style="padding: 8px; color: #f59e0b;">20 - 50 ms</td>
+                            <td style="padding: 8px; color: #f59e0b;">🟡 Cukup (10 - 30 Kelas)</td>
+                            <td style="padding: 8px; color: #f59e0b;">⚠️ Terbatas (1 - 2 Sekolah)</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                            <td style="padding: 8px;"><strong style="color: #3b82f6;">5.000 - 15.000 IOPS</strong></td>
+                            <td style="padding: 8px;">Fast Dedicated SATA SSD</td>
+                            <td style="padding: 8px; color: #3b82f6;">5 - 20 ms</td>
+                            <td style="padding: 8px; color: #34d399;">🟢 Sangat Siap (55+ Kelas)</td>
+                            <td style="padding: 8px; color: #3b82f6;">✔️ Siap (5 - 10 Sekolah)</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;"><strong style="color: #10b981;">&gt; 15.000 - 60.000+ IOPS</strong></td>
+                            <td style="padding: 8px;">Samsung EVO / Enterprise NVMe</td>
+                            <td style="padding: 8px; color: #10b981;">&lt; 3 ms</td>
+                            <td style="padding: 8px; color: #10b981;">🏆 Ultra Prima (Zero Bottleneck)</td>
+                            <td style="padding: 8px; color: #10b981;">🚀 Enterprise Ready (30+ Sekolah)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="font-size: 11px; color: var(--text-muted); line-height: 1.6;">
+                💡 <strong>Tips Best Practice:</strong> Absenta mengandalkan database PostgreSQL untuk pencatatan transaksi absensi dan Redis untuk session caching. Pada saat pergantian jam KBM (55 kelas submit serentak dalam 3 menit), kecepatan write direct storage mencegah antrean request lock (I/O wait) sehingga response time aplikasi tetap instan &lt; 50ms.
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+            <button class="btn btn-secondary" type="button" onclick="closeIopsModal()">Tutup Jendela</button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/preset-picker.js?v=20260919_iops"></script>
+<script src="/js/app.js?v=20260919_iops"></script>
+<script src="/js/wizard.js?v=20260919_iops"></script>
+<script src="/js/presets.js?v=20260919_iops"></script>
+<script src="/js/cluster.js?v=20260919_iops"></script>
+<script src="/js/logs.js?v=20260919_iops"></script>
+<script src="/js/health.js?v=20260919_iops"></script>
+<script src="/js/audit.js?v=20260919_iops"></script>
 
 </body>
 </html>

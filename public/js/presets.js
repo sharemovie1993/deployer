@@ -163,6 +163,7 @@ function renderPresetsGrid(presets) {
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 130px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(16,185,129,0.4); color: #34d399; background: rgba(16,185,129,0.08);" onclick="runSeedWilayahPreset(\'' + safeId + '\')">🌐 Seed Full Wilayah</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 120px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(56,189,248,0.4); color: #38bdf8; background: rgba(56,189,248,0.08);" onclick="openDomainModal(\'' + safeId + '\')">🌐 Ganti Domain</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 120px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(244,114,182,0.4); color: #f472b6; background: rgba(244,114,182,0.08);" onclick="openTuningModal(\'' + safeId + '\')">🚀 Tuning Server</button>' +
+                    '<button class="btn btn-secondary" style="flex: 1; min-width: 120px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(14,165,233,0.4); color: #38bdf8; background: rgba(14,165,233,0.08);" onclick="openIopsModal(\'' + safeId + '\')">⚡ IOPS Checker</button>' +
                 '</div>' +
             '</div>' +
         '</div>';
@@ -1704,4 +1705,142 @@ window.openTuningModal = openTuningModal;
 window.closeTuningModal = closeTuningModal;
 window.startTuningStream = startTuningStream;
 window.runTuningPrecheck = runTuningPrecheck;
+
+// ==========================================
+// IOPS CHECKER & STORAGE BENCHMARK
+// ==========================================
+let currentIopsPresetId = null;
+
+function openIopsModal(presetId) {
+    currentIopsPresetId = presetId;
+    const modal = document.getElementById('iops-modal-backdrop');
+    const targetLabel = document.getElementById('iops-target-server-label');
+    const diskLabel = document.getElementById('iops-target-disk-label');
+    const resultContainer = document.getElementById('iops-result-container');
+    const loadingContainer = document.getElementById('iops-loading-container');
+
+    if (!modal) return;
+
+    const p = globalPresets.find(item => item.id === presetId);
+    if (p) {
+        if (targetLabel) targetLabel.innerText = (p.name || 'Server VPS') + ' (' + (p.vpsUser || 'asep') + '@' + (p.vpsIp || '10.10.10.116') + ')';
+    } else {
+        if (targetLabel) targetLabel.innerText = presetId || '10.10.10.116';
+    }
+
+    if (diskLabel) diskLabel.innerText = 'Hardware Disk: Memuat data info storage...';
+    if (resultContainer) resultContainer.style.display = 'none';
+    if (loadingContainer) loadingContainer.style.display = 'none';
+
+    modal.style.display = 'flex';
+
+    // Otomatis jalankan benchmark saat modal dibuka
+    runIopsBenchmark();
+}
+
+function closeIopsModal() {
+    const modal = document.getElementById('iops-modal-backdrop');
+    if (modal) modal.style.display = 'none';
+}
+
+function runIopsBenchmark() {
+    const presetId = currentIopsPresetId;
+    const btn = document.getElementById('iops-run-btn');
+    const loadingContainer = document.getElementById('iops-loading-container');
+    const resultContainer = document.getElementById('iops-result-container');
+    const diskLabel = document.getElementById('iops-target-disk-label');
+
+    if (loadingContainer) loadingContainer.style.display = 'block';
+    if (resultContainer) resultContainer.style.display = 'none';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Sedang Benchmark (5s)...';
+    }
+
+    const apiUrl = '/api/benchmark-iops?id=' + encodeURIComponent(presetId || '');
+
+    fetch(apiUrl)
+        .then(res => res.json())
+        .then(data => {
+            if (loadingContainer) loadingContainer.style.display = 'none';
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = '⚡ Jalankan Uji IOPS (5 Detik)';
+            }
+
+            if (!data.success) {
+                alert('Gagal menjalankan benchmark IOPS: ' + (data.message || 'Unknown error'));
+                return;
+            }
+
+            // Disk info update
+            if (diskLabel && data.server && data.server.diskInfo) {
+                const cleanDisk = data.server.diskInfo.replace(/\n/g, ' | ').substring(0, 100);
+                diskLabel.innerText = 'Hardware Disk: ' + cleanDisk;
+            }
+
+            // Populate Metrics
+            const m = data.metrics || {};
+            const e = data.evaluation || {};
+
+            const totalEl = document.getElementById('iops-val-total');
+            if (totalEl) totalEl.innerText = (m.totalIops || 0).toLocaleString('id-ID');
+
+            const badgeGrade = document.getElementById('iops-badge-grade');
+            if (badgeGrade) {
+                badgeGrade.innerText = 'GRADE ' + (data.grade || 'C') + ' • ' + (data.rating || 'Standard');
+                badgeGrade.style.color = data.badgeColor || '#38bdf8';
+                badgeGrade.style.borderColor = data.badgeColor || '#38bdf8';
+                badgeGrade.style.background = (data.badgeColor || '#38bdf8') + '22';
+            }
+
+            const readEl = document.getElementById('iops-val-read');
+            if (readEl) readEl.innerText = (m.readIops || 0).toLocaleString('id-ID');
+
+            const writeEl = document.getElementById('iops-val-write');
+            if (writeEl) writeEl.innerText = (m.writeIops || 0).toLocaleString('id-ID');
+
+            const latEl = document.getElementById('iops-val-latency');
+            if (latEl) latEl.innerText = (m.avgLatMs || 0) + ' ms';
+
+            const tpEl = document.getElementById('iops-val-throughput');
+            if (tpEl) tpEl.innerText = (m.totalThroughputMb || 0) + ' MB/s';
+
+            // Populate Evaluations
+            const singleStatus = document.getElementById('iops-single-status');
+            const singleDesc = document.getElementById('iops-single-desc');
+            if (e.singleInstance) {
+                if (singleStatus) {
+                    singleStatus.innerText = e.singleInstance.status;
+                    singleStatus.style.color = data.badgeColor || '#10b981';
+                }
+                if (singleDesc) singleDesc.innerText = e.singleInstance.description;
+            }
+
+            const saasStatus = document.getElementById('iops-saas-status');
+            const saasDesc = document.getElementById('iops-saas-desc');
+            if (e.saas) {
+                if (saasStatus) {
+                    saasStatus.innerText = e.saas.status;
+                    saasStatus.style.color = data.badgeColor || '#10b981';
+                }
+                if (saasDesc) saasDesc.innerText = e.saas.description;
+            }
+
+            if (resultContainer) resultContainer.style.display = 'flex';
+        })
+        .catch(err => {
+            if (loadingContainer) loadingContainer.style.display = 'none';
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = '⚡ Jalankan Uji IOPS (5 Detik)';
+            }
+            alert('Terjadi kesalahan jaringan/server saat benchmark IOPS: ' + err.message);
+        });
+}
+
+window.openIopsModal = openIopsModal;
+window.closeIopsModal = closeIopsModal;
+window.runIopsBenchmark = runIopsBenchmark;
+
 
