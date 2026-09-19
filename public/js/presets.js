@@ -1438,10 +1438,13 @@ window.runDomainPrecheck = runDomainPrecheck;
 let currentTuningEventSource = null;
 
 function openTuningModal(presetId) {
-    const p = globalPresets.find(item => item.id === presetId);
+    let p = globalPresets.find(item => String(item.id) === String(presetId));
+    if (!p && window.sharedPresets && Array.isArray(window.sharedPresets)) {
+        p = window.sharedPresets.find(item => String(item.id) === String(presetId));
+    }
     if (!p) {
-        alert('Preset server tidak ditemukan.');
-        return;
+        console.warn('[TuningModal] Preset not found in globalPresets for ID:', presetId);
+        p = { id: presetId, vpsIp: 'Target Server', vpsUser: 'asepsuryadi', name: 'Server ' + presetId };
     }
 
     const backdrop = document.getElementById('tuning-modal-backdrop');
@@ -1450,14 +1453,23 @@ function openTuningModal(presetId) {
     const formArea = document.getElementById('tuning-modal-form-area');
     const terminalArea = document.getElementById('tuning-modal-terminal-area');
     const terminal = document.getElementById('tuning-stream-terminal');
+    const applyBtn = document.getElementById('tuning-modal-apply-btn');
 
-    if (!backdrop) return;
+    if (!backdrop) {
+        console.error('[TuningModal] #tuning-modal-backdrop element not found in DOM.');
+        alert('Modal tuning belum terpasang di DOM. Harap refresh halaman.');
+        return;
+    }
 
-    if (inputPresetId) inputPresetId.value = presetId;
+    if (inputPresetId) inputPresetId.value = p.id;
     if (targetInfo) targetInfo.innerText = `${p.vpsIp} (${p.vpsUser || 'asepsuryadi'}) - ${p.name || 'Server'}`;
     if (formArea) formArea.style.display = 'block';
     if (terminalArea) terminalArea.style.display = 'none';
     if (terminal) terminal.textContent = '';
+    if (applyBtn) {
+        applyBtn.disabled = false;
+        applyBtn.innerHTML = '🚀 Jalankan Tuning Server Sekarang';
+    }
 
     backdrop.style.display = 'flex';
 }
