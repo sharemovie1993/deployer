@@ -1928,18 +1928,22 @@ function onScenarioModeChange() {
 
 function calculateServerCapacity() {
     const elMode = document.getElementById('calc-scenario-mode');
+    const elLink = document.getElementById('calc-input-link');
     const elTerminal = document.getElementById('calc-input-terminal');
     const elGuru = document.getElementById('calc-input-guru');
     const elSiswa = document.getElementById('calc-input-siswa');
     const elOrtu = document.getElementById('calc-input-ortu');
 
-    // 3 Pilar Elements
+    // 4 Pilar Elements
     const elCapDisk = document.getElementById('calc-cap-disk');
     const elCapDiskSub = document.getElementById('calc-cap-disk-sub');
     const elCapRam = document.getElementById('calc-cap-ram');
     const elCapRamSub = document.getElementById('calc-cap-ram-sub');
     const elCapCpu = document.getElementById('calc-cap-cpu');
     const elCapCpuSub = document.getElementById('calc-cap-cpu-sub');
+    const elCapLink = document.getElementById('calc-cap-link');
+    const elCapLinkSub = document.getElementById('calc-cap-link-sub');
+    const elChipLink = document.getElementById('iops-chip-link');
     const elBottleneckBadge = document.getElementById('calc-val-bottleneck-badge');
 
     // Summary Elements
@@ -1957,9 +1961,14 @@ function calculateServerCapacity() {
     if (!elGuru || !elSiswa) return;
 
     const mode = elMode ? elMode.value : 'full-ecosystem';
+    const portBandwidthMbps = parseInt(elLink ? elLink.value : 100, 10) || 100;
     const jmlTerminal = Math.max(1, parseInt(elTerminal ? elTerminal.value : 10, 10) || 10);
     const jmlGuru = Math.max(1, parseInt(elGuru.value, 10) || 55);
     const jmlSiswa = Math.max(0, parseInt(elSiswa.value, 10) || 2000);
+
+    if (elChipLink) {
+        elChipLink.innerText = '🌐 Link: ' + (portBandwidthMbps >= 1000 ? '1 Gbps' : portBandwidthMbps + ' Mbps');
+    }
 
     // 1. Hitung Kebutuhan Puncak (Peak Concurrent Needed)
     let totalPeakNeeded = 0;
@@ -1981,7 +1990,7 @@ function calculateServerCapacity() {
         if (elOrtu) elOrtu.value = jmlSiswa.toLocaleString('id-ID') + ' Akun Ortu';
     }
 
-    // 2. Multi-Faktor 3 Pilar Kapasitas Komponen Server
+    // 2. Multi-Faktor 4 Pilar Kapasitas Komponen Server
 
     // A. Pilar 1: Storage Disk IOPS & Latency
     const totalIops = lastIopsMetrics.totalIops || 2000;
@@ -2010,32 +2019,43 @@ function calculateServerCapacity() {
     const cpuCores = lastHardwareInfo.cpuCores || 2;
     const capCpu = Math.round(cpuCores * 1000); // ~1.000 concurrent per core
 
-    // D. Hukum Rantai Terlemah (Bottleneck Identifier)
-    const maxSafeCapacity = Math.min(capDisk, capRam, capCpu);
+    // D. Pilar 4: Network Link Bandwidth
+    // Rata-rata response payload 20KB = 160Kbps. Peak concurrency burst ~16Kbps sustained/connection.
+    const capLink = Math.round((portBandwidthMbps * 1000) / 16); 
+    const peakBandwidthMbps = Math.max(0.2, parseFloat((totalPeakNeeded * 0.015).toFixed(1)));
+    const linkUsagePercent = parseFloat(((peakBandwidthMbps / portBandwidthMbps) * 100).toFixed(1));
+
+    // E. Hukum Rantai Terlemah (Bottleneck Identifier - 4 Pilar)
+    const maxSafeCapacity = Math.min(capDisk, capRam, capCpu, capLink);
 
     let bottleneckType = 'DISK';
     let bottleneckName = 'Storage Disk IOPS';
     let bottleneckDetail = totalIops.toLocaleString('id-ID') + ' IOPS (' + avgLatMs + ' ms)';
     let bottleneckAdvice = 'Upgrade storage ke NVMe SSD atau optimalkan shared_buffers.';
 
-    if (maxSafeCapacity === capCpu && capCpu < capDisk && capCpu < capRam) {
+    if (maxSafeCapacity === capCpu && capCpu < capDisk && capCpu < capRam && capCpu < capLink) {
         bottleneckType = 'CPU';
         bottleneckName = 'CPU Compute Core';
         bottleneckDetail = cpuCores + ' Cores';
         bottleneckAdvice = 'Tambah jumlah core CPU VPS atau terapkan clustering PM2.';
-    } else if (maxSafeCapacity === capRam && capRam < capDisk && capRam < capCpu) {
+    } else if (maxSafeCapacity === capRam && capRam < capDisk && capRam < capCpu && capRam < capLink) {
         bottleneckType = 'RAM';
         bottleneckName = 'RAM Memory';
         bottleneckDetail = (ramTotalMb / 1024).toFixed(1) + ' GB RAM';
         bottleneckAdvice = 'Tambah kapasitas RAM server minimal 8-16 GB.';
+    } else if (maxSafeCapacity === capLink && capLink < capDisk && capLink < capRam && capLink < capCpu) {
+        bottleneckType = 'NETWORK';
+        bottleneckName = 'Network Link Port';
+        bottleneckDetail = portBandwidthMbps + ' Mbps (Peak butuh ~' + peakBandwidthMbps + ' Mbps)';
+        bottleneckAdvice = 'Upgrade bandwidth link server ke minimal 50-100 Mbps Dedicated.';
     } else if (Math.abs(capDisk - capCpu) / Math.max(capDisk, capCpu) < 0.15 && Math.abs(capDisk - capRam) / Math.max(capDisk, capRam) < 0.15) {
         bottleneckType = 'BALANCED';
         bottleneckName = 'Seimbang (Balanced)';
-        bottleneckDetail = 'Disk, RAM & CPU proporsional';
-        bottleneckAdvice = 'Konfigurasi hardware sudah sangat optimal dan proporsional.';
+        bottleneckDetail = 'Disk, RAM, CPU & Link proporsional';
+        bottleneckAdvice = 'Konfigurasi hardware dan link sudah sangat optimal dan proporsional.';
     }
 
-    // Update 3-Pilar UI Elements
+    // Update 4-Pilar UI Elements
     if (elCapDisk) elCapDisk.innerText = '~' + capDisk.toLocaleString('id-ID') + ' User';
     if (elCapDiskSub) elCapDiskSub.innerText = totalIops.toLocaleString('id-ID') + ' IOPS (' + avgLatMs + 'ms)';
 
@@ -2045,9 +2065,12 @@ function calculateServerCapacity() {
     if (elCapCpu) elCapCpu.innerText = '~' + capCpu.toLocaleString('id-ID') + ' User';
     if (elCapCpuSub) elCapCpuSub.innerText = cpuCores + ' CPU Cores';
 
+    if (elCapLink) elCapLink.innerText = '~' + capLink.toLocaleString('id-ID') + ' User';
+    if (elCapLinkSub) elCapLinkSub.innerText = (portBandwidthMbps >= 1000 ? '1 Gbps' : portBandwidthMbps + ' Mbps') + ' (Peak ~' + peakBandwidthMbps + ' Mbps)';
+
     if (elBottleneckBadge) {
         if (bottleneckType === 'BALANCED') {
-            elBottleneckBadge.innerText = '⚖️ Hardware Seimbang (Balanced)';
+            elBottleneckBadge.innerText = '⚖️ Hardware & Link Seimbang';
             elBottleneckBadge.style.color = '#10b981';
             elBottleneckBadge.style.borderColor = 'rgba(16,185,129,0.3)';
             elBottleneckBadge.style.background = 'rgba(16,185,129,0.15)';
@@ -2094,11 +2117,11 @@ function calculateServerCapacity() {
         }
         if (elRecDesc) {
             if (mode === 'operational-only') {
-                elRecDesc.innerHTML = 'Pada mode <strong>Operational Only</strong>, server hanya menangani <strong>' + jmlTerminal + ' Terminal RFID</strong> & <strong>' + jmlGuru + ' Kelas KBM</strong> (puncak hanya <strong>~' + totalPeakNeeded + ' Concurrent</strong>).<br/>' +
+                elRecDesc.innerHTML = 'Pada mode <strong>Operational Only</strong>, server hanya menangani <strong>' + jmlTerminal + ' Terminal RFID</strong> & <strong>' + jmlGuru + ' Kelas KBM</strong> (puncak hanya <strong>~' + totalPeakNeeded + ' Concurrent</strong> / Bandwidth <strong>~' + peakBandwidthMbps + ' Mbps</strong>).<br/>' +
                     'Server ini menggunakan hanya <strong>' + loadPercent + '%</strong> dari batas aman server (<strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong> dibatasi oleh <em>' + bottleneckName + '</em>). Sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> dengan skala yang sama!';
             } else {
-                elRecDesc.innerHTML = 'Pada mode <strong>Full Ecosystem</strong>, kebutuhan puncak (' + jmlSiswa.toLocaleString('id-ID') + ' Siswa + Ortu + Guru) hanya menyerap <strong>' + loadPercent + '%</strong> kapasitas server (<strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent</strong> dibatasi oleh <em>' + bottleneckName + '</em>).<br/>' +
-                    '💡 <em>Kapasitas Multi-Tenant: Server sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> skala ini secara bersamaan (SaaS Ready).</em>';
+                elRecDesc.innerHTML = 'Pada mode <strong>Full Ecosystem</strong>, kebutuhan puncak (' + jmlSiswa.toLocaleString('id-ID') + ' Siswa + Ortu + Guru) hanya menyerap <strong>' + loadPercent + '%</strong> kapasitas server (<strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent</strong>).<br/>' +
+                    '🌐 <em>Estimasi Bandwidth Puncak: <strong>~' + peakBandwidthMbps + ' Mbps</strong> (' + linkUsagePercent + '% dari port ' + (portBandwidthMbps >= 1000 ? '1 Gbps' : portBandwidthMbps + ' Mbps') + '). Sangat longgar dan responsif!</em>';
             }
         }
     } else if (loadPercent <= 80) {
@@ -2118,7 +2141,8 @@ function calculateServerCapacity() {
             elRecTitle.style.color = '#38bdf8';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Server ini beroperasi stabil pada beban <strong>' + loadPercent + '%</strong> saat jam sibuk masuk sekolah (Batas aman: <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' User</strong>, faktor pembatas: <em>' + bottleneckName + '</em>). Response time database PostgreSQL dan Redis cache berada pada rentang optimal.';
+            elRecDesc.innerHTML = 'Server ini beroperasi stabil pada beban <strong>' + loadPercent + '%</strong> saat jam sibuk masuk sekolah (Batas aman: <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' User</strong>, faktor pembatas: <em>' + bottleneckName + '</em>).<br/>' +
+                '🌐 <em>Estimasi Bandwidth Puncak: <strong>~' + peakBandwidthMbps + ' Mbps</strong> (' + linkUsagePercent + '% dari port link). Response time database dan cache optimal.</em>';
         }
     } else if (loadPercent <= 100) {
         // Batas Maksimum
@@ -2137,7 +2161,7 @@ function calculateServerCapacity() {
             elRecTitle.style.color = '#fbbf24';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Kebutuhan puncak (' + modeText + ') menyerap <strong>' + loadPercent + '%</strong> daya tampung server (maks <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong>).<br/>' +
+            elRecDesc.innerHTML = 'Kebutuhan puncak (' + modeText + ') menyerap <strong>' + loadPercent + '%</strong> daya tampung server (maks <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong>, peak bandwidth: <strong>~' + peakBandwidthMbps + ' Mbps</strong>).<br/>' +
                 '🔍 <strong>Bottleneck Utama:</strong> <em>' + bottleneckName + ' (' + bottleneckDetail + ')</em>.<br/>' +
                 '💡 <em>Saran: ' + bottleneckAdvice + '</em>';
         }
@@ -2158,7 +2182,7 @@ function calculateServerCapacity() {
             elRecTitle.style.color = '#f87171';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Kapasitas maksimal terpadu server ini hanya <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong> (dibatasi oleh <strong>' + bottleneckName + '</strong>), sedangkan estimasi beban puncak skenario Anda mencapai <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (Beban <strong>' + loadPercent + '%</strong>).<br/>' +
+            elRecDesc.innerHTML = 'Kapasitas maksimal terpadu server ini hanya <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong> (dibatasi oleh <strong>' + bottleneckName + '</strong>), sedangkan estimasi beban puncak skenario Anda mencapai <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (Peak Bandwidth: <strong>~' + peakBandwidthMbps + ' Mbps</strong>).<br/>' +
                 '🚨 <strong>Solusi Upgrade:</strong> ' + bottleneckAdvice + ' Atau gunakan skenario <strong>Operational Only</strong> untuk menghemat resource.';
         }
     }
