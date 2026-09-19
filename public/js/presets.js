@@ -1864,6 +1864,11 @@ function runIopsBenchmark() {
                 if (saasDesc) saasDesc.innerText = s.saas.description;
             }
 
+            // Simpan data metrik terkini & jalankan kalkulator kapasitas
+            lastIopsMetrics = data.metrics || {};
+            lastIopsGrade = data.grade || 'C';
+            calculateServerCapacity();
+
             if (resultContainer) resultContainer.style.display = 'flex';
         })
         .catch(err => {
@@ -1876,8 +1881,168 @@ function runIopsBenchmark() {
         });
 }
 
+// State untuk kalkulator kapasitas
+let lastIopsMetrics = { totalIops: 60000, readIops: 40000, writeIops: 20000, avgLatMs: 1.0 };
+let lastIopsGrade = 'S';
+
+function calculateServerCapacity() {
+    const elSiswa = document.getElementById('calc-input-siswa');
+    const elGuru = document.getElementById('calc-input-guru');
+    const elOrtu = document.getElementById('calc-input-ortu');
+
+    const elMaxCap = document.getElementById('calc-val-max-capacity');
+    const elPeakNeed = document.getElementById('calc-val-peak-needed');
+    const elLoadPct = document.getElementById('calc-val-load-percent');
+    const elVerdict = document.getElementById('calc-val-verdict-tag');
+    const elBarLabel = document.getElementById('calc-bar-label');
+    const elLoadBar = document.getElementById('calc-load-bar');
+    const elRecBox = document.getElementById('calc-recommendation-box');
+    const elRecTitle = document.getElementById('calc-recommendation-title');
+    const elRecDesc = document.getElementById('calc-recommendation-desc');
+
+    if (!elSiswa || !elGuru) return;
+
+    const jmlSiswa = Math.max(0, parseInt(elSiswa.value, 10) || 0);
+    const jmlGuru = Math.max(0, parseInt(elGuru.value, 10) || 0);
+    const jmlOrtu = jmlSiswa; // 1:1 rasio orang tua
+
+    if (elOrtu) {
+        elOrtu.value = jmlOrtu.toLocaleString('id-ID') + ' Akun Wali Murid';
+    }
+
+    // 1. Hitung Estimasi Peak Concurrent Request Sekolah
+    // - Siswa aktif di jam sibuk pagi/rekap: 25%
+    // - Orang tua aktif terima notifikasi & buka app di jam masuk: 40%
+    // - Guru submit sesi KBM serentak saat pergantian jam: 100%
+    // - Tapping RFID background load: diakomodir dalam concurrency
+    const peakSiswa = Math.round(jmlSiswa * 0.25);
+    const peakOrtu = Math.round(jmlOrtu * 0.40);
+    const peakGuru = Math.round(jmlGuru * 1.0);
+    const totalPeakNeeded = Math.max(10, peakSiswa + peakOrtu + peakGuru);
+
+    // 2. Hitung Kapasitas Maksimal Server Berdasarkan Hasil Audit IOPS & Latensi
+    const totalIops = lastIopsMetrics.totalIops || 2000;
+    const avgLatMs = lastIopsMetrics.avgLatMs || 25.0;
+
+    let maxSafeCapacity = 300; // default minimum
+    if (totalIops >= 25000 || (totalIops >= 15000 && avgLatMs <= 3.0)) {
+        // Grade S: Enterprise NVMe / High-End SSD (Dell T40 + Samsung EVO)
+        maxSafeCapacity = Math.round(Math.min(10000, totalIops * 0.11)); // ~6.500 - 8.000 user
+    } else if (totalIops >= 8000) {
+        // Grade A: Fast Dedicated SSD
+        maxSafeCapacity = Math.round(totalIops * 0.14); // ~1.200 - 3.000 user
+    } else if (totalIops >= 2500) {
+        // Grade B: Standard Cloud SSD VPS
+        maxSafeCapacity = Math.round(totalIops * 0.18); // ~500 - 1.200 user
+    } else if (totalIops >= 1000) {
+        // Grade C: Budget Cloud VPS (Biznet Lisensi)
+        maxSafeCapacity = Math.round(Math.max(200, totalIops * 0.22)); // ~250 - 400 user
+    } else {
+        // Grade D: Slow Disk / HDD
+        maxSafeCapacity = Math.round(Math.max(80, totalIops * 0.15)); // < 150 user
+    }
+
+    // 3. Hitung Persentase Utilisasi Beban
+    const loadPercent = parseFloat(((totalPeakNeeded / maxSafeCapacity) * 100).toFixed(1));
+
+    if (elMaxCap) elMaxCap.innerText = '~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent';
+    if (elPeakNeed) elPeakNeed.innerText = '~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent';
+    if (elLoadPct) elLoadPct.innerText = loadPercent + '%';
+
+    // 4. Visualisasi & Rekomendasi
+    if (elLoadBar) {
+        elLoadBar.style.width = Math.min(100, loadPercent) + '%';
+    }
+    if (elBarLabel) {
+        elBarLabel.innerText = loadPercent + '% dari Total Kapasitas Maksimal I/O';
+    }
+
+    if (loadPercent <= 50) {
+        // Sangat Lega
+        const schoolsCount = Math.floor(maxSafeCapacity / Math.max(1, totalPeakNeeded));
+        if (elVerdict) {
+            elVerdict.innerText = 'SANGAT LEGA (Zero Lag)';
+            elVerdict.style.color = '#10b981';
+        }
+        if (elLoadPct) elLoadPct.style.color = '#10b981';
+        if (elLoadBar) elLoadBar.style.background = 'linear-gradient(90deg, #10b981, #34d399)';
+        if (elRecBox) {
+            elRecBox.style.background = 'rgba(16,185,129,0.08)';
+            elRecBox.style.borderColor = 'rgba(16,185,129,0.25)';
+        }
+        if (elRecTitle) {
+            elRecTitle.innerText = '✅ Rekomendasi: Server Sangat Ideal untuk Beban Sekolah Ini';
+            elRecTitle.style.color = '#34d399';
+        }
+        if (elRecDesc) {
+            elRecDesc.innerHTML = 'Server ini mampu menampung hingga <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong>, sedangkan kebutuhan puncak sekolah Anda hanya <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (hanya menyerap <strong>' + loadPercent + '%</strong> kapasitas I/O).<br/>' +
+                '💡 <em>Kapasitas Multi-Tenant: Server ini sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> dengan skala yang sama secara bersamaan (SaaS Ready).</em>';
+        }
+    } else if (loadPercent <= 80) {
+        // Ideal & Stabil
+        if (elVerdict) {
+            elVerdict.innerText = 'IDEAL & STABIL (Standar Produksi)';
+            elVerdict.style.color = '#38bdf8';
+        }
+        if (elLoadPct) elLoadPct.style.color = '#38bdf8';
+        if (elLoadBar) elLoadBar.style.background = 'linear-gradient(90deg, #0284c7, #38bdf8)';
+        if (elRecBox) {
+            elRecBox.style.background = 'rgba(56,189,248,0.08)';
+            elRecBox.style.borderColor = 'rgba(56,189,248,0.25)';
+        }
+        if (elRecTitle) {
+            elRecTitle.innerText = '✔️ Rekomendasi: Server Memenuhi Standar Produksi Sekolah';
+            elRecTitle.style.color = '#38bdf8';
+        }
+        if (elRecDesc) {
+            elRecDesc.innerHTML = 'Server ini beroperasi stabil pada beban <strong>' + loadPercent + '%</strong> saat jam sibuk masuk sekolah. Response time database PostgreSQL dan Redis cache berada pada rentang optimal.';
+        }
+    } else if (loadPercent <= 100) {
+        // Batas Maksimum
+        if (elVerdict) {
+            elVerdict.innerText = 'MENDEKATI BATAS (Waspada Jam Puncak)';
+            elVerdict.style.color = '#f59e0b';
+        }
+        if (elLoadPct) elLoadPct.style.color = '#f59e0b';
+        if (elLoadBar) elLoadBar.style.background = 'linear-gradient(90deg, #d97706, #f59e0b)';
+        if (elRecBox) {
+            elRecBox.style.background = 'rgba(245,158,11,0.08)';
+            elRecBox.style.borderColor = 'rgba(245,158,11,0.25)';
+        }
+        if (elRecTitle) {
+            elRecTitle.innerText = '⚠️ Rekomendasi: Utilisasi Tinggi pada Jam Puncak';
+            elRecTitle.style.color = '#fbbf24';
+        }
+        if (elRecDesc) {
+            elRecDesc.innerHTML = 'Kebutuhan puncak sekolah Anda (<strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' user</strong>) menyerap <strong>' + loadPercent + '%</strong> daya tampung storage (maks <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong>). Saat 55 kelas submit bersamaan dalam 1-2 menit, mungkin terjadi antrean query selama 1-2 detik.';
+        }
+    } else {
+        // Overload
+        if (elVerdict) {
+            elVerdict.innerText = 'OVERLOAD (Disk I/O Bottleneck)';
+            elVerdict.style.color = '#ef4444';
+        }
+        if (elLoadPct) elLoadPct.style.color = '#ef4444';
+        if (elLoadBar) elLoadBar.style.background = 'linear-gradient(90deg, #dc2626, #ef4444)';
+        if (elRecBox) {
+            elRecBox.style.background = 'rgba(239,68,68,0.08)';
+            elRecBox.style.borderColor = 'rgba(239,68,68,0.25)';
+        }
+        if (elRecTitle) {
+            elRecTitle.innerText = '❌ Rekomendasi: Server Tidak Mencukupi untuk Beban Ini';
+            elRecTitle.style.color = '#f87171';
+        }
+        if (elRecDesc) {
+            elRecDesc.innerHTML = 'Kapasitas maksimal server ini hanya <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong>, sedangkan estimasi beban puncak sekolah Anda mencapai <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (Beban <strong>' + loadPercent + '%</strong>).<br/>' +
+                '🚨 <em>Saran: Tingkatkan storage ke SSD Dedicated NVMe atau pisahkan database PostgreSQL ke server tersendiri untuk menghindari error 504 Gateway Timeout.</em>';
+        }
+    }
+}
+
 window.openIopsModal = openIopsModal;
 window.closeIopsModal = closeIopsModal;
 window.runIopsBenchmark = runIopsBenchmark;
+window.calculateServerCapacity = calculateServerCapacity;
+
 
 

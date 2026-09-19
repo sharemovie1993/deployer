@@ -1036,6 +1036,90 @@
                     <div style="font-size: 26px; font-weight: 800; color: #34d399; margin: 8px 0;" id="iops-val-throughput">0 MB/s</div>
                     <div style="font-size: 10.5px; color: var(--text-muted);" id="iops-desc-throughput">R/W speed kombinasi</div>
                 </div>
+            <!-- CONCURRENT USER CAPACITY CALCULATOR SECTION -->
+            <div style="background: linear-gradient(135deg, rgba(15,23,42,0.85), rgba(30,41,59,0.7)); border: 1px solid rgba(56,189,248,0.25); border-radius: 16px; padding: 20px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+                    <div>
+                        <h4 style="font-size: 14px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            🧮 KALKULATOR KAPASITAS CONCURRENT USER (HASIL AUDIT DISK)
+                        </h4>
+                        <p style="font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0 0;">
+                            Hitung daya tampung riil server terhadap jumlah Siswa, Guru, & Orang Tua sekolah Anda
+                        </p>
+                    </div>
+                    <span style="font-size: 11px; background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                        Auto-Calculate Real-Time
+                    </span>
+                </div>
+
+                <!-- Input Row -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 16px;">
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
+                            🎓 Jumlah Siswa
+                        </label>
+                        <input type="number" id="calc-input-siswa" value="2000" min="50" max="100000" step="50" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
+                            👨‍🏫 Jumlah Guru / Rombel Kelas
+                        </label>
+                        <input type="number" id="calc-input-guru" value="55" min="5" max="1000" step="5" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
+                            👨‍👩‍👦 Estimasi Orang Tua (1:1 Siswa)
+                        </label>
+                        <input type="text" id="calc-input-ortu" value="2.000 Akun" disabled style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.06); color: #94a3b8; font-size: 13px; font-weight: 600; cursor: not-allowed;">
+                    </div>
+                </div>
+
+                <!-- Calculation Metrics Summary Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                    <!-- Max Capacity Supported -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Kapasitas Maks Server (Batas Aman IOPS)</div>
+                        <div style="font-size: 20px; font-weight: 800; color: #38bdf8; margin: 4px 0;" id="calc-val-max-capacity">~6.500 User</div>
+                        <div style="font-size: 10.5px; color: var(--text-muted);" id="calc-desc-max-capacity">Concurrent user aman tanpa antrean I/O</div>
+                    </div>
+
+                    <!-- School Peak Concurrency Needed -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Estimasi Peak Concurrent Sekolah Anda</div>
+                        <div style="font-size: 20px; font-weight: 800; color: #f472b6; margin: 4px 0;" id="calc-val-peak-needed">~1.355 User</div>
+                        <div style="font-size: 10.5px; color: var(--text-muted);">Tapping + Ortu Notif + Guru Sesi jam sibuk</div>
+                    </div>
+
+                    <!-- Server Load Percentage -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Tingkat Beban I/O Server Saat Puncak</div>
+                        <div style="font-size: 20px; font-weight: 800; color: #10b981; margin: 4px 0;" id="calc-val-load-percent">20.8%</div>
+                        <div style="font-size: 10.5px; color: #10b981; font-weight: 600;" id="calc-val-verdict-tag">SANGAT LEGA (Zero Lag)</div>
+                    </div>
+                </div>
+
+                <!-- Load Progress Bar -->
+                <div style="margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+                        <span style="color: var(--text-muted);">Utilisasi Kapasitas Storage:</span>
+                        <span id="calc-bar-label" style="font-weight: 700; color: #10b981;">20.8% dari Kapasitas Maksimal</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden;">
+                        <div id="calc-load-bar" style="width: 20.8%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 5px; transition: width 0.4s ease, background 0.4s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Conclusion & Multi-Tenant SaaS Capacity Box -->
+                <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: 12px; padding: 12px 16px;" id="calc-recommendation-box">
+                    <div style="font-size: 12.5px; font-weight: 700; color: #34d399; margin-bottom: 4px;" id="calc-recommendation-title">
+                        ✅ Rekomendasi: Server Sangat Ideal untuk Kebutuhan Sekolah Ini
+                    </div>
+                    <div style="font-size: 11.5px; color: #e2e8f0; line-height: 1.6;" id="calc-recommendation-desc">
+                        Server memiliki daya tampung hingga <strong>~6.500 Concurrent User</strong>. Beban puncak sekolah Anda diperkirakan hanya menyerap <strong>20.8%</strong> kapasitas I/O. Server ini bahkan sanggup menampung hingga <strong>4 - 5 sekolah serupa</strong> jika Anda ingin mengoperasikannya sebagai platform SaaS multi-tenant.
+                    </div>
+                </div>
             </div>
 
             <!-- Detailed Workload Suitability Assessment -->
@@ -1177,14 +1261,14 @@
     </div>
 </div>
 
-<script src="/js/preset-picker.js?v=20260919_iops"></script>
-<script src="/js/app.js?v=20260919_iops"></script>
-<script src="/js/wizard.js?v=20260919_iops"></script>
-<script src="/js/presets.js?v=20260919_iops"></script>
-<script src="/js/cluster.js?v=20260919_iops"></script>
-<script src="/js/logs.js?v=20260919_iops"></script>
-<script src="/js/health.js?v=20260919_iops"></script>
-<script src="/js/audit.js?v=20260919_iops"></script>
+<script src="/js/preset-picker.js?v=20260919_calc"></script>
+<script src="/js/app.js?v=20260919_calc"></script>
+<script src="/js/wizard.js?v=20260919_calc"></script>
+<script src="/js/presets.js?v=20260919_calc"></script>
+<script src="/js/cluster.js?v=20260919_calc"></script>
+<script src="/js/logs.js?v=20260919_calc"></script>
+<script src="/js/health.js?v=20260919_calc"></script>
+<script src="/js/audit.js?v=20260919_calc"></script>
 
 </body>
 </html>
