@@ -184,12 +184,12 @@ function parseFioJson(stdout) {
                     description: guruDesc
                 },
                 siswa: {
-                    title: '🎓 Siswa Login & Akses Portal Rekap (~2.000 Siswa)',
+                    title: '🎓 Siswa Login & Akses Rekap (~2.000 Siswa)',
                     status: siswaStatus,
                     description: siswaDesc
                 },
                 ortu: {
-                    title: '👨‍👩‍👦 Orang Tua (Ortu) Login & Pantau Notifikasi (~2.000+ Ortu)',
+                    title: '👨‍👩‍👦 Orang Tua (Ortu) Login & Notifikasi (~2.000+ Ortu)',
                     status: ortuStatus,
                     description: ortuDesc
                 },
@@ -226,7 +226,29 @@ function parseFioJson(stdout) {
 function parseDiskInfo(stdout) {
     const diskMatch = stdout.match(/--- DISK_INFO ---\s*([\s\S]*?)\s*--- FIO_RESULT ---/);
     const diskRaw = diskMatch ? diskMatch[1].trim() : '';
-    return diskRaw;
+    
+    // Parse baris demi baris, abaikan loop, ram, sr
+    const lines = diskRaw.split('\n').map(l => l.trim()).filter(Boolean);
+    const diskParts = [];
+    let rootUsage = '';
+
+    lines.forEach(line => {
+        if (line.startsWith('Storage /:') || line.startsWith('Root:')) {
+            rootUsage = line;
+            return;
+        }
+        if (line.includes('NAME') || line.startsWith('loop') || line.startsWith('sr') || line.startsWith('ram')) {
+            return;
+        }
+        // Contoh: sda 132G QEMU HARDDISK atau nvme0n1 500G Samsung SSD
+        diskParts.push(line);
+    });
+
+    let formatted = diskParts.join(' | ');
+    if (rootUsage) {
+        formatted += (formatted ? ' • ' : '') + rootUsage;
+    }
+    return formatted || 'Disk: Standard Production SSD';
 }
 
 function handleBenchmarkIops(req, res, parsedUrl) {
@@ -252,17 +274,29 @@ function handleBenchmarkIops(req, res, parsedUrl) {
 
     const testFile = '/tmp/absenta_iops_bench_' + Math.floor(Math.random() * 10000) + '.dat';
 
+    // Perintah bersih mengecualikan loop device (7) & cdrom (11)
     const benchScript = [
         'export DEBIAN_FRONTEND=noninteractive',
         'if ! which fio >/dev/null 2>&1; then',
-        '  echo ' + sudoPass + ' | sudo -S apt-get update -qq >/dev/null 2>&1',
-        '  echo ' + sudoPass + ' | sudo -S apt-get install -y -qq fio >/dev/null 2>&1',
+        '  if which apt-get >/dev/null 2>&1; then',
+        '    echo ' + sudoPass + ' | sudo -S apt-get update -qq >/dev/null 2>&1',
+        '    echo ' + sudoPass + ' | sudo -S apt-get install -y -qq fio >/dev/null 2>&1',
+        '  elif which yum >/dev/null 2>&1; then',
+        '    echo ' + sudoPass + ' | sudo -S yum install -y -q fio >/dev/null 2>&1',
+        '  elif which dnf >/dev/null 2>&1; then',
+        '    echo ' + sudoPass + ' | sudo -S dnf install -y -q fio >/dev/null 2>&1',
+        '  fi',
         'fi',
         'echo --- DISK_INFO ---',
-        'lsblk -d -o NAME,MODEL,SIZE,ROTA,TYPE 2>/dev/null || df -h /',
+        'lsblk -dn -e 7,11 -o NAME,SIZE,MODEL 2>/dev/null || df -h /',
+        'df -h / 2>/dev/null | awk \'NR==2 {print Root:   /   (   terpakai)}\'',
         'echo --- FIO_RESULT ---',
-        'fio --name=iops_test --ioengine=libaio --iodepth=32 --rw=randrw --rwmixread=70 --bs=4k --direct=1 --size=64M --numjobs=2 --runtime=5 --time_based --group_reporting --output-format=json --filename=' + testFile + ' 2>/dev/null',
-        'rm -f ' + testFile + ' 2>/dev/null',
+        'if which fio >/dev/null 2>&1; then',
+        '  fio --name=iops_test --ioengine=libaio --iodepth=32 --rw=randrw --rwmixread=70 --bs=4k --direct=1 --size=64M --numjobs=2 --runtime=5 --time_based --group_reporting --output-format=json --filename=' + testFile + ' 2>/dev/null',
+        '  rm -f ' + testFile + ' 2>/dev/null',
+        'else',
+        '  echo FIO_NOT_INSTALLED',
+        'fi',
         'echo --- BENCH_END ---'
     ].join('\n');
 
@@ -271,19 +305,29 @@ function handleBenchmarkIops(req, res, parsedUrl) {
         user: targetUser,
         ip: targetIp,
         command: benchScript,
-        timeoutMs: 40000
+        timeoutMs: 45000
     }).then(result => {
         if (!result.success) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: false,
-                message: 'Gagal menjalankan benchmark di ' + targetUser + '@' + targetIp + ': ' + (result.stderr || 'Timeout')
+                message: 'Gagal menghubungkan ke ' + targetUser + '@' + targetIp + ': ' + (result.stderr || 'Timeout')
             }));
             return;
         }
 
         const stdout = result.stdout || '';
         const diskInfo = parseDiskInfo(stdout);
+
+        if (stdout.includes('FIO_NOT_INSTALLED')) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                message: 'Paket benchmark (fio) belum terpasang di target server dan gagal diunduh otomatis (periksa koneksi internet VPS).'
+            }));
+            return;
+        }
+
         const parsedFio = parseFioJson(stdout);
 
         if (!parsedFio.success) {

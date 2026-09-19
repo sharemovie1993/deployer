@@ -1774,9 +1774,9 @@ function runIopsBenchmark() {
             }
 
             // Disk info update
-            if (diskLabel && data.server && data.server.diskInfo) {
-                const cleanDisk = data.server.diskInfo.replace(/\n/g, ' | ').substring(0, 100);
-                diskLabel.innerText = 'Hardware Disk: ' + cleanDisk;
+            if (diskLabel && data.server) {
+                const cleanDisk = data.server.diskInfo || 'Standard Linux SSD';
+                diskLabel.innerText = '💽 Drive: ' + cleanDisk;
             }
 
             // Populate Metrics
