@@ -1885,9 +1885,31 @@ function runIopsBenchmark() {
 let lastIopsMetrics = { totalIops: 60000, readIops: 40000, writeIops: 20000, avgLatMs: 1.0 };
 let lastIopsGrade = 'S';
 
-function calculateServerCapacity() {
+function onScenarioModeChange() {
+    const elMode = document.getElementById('calc-scenario-mode');
+    const elDesc = document.getElementById('calc-scenario-desc');
+    const elOrtu = document.getElementById('calc-input-ortu');
     const elSiswa = document.getElementById('calc-input-siswa');
+
+    if (!elMode) return;
+
+    const mode = elMode.value;
+    const jmlSiswa = Math.max(0, parseInt(elSiswa ? elSiswa.value : 2000, 10) || 0);
+
+    if (mode === 'operational-only') {
+        if (elDesc) elDesc.innerText = 'Mode Internal Sekolah: Hanya melayani perangkat RFID di gerbang & petugas/guru di setiap kelas. Siswa & Orang Tua tidak login.';
+        if (elOrtu) elOrtu.value = 'Nonaktif (Internal Only)';
+    } else {
+        if (elDesc) elDesc.innerText = 'Mode Lengkap: Melayani tapping RFID gerbang, sesi absensi kelas, serta login serentak seluruh Siswa, Guru, dan Orang Tua.';
+        if (elOrtu) elOrtu.value = jmlSiswa.toLocaleString('id-ID') + ' Akun Ortu';
+    }
+}
+
+function calculateServerCapacity() {
+    const elMode = document.getElementById('calc-scenario-mode');
+    const elTerminal = document.getElementById('calc-input-terminal');
     const elGuru = document.getElementById('calc-input-guru');
+    const elSiswa = document.getElementById('calc-input-siswa');
     const elOrtu = document.getElementById('calc-input-ortu');
 
     const elMaxCap = document.getElementById('calc-val-max-capacity');
@@ -1900,25 +1922,34 @@ function calculateServerCapacity() {
     const elRecTitle = document.getElementById('calc-recommendation-title');
     const elRecDesc = document.getElementById('calc-recommendation-desc');
 
-    if (!elSiswa || !elGuru) return;
+    if (!elGuru || !elSiswa) return;
 
-    const jmlSiswa = Math.max(0, parseInt(elSiswa.value, 10) || 0);
-    const jmlGuru = Math.max(0, parseInt(elGuru.value, 10) || 0);
-    const jmlOrtu = jmlSiswa; // 1:1 rasio orang tua
+    const mode = elMode ? elMode.value : 'full-ecosystem';
+    const jmlTerminal = Math.max(1, parseInt(elTerminal ? elTerminal.value : 10, 10) || 10);
+    const jmlGuru = Math.max(1, parseInt(elGuru.value, 10) || 55);
+    const jmlSiswa = Math.max(0, parseInt(elSiswa.value, 10) || 2000);
 
-    if (elOrtu) {
-        elOrtu.value = jmlOrtu.toLocaleString('id-ID') + ' Akun Wali Murid';
+    let totalPeakNeeded = 0;
+    let modeText = '';
+
+    if (mode === 'operational-only') {
+        // Skenario 1: Operational Only (Terminal Gerbang + Kelas KBM)
+        // Concurrency hanya berasal dari perangkat terminal dan guru yang buka sesi
+        const peakTerminal = Math.round(jmlTerminal * 1.0);
+        const peakKelas = Math.round(jmlGuru * 1.0);
+        totalPeakNeeded = Math.max(5, peakTerminal + peakKelas);
+        modeText = 'Operational Only (' + jmlTerminal + ' Terminal + ' + jmlGuru + ' Kelas)';
+        if (elOrtu) elOrtu.value = 'Nonaktif (Internal Only)';
+    } else {
+        // Skenario 2: Full Ecosystem (Terminal + Guru + Siswa + Ortu)
+        const peakTerminal = Math.round(jmlTerminal * 1.0);
+        const peakSiswa = Math.round(jmlSiswa * 0.25);
+        const peakOrtu = Math.round(jmlSiswa * 0.40);
+        const peakGuru = Math.round(jmlGuru * 1.0);
+        totalPeakNeeded = Math.max(10, peakTerminal + peakSiswa + peakOrtu + peakGuru);
+        modeText = 'Full Ecosystem (' + jmlSiswa.toLocaleString('id-ID') + ' Siswa & Ortu)';
+        if (elOrtu) elOrtu.value = jmlSiswa.toLocaleString('id-ID') + ' Akun Ortu';
     }
-
-    // 1. Hitung Estimasi Peak Concurrent Request Sekolah
-    // - Siswa aktif di jam sibuk pagi/rekap: 25%
-    // - Orang tua aktif terima notifikasi & buka app di jam masuk: 40%
-    // - Guru submit sesi KBM serentak saat pergantian jam: 100%
-    // - Tapping RFID background load: diakomodir dalam concurrency
-    const peakSiswa = Math.round(jmlSiswa * 0.25);
-    const peakOrtu = Math.round(jmlOrtu * 0.40);
-    const peakGuru = Math.round(jmlGuru * 1.0);
-    const totalPeakNeeded = Math.max(10, peakSiswa + peakOrtu + peakGuru);
 
     // 2. Hitung Kapasitas Maksimal Server Berdasarkan Hasil Audit IOPS & Latensi
     const totalIops = lastIopsMetrics.totalIops || 2000;
@@ -1971,12 +2002,17 @@ function calculateServerCapacity() {
             elRecBox.style.borderColor = 'rgba(16,185,129,0.25)';
         }
         if (elRecTitle) {
-            elRecTitle.innerText = '✅ Rekomendasi: Server Sangat Ideal untuk Beban Sekolah Ini';
+            elRecTitle.innerText = '✅ Rekomendasi: Server Sangat Ideal untuk ' + (mode === 'operational-only' ? 'Operasional Internal Ini' : 'Full Ekosistem Sekolah Ini');
             elRecTitle.style.color = '#34d399';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Server ini mampu menampung hingga <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong>, sedangkan kebutuhan puncak sekolah Anda hanya <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (hanya menyerap <strong>' + loadPercent + '%</strong> kapasitas I/O).<br/>' +
-                '💡 <em>Kapasitas Multi-Tenant: Server ini sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> dengan skala yang sama secara bersamaan (SaaS Ready).</em>';
+            if (mode === 'operational-only') {
+                elRecDesc.innerHTML = 'Pada mode <strong>Operational Only</strong>, server hanya menangani <strong>' + jmlTerminal + ' Terminal RFID</strong> & <strong>' + jmlGuru + ' Kelas KBM</strong> (puncak hanya <strong>~' + totalPeakNeeded + ' Concurrent</strong>).<br/>' +
+                    'Server ini menggunakan hanya <strong>' + loadPercent + '%</strong> kapasitas I/O dan sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> dengan jumlah terminal yang sama secara simultan!';
+            } else {
+                elRecDesc.innerHTML = 'Pada mode <strong>Full Ecosystem</strong>, kebutuhan puncak (' + jmlSiswa.toLocaleString('id-ID') + ' Siswa + Ortu + Guru) hanya menyerap <strong>' + loadPercent + '%</strong> kapasitas I/O server.<br/>' +
+                    '💡 <em>Kapasitas Multi-Tenant: Server sanggup menampung hingga <strong>' + schoolsCount + ' sekolah</strong> skala ini secara bersamaan (SaaS Ready).</em>';
+            }
         }
     } else if (loadPercent <= 80) {
         // Ideal & Stabil
@@ -2014,7 +2050,7 @@ function calculateServerCapacity() {
             elRecTitle.style.color = '#fbbf24';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Kebutuhan puncak sekolah Anda (<strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' user</strong>) menyerap <strong>' + loadPercent + '%</strong> daya tampung storage (maks <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong>). Saat 55 kelas submit bersamaan dalam 1-2 menit, mungkin terjadi antrean query selama 1-2 detik.';
+            elRecDesc.innerHTML = 'Kebutuhan puncak (' + modeText + ') menyerap <strong>' + loadPercent + '%</strong> daya tampung storage (maks <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' user</strong>). Saat jam masuk/pergantian KBM serentak, mungkin terjadi delay query 1-2 detik.';
         }
     } else {
         // Overload
@@ -2033,8 +2069,8 @@ function calculateServerCapacity() {
             elRecTitle.style.color = '#f87171';
         }
         if (elRecDesc) {
-            elRecDesc.innerHTML = 'Kapasitas maksimal server ini hanya <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong>, sedangkan estimasi beban puncak sekolah Anda mencapai <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (Beban <strong>' + loadPercent + '%</strong>).<br/>' +
-                '🚨 <em>Saran: Tingkatkan storage ke SSD Dedicated NVMe atau pisahkan database PostgreSQL ke server tersendiri untuk menghindari error 504 Gateway Timeout.</em>';
+            elRecDesc.innerHTML = 'Kapasitas maksimal server ini hanya <strong>~' + maxSafeCapacity.toLocaleString('id-ID') + ' Concurrent User</strong>, sedangkan estimasi beban puncak skenario Anda mencapai <strong>~' + totalPeakNeeded.toLocaleString('id-ID') + ' Concurrent User</strong> (Beban <strong>' + loadPercent + '%</strong>).<br/>' +
+                '🚨 <em>Saran: Jika ingin mengaktifkan login siswa & orang tua secara massal, disarankan upgrade storage ke Dedicated NVMe SSD atau gunakan mode Operational Only.</em>';
         }
     }
 }
@@ -2043,6 +2079,8 @@ window.openIopsModal = openIopsModal;
 window.closeIopsModal = closeIopsModal;
 window.runIopsBenchmark = runIopsBenchmark;
 window.calculateServerCapacity = calculateServerCapacity;
+window.onScenarioModeChange = onScenarioModeChange;
+
 
 
 

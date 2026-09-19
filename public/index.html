@@ -1069,28 +1069,49 @@
                         </span>
                     </div>
 
-                    <!-- Input Grid -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
-                                🎓 Jumlah Siswa
-                            </label>
-                            <input type="number" id="calc-input-siswa" value="2000" min="50" max="100000" step="50" oninput="calculateServerCapacity()" style="width: 100%; padding: 11px 14px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 14px; font-weight: 700;">
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
-                                👨‍🏫 Jumlah Guru / Rombel
-                            </label>
-                            <input type="number" id="calc-input-guru" value="55" min="5" max="1000" step="5" oninput="calculateServerCapacity()" style="width: 100%; padding: 11px 14px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 14px; font-weight: 700;">
+                    <!-- Scenario Mode Selector -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(56,189,248,0.2); border-radius: 12px; padding: 12px 14px;">
+                        <label style="display: block; font-size: 12px; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">
+                            🎯 Pilih Skenario Penerapan Platform Absenta
+                        </label>
+                        <select id="calc-scenario-mode" onchange="onScenarioModeChange(); calculateServerCapacity();" style="width: 100%; padding: 10px 12px; border-radius: 8px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 13px; font-weight: 700;">
+                            <option value="operational-only">🏢 Skenario 1: Operational Only (Terminal Gerbang + Kelas / Internal Sekolah Saja)</option>
+                            <option value="full-ecosystem" selected>🌐 Skenario 2: Full Ecosystem (Terminal + Guru + Siswa + Orang Tua Login) [Lengkap]</option>
+                        </select>
+                        <div id="calc-scenario-desc" style="font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+                            Mode Lengkap: Melayani tapping RFID gerbang, sesi absensi guru di kelas, serta login serentak siswa dan orang tua.
                         </div>
                     </div>
 
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
-                            👨‍👩‍👦 Estimasi Akun Orang Tua (Rasio 1:1 terhadap Siswa)
-                        </label>
-                        <input type="text" id="calc-input-ortu" value="2.000 Akun Wali Murid" disabled style="width: 100%; padding: 10px 14px; border-radius: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.06); color: #94a3b8; font-size: 13px; font-weight: 600; cursor: not-allowed;">
+                    <!-- Input Grid (4 Inputs) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">
+                                📟 Terminal RFID Gerbang
+                            </label>
+                            <input type="number" id="calc-input-terminal" value="10" min="1" max="200" step="1" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">
+                                🏫 Jumlah Rombel / Kelas KBM
+                            </label>
+                            <input type="number" id="calc-input-guru" value="55" min="1" max="1000" step="5" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">
+                                🎓 Jumlah Siswa Total
+                            </label>
+                            <input type="number" id="calc-input-siswa" value="2000" min="50" max="100000" step="50" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
+                        </div>
+
+                        <div id="calc-ortu-container">
+                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">
+                                👨‍👩‍👦 Estimasi Orang Tua (1:1)
+                            </label>
+                            <input type="text" id="calc-input-ortu" value="2.000 Akun Ortu" disabled style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.06); color: #94a3b8; font-size: 13px; font-weight: 600; cursor: not-allowed;">
+                        </div>
                     </div>
 
                     <!-- Metrics Summary 3 Cards -->
@@ -1214,14 +1235,14 @@
     </div>
 </div>
 
-<script src="/js/preset-picker.js?v=20260919_cleandisk"></script>
-<script src="/js/app.js?v=20260919_cleandisk"></script>
-<script src="/js/wizard.js?v=20260919_cleandisk"></script>
-<script src="/js/presets.js?v=20260919_cleandisk"></script>
-<script src="/js/cluster.js?v=20260919_cleandisk"></script>
-<script src="/js/logs.js?v=20260919_cleandisk"></script>
-<script src="/js/health.js?v=20260919_cleandisk"></script>
-<script src="/js/audit.js?v=20260919_cleandisk"></script>
+<script src="/js/preset-picker.js?v=20260919_scenarios"></script>
+<script src="/js/app.js?v=20260919_scenarios"></script>
+<script src="/js/wizard.js?v=20260919_scenarios"></script>
+<script src="/js/presets.js?v=20260919_scenarios"></script>
+<script src="/js/cluster.js?v=20260919_scenarios"></script>
+<script src="/js/logs.js?v=20260919_scenarios"></script>
+<script src="/js/health.js?v=20260919_scenarios"></script>
+<script src="/js/audit.js?v=20260919_scenarios"></script>
 
 </body>
 </html>
