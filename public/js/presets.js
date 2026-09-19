@@ -162,6 +162,7 @@ function renderPresetsGrid(presets) {
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 110px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(167,139,250,0.4); color: #a78bfa; background: rgba(167,139,250,0.08);" onclick="openLogMonitorForPreset(\'' + safeId + '\')">📜 Log PM2</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 130px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(16,185,129,0.4); color: #34d399; background: rgba(16,185,129,0.08);" onclick="runSeedWilayahPreset(\'' + safeId + '\')">🌐 Seed Full Wilayah</button>' +
                     '<button class="btn btn-secondary" style="flex: 1; min-width: 120px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(56,189,248,0.4); color: #38bdf8; background: rgba(56,189,248,0.08);" onclick="openDomainModal(\'' + safeId + '\')">🌐 Ganti Domain</button>' +
+                    '<button class="btn btn-secondary" style="flex: 1; min-width: 120px; justify-content: center; padding: 8px; font-size: 11.5px; border-color: rgba(244,114,182,0.4); color: #f472b6; background: rgba(244,114,182,0.08);" onclick="openTuningModal(\'' + safeId + '\')">🚀 Tuning Server</button>' +
                 '</div>' +
             '</div>' +
         '</div>';
@@ -1430,3 +1431,123 @@ window.closeDomainModal = closeDomainModal;
 window.updateDomainPreview = updateDomainPreview;
 window.startDomainUpdateStream = startDomainUpdateStream;
 window.runDomainPrecheck = runDomainPrecheck;
+
+// =========================================================================
+// TUNING SERVER MODAL & SSE STREAMING HANDLER
+// =========================================================================
+let currentTuningEventSource = null;
+
+function openTuningModal(presetId) {
+    const p = globalPresets.find(item => item.id === presetId);
+    if (!p) {
+        alert('Preset server tidak ditemukan.');
+        return;
+    }
+
+    const backdrop = document.getElementById('tuning-modal-backdrop');
+    const inputPresetId = document.getElementById('tuning-modal-preset-id');
+    const targetInfo = document.getElementById('tuning-modal-target-info');
+    const formArea = document.getElementById('tuning-modal-form-area');
+    const terminalArea = document.getElementById('tuning-modal-terminal-area');
+    const terminal = document.getElementById('tuning-stream-terminal');
+
+    if (!backdrop) return;
+
+    if (inputPresetId) inputPresetId.value = presetId;
+    if (targetInfo) targetInfo.innerText = `${p.vpsIp} (${p.vpsUser || 'asepsuryadi'}) - ${p.name || 'Server'}`;
+    if (formArea) formArea.style.display = 'block';
+    if (terminalArea) terminalArea.style.display = 'none';
+    if (terminal) terminal.textContent = '';
+
+    backdrop.style.display = 'flex';
+}
+
+function closeTuningModal() {
+    const backdrop = document.getElementById('tuning-modal-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+
+    if (currentTuningEventSource) {
+        currentTuningEventSource.close();
+        currentTuningEventSource = null;
+    }
+}
+
+function startTuningStream() {
+    const presetId = document.getElementById('tuning-modal-preset-id')?.value;
+    const role = document.getElementById('tuning-modal-role')?.value || 'all-in-one';
+    const tz = document.getElementById('tuning-modal-timezone')?.value || 'Asia/Jakarta';
+
+    if (!presetId) {
+        alert('ID Preset tidak valid.');
+        return;
+    }
+
+    const formArea = document.getElementById('tuning-modal-form-area');
+    const terminalArea = document.getElementById('tuning-modal-terminal-area');
+    const terminal = document.getElementById('tuning-stream-terminal');
+    const statusText = document.getElementById('tuning-stream-status');
+    const spinner = document.getElementById('tuning-stream-spinner');
+
+    if (formArea) formArea.style.display = 'none';
+    if (terminalArea) terminalArea.style.display = 'block';
+    if (terminal) terminal.textContent = 'Memulai inisialisasi koneksi SSE stream tuning kernel ke VPS...\n';
+    if (statusText) {
+        statusText.innerText = '⏳ Menghubungkan & menjalankan skrip tuning remote...';
+        statusText.style.color = '#f472b6';
+    }
+    if (spinner) spinner.style.display = 'inline-block';
+
+    const streamUrl = '/api/stream-tuning?id=' + encodeURIComponent(presetId) +
+        '&tz=' + encodeURIComponent(tz) +
+        '&role=' + encodeURIComponent(role);
+
+    if (currentTuningEventSource) {
+        currentTuningEventSource.close();
+    }
+
+    currentTuningEventSource = new EventSource(streamUrl);
+
+    currentTuningEventSource.onmessage = function(e) {
+        const line = e.data;
+        if (!line) return;
+
+        if (terminal) {
+            terminal.textContent += line + '\n';
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        if (line.includes('[TUNING_COMPLETE]') || line.includes('TUNING SISTEM SELESAI') || line.includes('BERHASIL SELESAI')) {
+            if (statusText) {
+                statusText.innerText = '✅ Tuning Kernel & Sistem Berhasil Selesai!';
+                statusText.style.color = '#34d399';
+            }
+            if (spinner) spinner.style.display = 'none';
+            currentTuningEventSource.close();
+            currentTuningEventSource = null;
+        } else if (line.includes('[TUNING_FAILED]') || line.includes('ERROR:')) {
+            if (statusText) {
+                statusText.innerText = '❌ Proses Tuning Mengalami Kendala!';
+                statusText.style.color = '#f87171';
+            }
+            if (spinner) spinner.style.display = 'none';
+            currentTuningEventSource.close();
+            currentTuningEventSource = null;
+        }
+    };
+
+    currentTuningEventSource.onerror = function() {
+        if (terminal) {
+            terminal.textContent += '\n[SSE INFO] Aliran log selesai atau terputus.\n';
+        }
+        if (spinner) spinner.style.display = 'none';
+        if (currentTuningEventSource) {
+            currentTuningEventSource.close();
+            currentTuningEventSource = null;
+        }
+    };
+}
+
+window.openTuningModal = openTuningModal;
+window.closeTuningModal = closeTuningModal;
+window.startTuningStream = startTuningStream;
+
