@@ -963,226 +963,241 @@
     </div>
 </div>
 
-<!-- MODAL: IOPS CHECKER & STORAGE BENCHMARK -->
-<div id="iops-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
-    <div style="background: #0b1120; border: 1px solid rgba(255,255,255,0.12); border-radius: 20px; width: 100%; max-width: 860px; max-height: 90vh; overflow-y: auto; padding: 26px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8); position: relative;">
-        <!-- Header -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px;">
+<!-- MODAL: IOPS CHECKER & STORAGE BENCHMARK (FULL PAGE) -->
+<div id="iops-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(7, 13, 24, 0.96); backdrop-filter: blur(14px); z-index: 99999; overflow-y: auto; padding: 24px 30px; box-sizing: border-box;">
+    <div style="background: #0b1120; border: 1px solid rgba(255,255,255,0.14); border-radius: 24px; width: 100%; max-width: 1440px; margin: 0 auto; padding: 32px 36px; box-shadow: 0 25px 60px -15px rgba(0,0,0,0.9); display: flex; flex-direction: column; gap: 22px;">
+        
+        <!-- Header Bar -->
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 18px; flex-wrap: wrap; gap: 12px;">
             <div>
-                <h3 style="font-size: 19px; font-weight: 800; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
-                    ⚡ DISK IOPS & STORAGE BENCHMARK CHECKER
-                </h3>
-                <p style="font-size: 12.5px; color: var(--text-muted);">Uji Performa Kecepatan Disk Real-Time & Evaluasi Kelayakan Single Instance vs SaaS Multi-Tenant</p>
+                <h2 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 6px 0; display: flex; align-items: center; gap: 10px;">
+                    ⚡ DISK IOPS BENCHMARK & CONCURRENT CAPACITY AUDITOR
+                </h2>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+                    Uji Performa Direct I/O Disk Real-Time, Kalkulator Daya Tampung Concurrent User, & Evaluasi Kelayakan Single Instance vs SaaS
+                </p>
             </div>
-            <button type="button" onclick="closeIopsModal()" style="background: transparent; border: none; font-size: 22px; color: var(--text-muted); cursor: pointer; padding: 4px 8px; border-radius: 6px;">&times;</button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="btn btn-secondary" type="button" onclick="closeIopsModal()" style="padding: 10px 20px; font-size: 13px; font-weight: 700; border-color: rgba(255,255,255,0.2); color: #e2e8f0; display: flex; align-items: center; gap: 6px;">
+                    ✕ Tutup Layar Penuh
+                </button>
+            </div>
         </div>
 
         <!-- Target Info & Action Bar -->
-        <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
-            <div>
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 2px;">Target Server VPS</div>
-                <div style="font-size: 14px; font-weight: 700; color: #38bdf8;" id="iops-target-server-label">10.10.10.116 (asep)</div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="iops-target-disk-label">Hardware Disk: Memuat info...</div>
+        <div style="background: rgba(15,23,42,0.65); border: 1px solid var(--glass-border); border-radius: 16px; padding: 18px 24px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
+            <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center;">
+                <div>
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 2px;">Target Server VPS Terpilih</div>
+                    <div style="font-size: 16px; font-weight: 800; color: #38bdf8;" id="iops-target-server-label">10.10.10.116 (asep)</div>
+                </div>
+                <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 2px;">Hardware & Storage Terdeteksi</div>
+                    <div style="font-size: 13px; color: #cbd5e1; font-family: monospace;" id="iops-target-disk-label">Hardware Disk: Memuat info...</div>
+                </div>
             </div>
             <div>
-                <button class="btn btn-primary" id="iops-run-btn" type="button" onclick="runIopsBenchmark()" style="background: linear-gradient(135deg, #0284c7, #2563eb); border: none; padding: 10px 20px; font-weight: 700;">
+                <button class="btn btn-primary" id="iops-run-btn" type="button" onclick="runIopsBenchmark()" style="background: linear-gradient(135deg, #0284c7, #2563eb); border: none; padding: 12px 26px; font-weight: 800; font-size: 13.5px; box-shadow: 0 10px 20px -5px rgba(2,132,199,0.5);">
                     ⚡ Jalankan Uji IOPS (5 Detik)
                 </button>
             </div>
         </div>
 
         <!-- Loading State -->
-        <div id="iops-loading-container" style="display: none; text-align: center; padding: 40px 20px;">
-            <span class="spinner" style="width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; margin-bottom: 14px;"></span>
-            <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 6px;">Sedang Menjalankan Benchmark I/O Direct Random 4K...</div>
-            <div style="font-size: 12px; color: var(--text-muted);">Menguji Direct I/O (libaio, iodepth=32, randrw 70/30) via fio di server target. Mohon tunggu ~5-7 detik.</div>
+        <div id="iops-loading-container" style="display: none; text-align: center; padding: 60px 20px; background: rgba(15,23,42,0.4); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.1);">
+            <span class="spinner" style="width: 38px; height: 38px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; margin-bottom: 16px;"></span>
+            <div style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">Sedang Menjalankan Direct I/O Random 4K Benchmark...</div>
+            <div style="font-size: 13px; color: var(--text-muted);">Menguji Direct I/O (libaio, iodepth=32, randrw 70/30) via fio di server target. Mohon tunggu ~5-7 detik.</div>
         </div>
 
         <!-- Benchmark Result Display Container -->
-        <div id="iops-result-container" style="display: none; flex-direction: column; gap: 20px;">
-            <!-- Score Cards Grid -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+        <div id="iops-result-container" style="display: none; flex-direction: column; gap: 22px;">
+            <!-- Score Cards Grid (Top Metrics) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
                 <!-- Total IOPS Card -->
-                <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Total Random IOPS</div>
-                    <div style="font-size: 26px; font-weight: 800; color: #fff; margin: 8px 0;" id="iops-val-total">0</div>
+                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Random IOPS</div>
+                    <div style="font-size: 32px; font-weight: 900; color: #fff; margin: 10px 0;" id="iops-val-total">0</div>
                     <div>
-                        <span id="iops-badge-grade" style="display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3);">
+                        <span id="iops-badge-grade" style="display: inline-block; padding: 4px 12px; border-radius: 8px; font-size: 11.5px; font-weight: 800; background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3);">
                             GRADE S
                         </span>
                     </div>
                 </div>
 
                 <!-- Read vs Write IOPS -->
-                <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Read vs Write IOPS</div>
-                    <div style="font-size: 13px; color: var(--text-main); margin: 8px 0; line-height: 1.6;">
-                        <div>📖 Read: <strong style="color: #38bdf8;" id="iops-val-read">0</strong> IOPS</div>
-                        <div>✍️ Write: <strong style="color: #f472b6;" id="iops-val-write">0</strong> IOPS</div>
+                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Read vs Write IOPS</div>
+                    <div style="font-size: 14px; color: var(--text-main); margin: 10px 0; line-height: 1.7;">
+                        <div>📖 Read: <strong style="color: #38bdf8; font-size: 16px;" id="iops-val-read">0</strong> IOPS</div>
+                        <div>✍️ Write: <strong style="color: #f472b6; font-size: 16px;" id="iops-val-write">0</strong> IOPS</div>
                     </div>
-                    <div style="font-size: 10.5px; color: var(--text-muted);">4K Random Mix (70/30)</div>
+                    <div style="font-size: 11px; color: var(--text-muted);">4K Random Mix (70% Read / 30% Write)</div>
                 </div>
 
                 <!-- Average Latency -->
-                <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Disk Latency</div>
-                    <div style="font-size: 26px; font-weight: 800; color: #a78bfa; margin: 8px 0;" id="iops-val-latency">0 ms</div>
-                    <div style="font-size: 10.5px; color: var(--text-muted);" id="iops-desc-latency">Rata-rata waktu tunggu I/O</div>
+                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Disk Latency</div>
+                    <div style="font-size: 32px; font-weight: 900; color: #a78bfa; margin: 10px 0;" id="iops-val-latency">0 ms</div>
+                    <div style="font-size: 11px; color: var(--text-muted);" id="iops-desc-latency">Rata-rata waktu tunggu akses I/O disk</div>
                 </div>
 
                 <!-- Throughput Bandwidth -->
-                <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Total Throughput</div>
-                    <div style="font-size: 26px; font-weight: 800; color: #34d399; margin: 8px 0;" id="iops-val-throughput">0 MB/s</div>
-                    <div style="font-size: 10.5px; color: var(--text-muted);" id="iops-desc-throughput">R/W speed kombinasi</div>
-                </div>
-            <!-- CONCURRENT USER CAPACITY CALCULATOR SECTION -->
-            <div style="background: linear-gradient(135deg, rgba(15,23,42,0.85), rgba(30,41,59,0.7)); border: 1px solid rgba(56,189,248,0.25); border-radius: 16px; padding: 20px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
-                    <div>
-                        <h4 style="font-size: 14px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 8px;">
-                            🧮 KALKULATOR KAPASITAS CONCURRENT USER (HASIL AUDIT DISK)
-                        </h4>
-                        <p style="font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0 0;">
-                            Hitung daya tampung riil server terhadap jumlah Siswa, Guru, & Orang Tua sekolah Anda
-                        </p>
-                    </div>
-                    <span style="font-size: 11px; background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); padding: 4px 10px; border-radius: 6px; font-weight: 600;">
-                        Auto-Calculate Real-Time
-                    </span>
-                </div>
-
-                <!-- Input Row -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 16px;">
-                    <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
-                            🎓 Jumlah Siswa
-                        </label>
-                        <input type="number" id="calc-input-siswa" value="2000" min="50" max="100000" step="50" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
-                    </div>
-
-                    <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
-                            👨‍🏫 Jumlah Guru / Rombel Kelas
-                        </label>
-                        <input type="number" id="calc-input-guru" value="55" min="5" max="1000" step="5" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
-                    </div>
-
-                    <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
-                            👨‍👩‍👦 Estimasi Orang Tua (1:1 Siswa)
-                        </label>
-                        <input type="text" id="calc-input-ortu" value="2.000 Akun" disabled style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.06); color: #94a3b8; font-size: 13px; font-weight: 600; cursor: not-allowed;">
-                    </div>
-                </div>
-
-                <!-- Calculation Metrics Summary Cards -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px;">
-                    <!-- Max Capacity Supported -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Kapasitas Maks Server (Batas Aman IOPS)</div>
-                        <div style="font-size: 20px; font-weight: 800; color: #38bdf8; margin: 4px 0;" id="calc-val-max-capacity">~6.500 User</div>
-                        <div style="font-size: 10.5px; color: var(--text-muted);" id="calc-desc-max-capacity">Concurrent user aman tanpa antrean I/O</div>
-                    </div>
-
-                    <!-- School Peak Concurrency Needed -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Estimasi Peak Concurrent Sekolah Anda</div>
-                        <div style="font-size: 20px; font-weight: 800; color: #f472b6; margin: 4px 0;" id="calc-val-peak-needed">~1.355 User</div>
-                        <div style="font-size: 10.5px; color: var(--text-muted);">Tapping + Ortu Notif + Guru Sesi jam sibuk</div>
-                    </div>
-
-                    <!-- Server Load Percentage -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Tingkat Beban I/O Server Saat Puncak</div>
-                        <div style="font-size: 20px; font-weight: 800; color: #10b981; margin: 4px 0;" id="calc-val-load-percent">20.8%</div>
-                        <div style="font-size: 10.5px; color: #10b981; font-weight: 600;" id="calc-val-verdict-tag">SANGAT LEGA (Zero Lag)</div>
-                    </div>
-                </div>
-
-                <!-- Load Progress Bar -->
-                <div style="margin-bottom: 14px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
-                        <span style="color: var(--text-muted);">Utilisasi Kapasitas Storage:</span>
-                        <span id="calc-bar-label" style="font-weight: 700; color: #10b981;">20.8% dari Kapasitas Maksimal</span>
-                    </div>
-                    <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden;">
-                        <div id="calc-load-bar" style="width: 20.8%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 5px; transition: width 0.4s ease, background 0.4s ease;"></div>
-                    </div>
-                </div>
-
-                <!-- Conclusion & Multi-Tenant SaaS Capacity Box -->
-                <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: 12px; padding: 12px 16px;" id="calc-recommendation-box">
-                    <div style="font-size: 12.5px; font-weight: 700; color: #34d399; margin-bottom: 4px;" id="calc-recommendation-title">
-                        ✅ Rekomendasi: Server Sangat Ideal untuk Kebutuhan Sekolah Ini
-                    </div>
-                    <div style="font-size: 11.5px; color: #e2e8f0; line-height: 1.6;" id="calc-recommendation-desc">
-                        Server memiliki daya tampung hingga <strong>~6.500 Concurrent User</strong>. Beban puncak sekolah Anda diperkirakan hanya menyerap <strong>20.8%</strong> kapasitas I/O. Server ini bahkan sanggup menampung hingga <strong>4 - 5 sekolah serupa</strong> jika Anda ingin mengoperasikannya sebagai platform SaaS multi-tenant.
-                    </div>
+                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Throughput</div>
+                    <div style="font-size: 32px; font-weight: 900; color: #34d399; margin: 10px 0;" id="iops-val-throughput">0 MB/s</div>
+                    <div style="font-size: 11px; color: var(--text-muted);" id="iops-desc-throughput">Bandwidth Read/Write simultan</div>
                 </div>
             </div>
 
-            <!-- Detailed Workload Suitability Assessment -->
-            <div style="background: rgba(15,23,42,0.7); border: 1px solid var(--glass-border); border-radius: 14px; padding: 18px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                    <h4 style="font-size: 13.5px; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
-                        📊 Evaluasi Kelayakan Beban Skenario Nyata Platform Absenta
-                    </h4>
-                    <span style="font-size: 11px; color: var(--text-muted);">Berdasarkan uji direct I/O random read/write 4K database PostgreSQL & Redis</span>
+            <!-- TWO COLUMNS LAYOUT: CALCULATOR (LEFT) & SCENARIOS (RIGHT) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 20px; align-items: start;">
+                
+                <!-- LEFT COLUMN: CONCURRENT CAPACITY CALCULATOR -->
+                <div style="background: linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.75)); border: 1px solid rgba(56,189,248,0.3); border-radius: 18px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px;">
+                        <div>
+                            <h4 style="font-size: 15px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                🧮 KALKULATOR KAPASITAS CONCURRENT USER
+                            </h4>
+                            <p style="font-size: 12px; color: var(--text-muted); margin: 3px 0 0 0;">
+                                Hitung daya tampung riil terhadap jumlah Siswa, Guru, & Ortu
+                            </p>
+                        </div>
+                        <span style="font-size: 11px; background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                            Live Calculator
+                        </span>
+                    </div>
+
+                    <!-- Input Grid -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
+                                🎓 Jumlah Siswa
+                            </label>
+                            <input type="number" id="calc-input-siswa" value="2000" min="50" max="100000" step="50" oninput="calculateServerCapacity()" style="width: 100%; padding: 11px 14px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 14px; font-weight: 700;">
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
+                                👨‍🏫 Jumlah Guru / Rombel
+                            </label>
+                            <input type="number" id="calc-input-guru" value="55" min="5" max="1000" step="5" oninput="calculateServerCapacity()" style="width: 100%; padding: 11px 14px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 14px; font-weight: 700;">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">
+                            👨‍👩‍👦 Estimasi Akun Orang Tua (Rasio 1:1 terhadap Siswa)
+                        </label>
+                        <input type="text" id="calc-input-ortu" value="2.000 Akun Wali Murid" disabled style="width: 100%; padding: 10px 14px; border-radius: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.06); color: #94a3b8; font-size: 13px; font-weight: 600; cursor: not-allowed;">
+                    </div>
+
+                    <!-- Metrics Summary 3 Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                            <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Batas Maks Server</div>
+                            <div style="font-size: 17px; font-weight: 800; color: #38bdf8; margin: 4px 0;" id="calc-val-max-capacity">~6.500 User</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">Aman antrean I/O</div>
+                        </div>
+
+                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                            <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Kebutuhan Puncak</div>
+                            <div style="font-size: 17px; font-weight: 800; color: #f472b6; margin: 4px 0;" id="calc-val-peak-needed">~1.355 User</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">Peak jam masuk/KBM</div>
+                        </div>
+
+                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                            <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Beban Puncak</div>
+                            <div style="font-size: 17px; font-weight: 800; color: #10b981; margin: 4px 0;" id="calc-val-load-percent">20.8%</div>
+                            <div style="font-size: 10px; color: #10b981; font-weight: 600;" id="calc-val-verdict-tag">SANGAT LEGA</div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 5px;">
+                            <span style="color: var(--text-muted);">Utilisasi Kapasitas Disk I/O:</span>
+                            <span id="calc-bar-label" style="font-weight: 700; color: #10b981;">20.8% dari Kapasitas Maksimal</span>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden;">
+                            <div id="calc-load-bar" style="width: 20.8%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 5px; transition: width 0.4s ease, background 0.4s ease;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Recommendation Box -->
+                    <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: 12px; padding: 14px 16px;" id="calc-recommendation-box">
+                        <div style="font-size: 13px; font-weight: 700; color: #34d399; margin-bottom: 5px;" id="calc-recommendation-title">
+                            ✅ Rekomendasi: Server Sangat Ideal untuk Kebutuhan Sekolah Ini
+                        </div>
+                        <div style="font-size: 12px; color: #e2e8f0; line-height: 1.6;" id="calc-recommendation-desc">
+                            Server memiliki daya tampung hingga <strong>~6.500 Concurrent User</strong>. Beban puncak sekolah Anda diperkirakan hanya menyerap <strong>20.8%</strong> kapasitas I/O. Server ini bahkan sanggup menampung hingga <strong>4 - 5 sekolah serupa</strong> jika Anda ingin mengoperasikannya sebagai platform SaaS multi-tenant.
+                        </div>
+                    </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px;">
+                <!-- RIGHT COLUMN: DETAILED SCENARIOS SUITABILITY -->
+                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+                    <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px;">
+                        <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            📊 EVALUASI KELAYAKAN 5 SKENARIO BEBAN NYATA
+                        </h4>
+                        <p style="font-size: 12px; color: var(--text-muted); margin: 3px 0 0 0;">
+                            Analisa spesifik per peran pengguna pada jam operasional sekolah
+                        </p>
+                    </div>
+
                     <!-- Skenario 1: Guru -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">👨‍🏫 Guru Login & Sesi KBM (55 Kelas Serentak)</span>
-                            <span id="iops-guru-status" style="font-size: 11px; font-weight: 700; color: #10b981;">SANGAT INSTAN</span>
+                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">👨‍🏫 Guru Login & Sesi KBM (55 Kelas Serentak)</span>
+                            <span id="iops-guru-status" style="font-size: 11px; font-weight: 800; color: #10b981;">SANGAT INSTAN</span>
                         </div>
-                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-guru-desc">
+                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-guru-desc">
                             55 Guru buka sesi & update 2.000 status siswa serentak dalam 1 menit selesai tanpa ada I/O lock (&lt;10ms).
                         </p>
                     </div>
 
                     <!-- Skenario 2: Siswa -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">🎓 Siswa Login & Akses Rekap (~2.000 Siswa)</span>
-                            <span id="iops-siswa-status" style="font-size: 11px; font-weight: 700; color: #10b981;">SANGAT PRIMA</span>
+                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">🎓 Siswa Login & Akses Rekap (~2.000 Siswa)</span>
+                            <span id="iops-siswa-status" style="font-size: 11px; font-weight: 800; color: #10b981;">SANGAT PRIMA</span>
                         </div>
-                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-siswa-desc">
+                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-siswa-desc">
                             2.000 - 5.000 Siswa login & buka portal akademik bersamaan tanpa antrean disk.
                         </p>
                     </div>
 
                     <!-- Skenario 3: Ortu -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">👨‍👩‍👦 Orang Tua (Ortu) Login & Notifikasi (~2.000+ Ortu)</span>
-                            <span id="iops-ortu-status" style="font-size: 11px; font-weight: 700; color: #10b981;">SANGAT PRIMA</span>
+                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">👨‍👩‍👦 Orang Tua Login & Notifikasi (~2.000+ Ortu)</span>
+                            <span id="iops-ortu-status" style="font-size: 11px; font-weight: 800; color: #10b981;">SANGAT PRIMA</span>
                         </div>
-                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-ortu-desc">
+                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-ortu-desc">
                             3.000+ Orang tua menerima & memantau notifikasi real-time saat jam masuk tanpa latency.
                         </p>
                     </div>
 
                     <!-- Skenario 4: Terminal RFID -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">📟 Terminal RFID Tapping Gerbang (10 - 55 Mesin)</span>
-                            <span id="iops-terminal-status" style="font-size: 11px; font-weight: 700; color: #10b981;">ULTRA CEPAT</span>
+                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">📟 Terminal RFID Gerbang (10 - 55 Mesin)</span>
+                            <span id="iops-terminal-status" style="font-size: 11px; font-weight: 800; color: #10b981;">ULTRA CEPAT</span>
                         </div>
-                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-terminal-desc">
+                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-terminal-desc">
                             55 Perangkat RFID tapping serentak (30-50 tap/detik) tercatat instan di PostgreSQL direct write.
                         </p>
                     </div>
 
                     <!-- Skenario 5: SaaS Multi-Tenant -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px; grid-column: 1 / -1;">
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">🌐 Platform SaaS Multi-Tenant (Multi-Sekolah / Puluhan Ribu Siswa)</span>
-                            <span id="iops-saas-status" style="font-size: 11px; font-weight: 700; color: #10b981;">ENTERPRISE READY</span>
+                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">🌐 SaaS Multi-Tenant (Puluhan Ribu Siswa)</span>
+                            <span id="iops-saas-status" style="font-size: 11px; font-weight: 800; color: #10b981;">ENTERPRISE READY</span>
                         </div>
-                        <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-saas-desc">
+                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-saas-desc">
                             Sangat siap melayani 15-30+ sekolah / puluhan ribu siswa aktif serentak (SaaS High Load & CBT Ready).
                         </p>
                     </div>
@@ -1190,85 +1205,88 @@
             </div>
         </div>
 
-        <!-- Standar Acuan & Best Practices Guide (Always Visible) -->
-        <div style="background: rgba(30,41,59,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px; margin-top: 20px;">
-            <h4 style="font-size: 13px; font-weight: 700; color: #f8fafc; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-                📖 Standar Acuan Minimum & Best Practices IOPS Server Produksi
+        <!-- Standar Acuan & Best Practices Guide (Always Visible Full-Width) -->
+        <div style="background: rgba(30,41,59,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 22px;">
+            <h4 style="font-size: 13.5px; font-weight: 800; color: #f8fafc; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
+                📖 STANDAR ACUAN MINIMUM & BEST PRACTICES IOPS SERVER PRODUKSI
             </h4>
 
             <div style="overflow-x: auto; margin-bottom: 14px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; min-width: 680px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left; min-width: 760px;">
                     <thead>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
-                            <th style="padding: 6px 8px;">Tingkat IOPS</th>
-                            <th style="padding: 6px 8px;">Kategori Storage</th>
-                            <th style="padding: 6px 8px;">Disk Latency</th>
-                            <th style="padding: 6px 8px;">👨‍🏫 Guru (55 Kelas)</th>
-                            <th style="padding: 6px 8px;">🎓 Siswa & 👨‍👩‍👦 Ortu (2k+)</th>
-                            <th style="padding: 6px 8px;">📟 RFID Terminal</th>
-                            <th style="padding: 6px 8px;">🌐 SaaS Multi-Tenant</th>
+                            <th style="padding: 8px 10px;">Tingkat IOPS</th>
+                            <th style="padding: 8px 10px;">Kategori Storage</th>
+                            <th style="padding: 8px 10px;">Disk Latency</th>
+                            <th style="padding: 8px 10px;">👨‍🏫 Guru (55 Kelas)</th>
+                            <th style="padding: 8px 10px;">🎓 Siswa & 👨‍👩‍👦 Ortu (2k+)</th>
+                            <th style="padding: 8px 10px;">📟 RFID Terminal</th>
+                            <th style="padding: 8px 10px;">🌐 SaaS Multi-Tenant</th>
                         </tr>
                     </thead>
                     <tbody style="color: #cbd5e1;">
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
-                            <td style="padding: 8px;"><strong style="color: #ef4444;">&lt; 1.500 IOPS</strong></td>
-                            <td style="padding: 8px;">HDD / Shared VPS</td>
-                            <td style="padding: 8px; color: #ef4444;">&gt; 50 ms</td>
-                            <td style="padding: 8px; color: #ef4444;">🔴 Rawan Timeout 504</td>
-                            <td style="padding: 8px; color: #ef4444;">🔴 Delay Antrean &gt;5s</td>
-                            <td style="padding: 8px; color: #ef4444;">🔴 Rawan Pending</td>
-                            <td style="padding: 8px; color: #ef4444;">❌ Tidak Layak</td>
+                            <td style="padding: 10px;"><strong style="color: #ef4444;">&lt; 1.500 IOPS</strong></td>
+                            <td style="padding: 10px;">HDD / Shared VPS</td>
+                            <td style="padding: 10px; color: #ef4444;">&gt; 50 ms</td>
+                            <td style="padding: 10px; color: #ef4444;">🔴 Rawan Timeout 504</td>
+                            <td style="padding: 10px; color: #ef4444;">🔴 Delay Antrean &gt;5s</td>
+                            <td style="padding: 10px; color: #ef4444;">🔴 Rawan Pending</td>
+                            <td style="padding: 10px; color: #ef4444;">❌ Tidak Layak</td>
                         </tr>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
-                            <td style="padding: 8px;"><strong style="color: #f59e0b;">1.500 - 5.000 IOPS</strong></td>
-                            <td style="padding: 8px;">Cloud SSD Standard</td>
-                            <td style="padding: 8px; color: #f59e0b;">20 - 50 ms</td>
-                            <td style="padding: 8px; color: #f59e0b;">🟡 Cukup (Delay ~1-2s)</td>
-                            <td style="padding: 8px; color: #f59e0b;">🟡 Aman dgn Redis Cache</td>
-                            <td style="padding: 8px; color: #f59e0b;">🟡 10 - 20 Mesin</td>
-                            <td style="padding: 8px; color: #f59e0b;">⚠️ Terbatas (1 - 2 Sekolah)</td>
+                            <td style="padding: 10px;"><strong style="color: #f59e0b;">1.500 - 5.000 IOPS</strong></td>
+                            <td style="padding: 10px;">Cloud SSD Standard</td>
+                            <td style="padding: 10px; color: #f59e0b;">20 - 50 ms</td>
+                            <td style="padding: 10px; color: #f59e0b;">🟡 Cukup (Delay ~1-2s)</td>
+                            <td style="padding: 10px; color: #f59e0b;">🟡 Aman dgn Redis Cache</td>
+                            <td style="padding: 10px; color: #f59e0b;">🟡 10 - 20 Mesin</td>
+                            <td style="padding: 10px; color: #f59e0b;">⚠️ Terbatas (1 - 2 Sekolah)</td>
                         </tr>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
-                            <td style="padding: 8px;"><strong style="color: #3b82f6;">5.000 - 15.000 IOPS</strong></td>
-                            <td style="padding: 8px;">Fast Dedicated SSD</td>
-                            <td style="padding: 8px; color: #3b82f6;">5 - 20 ms</td>
-                            <td style="padding: 8px; color: #34d399;">🟢 Sangat Siap (&lt;50ms)</td>
-                            <td style="padding: 8px; color: #34d399;">🟢 Lancar 2.000 Siswa/Ortu</td>
-                            <td style="padding: 8px; color: #34d399;">🟢 55 Terminal Serentak</td>
-                            <td style="padding: 8px; color: #3b82f6;">✔️ Siap (5 - 10 Sekolah)</td>
+                            <td style="padding: 10px;"><strong style="color: #3b82f6;">5.000 - 15.000 IOPS</strong></td>
+                            <td style="padding: 10px;">Fast Dedicated SSD</td>
+                            <td style="padding: 10px; color: #3b82f6;">5 - 20 ms</td>
+                            <td style="padding: 10px; color: #34d399;">🟢 Sangat Siap (&lt;50ms)</td>
+                            <td style="padding: 10px; color: #34d399;">🟢 Lancar 2.000 Siswa/Ortu</td>
+                            <td style="padding: 10px; color: #34d399;">🟢 55 Terminal Serentak</td>
+                            <td style="padding: 10px; color: #3b82f6;">✔️ Siap (5 - 10 Sekolah)</td>
                         </tr>
                         <tr>
-                            <td style="padding: 8px;"><strong style="color: #10b981;">&gt; 15.000 - 60.000+ IOPS</strong></td>
-                            <td style="padding: 8px;">Samsung EVO / NVMe</td>
-                            <td style="padding: 8px; color: #10b981;">&lt; 3 ms</td>
-                            <td style="padding: 8px; color: #10b981;">🏆 Zero Delay (&lt;10ms)</td>
-                            <td style="padding: 8px; color: #10b981;">🏆 5.000+ Siswa/Ortu Instan</td>
-                            <td style="padding: 8px; color: #10b981;">🏆 55+ Mesin 50 tap/dtk</td>
-                            <td style="padding: 8px; color: #10b981;">🚀 Enterprise (30+ Sekolah)</td>
+                            <td style="padding: 10px;"><strong style="color: #10b981;">&gt; 15.000 - 60.000+ IOPS</strong></td>
+                            <td style="padding: 10px;">Samsung EVO / NVMe</td>
+                            <td style="padding: 10px; color: #10b981;">&lt; 3 ms</td>
+                            <td style="padding: 10px; color: #10b981;">🏆 Zero Delay (&lt;10ms)</td>
+                            <td style="padding: 10px; color: #10b981;">🏆 5.000+ Siswa/Ortu Instan</td>
+                            <td style="padding: 10px; color: #10b981;">🏆 55+ Mesin 50 tap/dtk</td>
+                            <td style="padding: 10px; color: #10b981;">🚀 Enterprise (30+ Sekolah)</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); line-height: 1.6;">
+            <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.6;">
                 💡 <strong>Tips Best Practice:</strong> Absenta mengandalkan database PostgreSQL untuk pencatatan transaksi absensi dan Redis untuk session caching. Pada saat pergantian jam KBM (55 kelas submit serentak dalam 3 menit), kecepatan write direct storage mencegah antrean request lock (I/O wait) sehingga response time aplikasi tetap instan &lt; 50ms.
             </div>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
-            <button class="btn btn-secondary" type="button" onclick="closeIopsModal()">Tutup Jendela</button>
+        <!-- Footer Action -->
+        <div style="display: flex; justify-content: flex-end; padding-top: 10px;">
+            <button class="btn btn-secondary" type="button" onclick="closeIopsModal()" style="padding: 10px 24px; font-weight: 700; font-size: 13px;">
+                Tutup Layar Penuh
+            </button>
         </div>
     </div>
 </div>
 
-<script src="/js/preset-picker.js?v=20260919_calc"></script>
-<script src="/js/app.js?v=20260919_calc"></script>
-<script src="/js/wizard.js?v=20260919_calc"></script>
-<script src="/js/presets.js?v=20260919_calc"></script>
-<script src="/js/cluster.js?v=20260919_calc"></script>
-<script src="/js/logs.js?v=20260919_calc"></script>
-<script src="/js/health.js?v=20260919_calc"></script>
-<script src="/js/audit.js?v=20260919_calc"></script>
+<script src="/js/preset-picker.js?v=20260919_fullpage"></script>
+<script src="/js/app.js?v=20260919_fullpage"></script>
+<script src="/js/wizard.js?v=20260919_fullpage"></script>
+<script src="/js/presets.js?v=20260919_fullpage"></script>
+<script src="/js/cluster.js?v=20260919_fullpage"></script>
+<script src="/js/logs.js?v=20260919_fullpage"></script>
+<script src="/js/health.js?v=20260919_fullpage"></script>
+<script src="/js/audit.js?v=20260919_fullpage"></script>
 
 </body>
 </html>
