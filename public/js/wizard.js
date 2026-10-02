@@ -672,8 +672,44 @@ function startInstallation() {
                 percentText.innerHTML = '100%';
                 statusText.innerHTML = 'Pemasangan Selesai Sukses! 🎉';
                 
+                const hostIp = (installConfig.vpsIp && installConfig.vpsIp !== 'localhost') ? installConfig.vpsIp : 'localhost';
+                const ipUrl = `http://${hostIp}`;
+                
+                let domainUrl = '';
+                if (installConfig.targetDomain && installConfig.targetDomain !== 'localhost' && !/^[0-9.]+$/.test(installConfig.targetDomain)) {
+                    const proto = (installConfig.sslScenario === 'letsencrypt' || installConfig.sslScenario === 'cloudflare') ? 'https://' : 'http://';
+                    domainUrl = `${proto}${installConfig.targetDomain}`;
+                }
+
+                let buttonsHtml = `
+                    <a href="${ipUrl}" target="_blank" class="btn btn-primary" style="text-decoration: none; padding: 9px 18px; font-size: 13.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                        🌐 Buka Portal via IP Server (${ipUrl})
+                    </a>
+                `;
+
+                if (domainUrl) {
+                    buttonsHtml += `
+                        <a href="${domainUrl}" target="_blank" class="btn btn-secondary" style="text-decoration: none; padding: 9px 18px; font-size: 13.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                            🔗 Buka via Domain (${installConfig.targetDomain})
+                        </a>
+                    `;
+                }
+
                 finalAlert.className = 'alert-box success';
-                finalAlert.innerHTML = '<strong>Suksess!</strong> Aplikasi Absenta berhasil dipasang.<br><a href="http://' + installConfig.vpsIp + ':' + installConfig.frontendPort + '" target="_blank" style="color: white; font-weight: bold; text-decoration: underline;">Buka Portal Absenta Sekolah</a>';
+                finalAlert.style.padding = '18px';
+                finalAlert.style.borderRadius = '12px';
+                finalAlert.innerHTML = `
+                    <div style="font-weight: 700; font-size: 16px; color: #34d399; margin-bottom: 6px;">
+                        🎉 Pemasangan Selesai Sukses!
+                    </div>
+                    <div style="font-size: 13px; color: #e2e8f0; line-height: 1.6; margin-bottom: 14px;">
+                        Layanan Web Server Caddy telah aktif dan siap melayani lalu lintas di <strong>Port 80/443</strong>.<br>
+                        Port aplikasi internal (<code>${installConfig.frontendPort}</code> & <code>${installConfig.backendPort}</code>) telah diproteksi dan dirutekan secara otomatis.
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        ${buttonsHtml}
+                    </div>
+                `;
                 return;
             }
 
