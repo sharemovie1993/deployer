@@ -239,6 +239,17 @@ async function runRegressionTests() {
                 sseUpdate.statusCode === 200 && sseUpdate.contentType.includes('text/event-stream'),
                 '16. GET /api/stream-quick-update (Quick Update 1-Click Stream)'
             );
+
+            // Test 17: GET /api/benchmark-iops (Storage Direct I/O FIO & Speedtest Benchmark)
+            console.log(`\n[BENCHMARK TESTS] Menguji benchmark IOPS & Jaringan...`);
+            const resBench = await request({
+                hostname: '127.0.0.1', port: TEST_PORT, path: `/api/benchmark-iops?id=${p10.id}`, method: 'GET'
+            });
+            assert(
+                resBench.statusCode === 200 && resBench.body.success === true && resBench.body.metrics && resBench.body.grade,
+                '17. GET /api/benchmark-iops (FIO Storage IOPS & Dual Network Speedtest)',
+                `Grade: ${resBench.body.grade}, IOPS: ${resBench.body.metrics ? resBench.body.metrics.totalIops : 0}, Latency: ${resBench.body.metrics ? resBench.body.metrics.avgLatMs : 0}ms`
+            );
         }
 
     } catch (e) {

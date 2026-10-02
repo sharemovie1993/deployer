@@ -1,0 +1,105 @@
+<!-- MODAL: TUNING KERNEL & SISTEM PRODUKSI (REMOTE SSE) -->
+<div id="tuning-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 10000; justify-content: center; align-items: center;" onclick="if(event.target===this) closeTuningModal()">
+    <div style="background: #1e293b; border: 1px solid rgba(244,114,182,0.3); border-radius: 20px; width: 90%; max-width: 680px; max-height: 90vh; overflow-y: auto; padding: 28px; box-shadow: 0 25px 70px rgba(0,0,0,0.7);" onclick="event.stopPropagation()">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid var(--glass-border); padding-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(244,114,182,0.15); border: 1px solid rgba(244,114,182,0.3); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    🚀
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">Tuning Kernel & Sistem Produksi</h3>
+                    <p style="margin: 2px 0 0; font-size: 12px; color: var(--text-muted);">Optimasi OS Linux, Conntrack 524k, TCP BBR, Postgres, Redis, & WireGuard</p>
+                </div>
+            </div>
+            <button class="btn-close" onclick="closeTuningModal()" style="background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer;">✕</button>
+        </div>
+
+        <!-- Form Input Parameter Tuning -->
+        <div id="tuning-modal-form-area">
+            <input type="hidden" id="tuning-modal-preset-id">
+
+            <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Target Server:</div>
+                    <div id="tuning-modal-target-info" style="font-family: 'Fira Code', monospace; font-size: 13.5px; font-weight: 600; color: #f472b6;">
+                        10.10.10.116 (asep)
+                    </div>
+                </div>
+                <span class="badge" style="background: rgba(244,114,182,0.12); color: #f472b6; border: 1px solid rgba(244,114,182,0.3); font-size: 11px;">
+                    ⚡ High-Concurrency
+                </span>
+            </div>
+
+            <!-- Live Pre-Check Status Matrix -->
+            <div id="tuning-precheck-container" style="background: rgba(15,23,42,0.7); border: 1px solid rgba(244,114,182,0.25); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div style="font-size: 12px; font-weight: 700; color: #f472b6; display: flex; align-items: center; gap: 6px;">
+                        <span>🔍</span> Kondisi Parameter Sistem Saat Ini (Live Pre-Check)
+                    </div>
+                    <span id="tuning-precheck-badge" class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); font-size: 11px;">
+                        ⏳ Memeriksa...
+                    </span>
+                </div>
+                <div id="tuning-precheck-content" style="font-size: 11.5px; color: var(--text-muted);">
+                    <div style="text-align: center; padding: 10px 0;">
+                        <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #f472b6; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
+                        Sedang membaca parameter kernel sysctl, conntrack, memory, dan limits di VPS...
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="tuning-modal-role">Profil Peran Server (Workload Profile)</label>
+                    <select id="tuning-modal-role" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: var(--text-main); font-size: 12.5px;">
+                        <option value="all-in-one" selected>All-In-One (App + DB Postgres + Redis + Tunnel) [Rekomendasi]</option>
+                        <option value="dedicated-postgres">Dedicated PostgreSQL Database Server (50% RAM ke DB)</option>
+                        <option value="dedicated-redis">Dedicated Redis Caching Server (70% RAM ke Redis)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="tuning-modal-timezone">Zona Waktu Server OS & Sinkronisasi NTP</label>
+                    <select id="tuning-modal-timezone" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: var(--text-main); font-size: 12.5px;">
+                        <option value="Asia/Jakarta" selected>Asia/Jakarta (WIB - Jawa, Sumatera, Kalbar, Kalteng)</option>
+                        <option value="Asia/Makassar">Asia/Makassar (WITA - Bali, Sulawesi, NTB, NTT, Kalsel, Kaltim)</option>
+                        <option value="Asia/Jayapura">Asia/Jayapura (WIT - Papua, Maluku)</option>
+                        <option value="UTC">UTC (Standar Cloud Multi-Tenant)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Detail Optimasi yang Diterapkan -->
+            <div style="background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 14px; margin-bottom: 20px; font-size: 12px; line-height: 1.8; color: var(--text-muted);">
+                <div style="font-weight: 600; color: var(--text-main); margin-bottom: 6px;">Komponen yang Otomatis Dioptimalkan:</div>
+                <div>⚡ <strong>1. Kernel & WireGuard:</strong> Conntrack 524.288, Google TCP BBR, Buffer Socket 16MB, SOMAXCONN 65.535, IP Forwarding.</div>
+                <div>🛡️ <strong>2. Limits & Sockets:</strong> Open Files 65.536 s/d 1.048.576 (mencegah error <em>too many open files</em>).</div>
+                <div>🗄️ <strong>3. PostgreSQL:</strong> Auto-tuning <code>shared_buffers</code>, <code>max_connections</code>, & worker threads adaptif RAM/CPU.</div>
+                <div>⚡ <strong>4. Redis:</strong> Maxmemory dinamis & eviction policy <code>allkeys-lru</code> untuk caching cepat.</div>
+                <div>🐳 <strong>5. Docker & MTU:</strong> Log rotation 50MB x 5 file & TCP MSS Clamping anti-fragmentasi.</div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn btn-secondary" type="button" onclick="closeTuningModal()">Batal</button>
+                <button class="btn btn-primary" id="tuning-modal-apply-btn" type="button" style="background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none;" onclick="startTuningStream()">
+                    🚀 Jalankan Tuning Server Sekarang
+                </button>
+            </div>
+        </div>
+
+        <!-- Terminal Output Log Area (Hidden during form input) -->
+        <div id="tuning-modal-terminal-area" style="display: none; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span id="tuning-stream-status" style="font-size: 13px; font-weight: 600; color: #f472b6;">⏳ Memulai proses tuning kernel remote...</span>
+                <span id="tuning-stream-spinner" class="spinner" style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #f472b6; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite;"></span>
+            </div>
+            <pre id="tuning-stream-terminal" style="background: #090d16; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; font-family: 'Fira Code', monospace; font-size: 12px; color: #fbcfe8; height: 320px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;"></pre>
+            
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
+                <button class="btn btn-secondary" id="tuning-modal-close-stream-btn" type="button" onclick="closeTuningModal()">Tutup Jendela</button>
+            </div>
+        </div>
+    </div>
+</div>

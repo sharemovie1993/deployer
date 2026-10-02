@@ -489,6 +489,76 @@ function handleTestClusterNodes(req, res) {
     });
 }
 
+function handleRequestMigrationOtp(req, res) {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const data = JSON.parse(body);
+            let slug = (data.requestedSlug || data.slug || '').trim().toLowerCase();
+
+            if (!slug) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Subdomain pilihan wajib diisi.' }));
+            }
+
+            if (slug.endsWith('.absenta.id')) {
+                slug = slug.substring(0, slug.length - '.absenta.id'.length);
+            }
+
+            const response = await fetch('https://api.absenta.id/api/license/request-migration-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requested_slug: slug }),
+                signal: AbortSignal.timeout(12000)
+            });
+
+            const json = await response.json();
+            res.writeHead(response.status || 200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify(json));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: `Gagal meminta OTP migrasi: ${e.message}` }));
+        }
+    });
+}
+
+function handleConfirmMigrationOtp(req, res) {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const data = JSON.parse(body);
+            let slug = (data.requestedSlug || data.slug || '').trim().toLowerCase();
+            const otp = (data.otp || '').trim();
+            const hardwareId = (data.hardwareId || '').trim();
+
+            if (!slug || !otp) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Subdomain dan kode OTP wajib diisi.' }));
+            }
+
+            if (slug.endsWith('.absenta.id')) {
+                slug = slug.substring(0, slug.length - '.absenta.id'.length);
+            }
+
+            const response = await fetch('https://api.absenta.id/api/license/confirm-migration-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requested_slug: slug, otp, hardware_id: hardwareId }),
+                signal: AbortSignal.timeout(15000)
+            });
+
+            const json = await response.json();
+            res.writeHead(response.status || 200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify(json));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: `Gagal verifikasi OTP migrasi: ${e.message}` }));
+        }
+    });
+}
+
 module.exports = {
     handleBrowseFile,
     handleTestSsh,
@@ -496,6 +566,8 @@ module.exports = {
     handleCreateDb,
     handleRegisterLicense,
     handleVerifyLicense,
+    handleRequestMigrationOtp,
+    handleConfirmMigrationOtp,
     handleSaveConfig,
     handleTestClusterNodes
 };

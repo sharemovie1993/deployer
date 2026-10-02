@@ -283,7 +283,7 @@ function parseNetworkTest(stdout) {
         iface = ifaceMatch[1].trim();
     }
 
-    // 2. Parse Ping
+    // 2. Parse Public Ping
     const pingSection = stdout.match(/--- NET_PING ---\s*([\s\S]*?)\s*--- NET_SPEED ---/);
     if (pingSection) {
         const pingText = pingSection[1];
@@ -297,7 +297,7 @@ function parseNetworkTest(stdout) {
         }
     }
 
-    // 3. Parse Speed
+    // 3. Parse Public Speed
     const speedBytesMatch = stdout.match(/SPEED_BYTES:\s*([\d\.]+)/);
     if (speedBytesMatch) {
         const bytesPerSec = parseFloat(speedBytesMatch[1]) || 0;
@@ -306,7 +306,51 @@ function parseNetworkTest(stdout) {
         }
     }
 
-    // 4. Network Evaluation Status
+    // 4. Parse Tunnel to Server Lisensi
+    let tunnelIface = '';
+    let tunnelClientIp = '';
+    let tunnelGwIp = '10.0.0.1';
+    let tunnelPingMs = 0;
+    let tunnelSpeedMbps = 0;
+    let tunnelStatus = 'Belum Terpasang (Offline)';
+    let hasTunnel = false;
+
+    const tIfaceMatch = stdout.match(/TUNNEL_IFACE:\s*([^\r\n]+)/);
+    if (tIfaceMatch && tIfaceMatch[1].trim() && tIfaceMatch[1].trim() !== 'NONE') {
+        tunnelIface = tIfaceMatch[1].trim();
+        hasTunnel = true;
+    }
+
+    const tClientIpMatch = stdout.match(/TUNNEL_CLIENT_IP:\s*([^\r\n]+)/);
+    if (tClientIpMatch && tClientIpMatch[1].trim()) {
+        tunnelClientIp = tClientIpMatch[1].trim();
+    }
+
+    const tGwIpMatch = stdout.match(/TUNNEL_GW_IP:\s*([^\r\n]+)/);
+    if (tGwIpMatch && tGwIpMatch[1].trim()) {
+        tunnelGwIp = tGwIpMatch[1].trim();
+    }
+
+    if (hasTunnel) {
+        const tunnelPingMatch = stdout.match(/TUNNEL_PING_MS:\s*([\d\.]+)/);
+        const tunnelHttpMatch = stdout.match(/TUNNEL_HTTP_CODE:\s*(\d+)/);
+        if (tunnelPingMatch && tunnelHttpMatch && tunnelHttpMatch[1] === '200') {
+            tunnelPingMs = parseFloat((parseFloat(tunnelPingMatch[1]) * 1000).toFixed(1));
+            tunnelStatus = 'ONLINE & CEPAT';
+        } else {
+            tunnelStatus = 'TERPUTUS (Unreachable)';
+        }
+
+        const tunnelSpeedMatch = stdout.match(/TUNNEL_SPEED_BYTES:\s*([\d\.]+)/);
+        if (tunnelSpeedMatch) {
+            const tBytes = parseFloat(tunnelSpeedMatch[1]) || 0;
+            if (tBytes > 0) {
+                tunnelSpeedMbps = parseFloat(((tBytes * 8) / 1000000).toFixed(1));
+            }
+        }
+    }
+
+    // 5. Network Evaluation Status
     if (packetLossPct > 5 || pingLatencyMs > 200) {
         status = 'BURUK (Packet Loss / Kongesti)';
         grade = 'D';
@@ -326,6 +370,15 @@ function parseNetworkTest(stdout) {
         pingLatencyMs,
         packetLossPct,
         measuredSpeedMbps,
+        tunnel: {
+            hasTunnel,
+            iface: tunnelIface,
+            clientIp: tunnelClientIp,
+            gwIp: tunnelGwIp,
+            pingMs: tunnelPingMs,
+            speedMbps: tunnelSpeedMbps,
+            status: tunnelStatus
+        },
         status,
         grade
     };
@@ -406,6 +459,23 @@ function handleBenchmarkIops(req, res, parsedUrl) {
         'ping -c 3 -W 2 1.1.1.1 2>/dev/null || ping -c 3 -W 2 8.8.8.8 2>/dev/null || echo "PING_FAILED"',
         'echo --- NET_SPEED ---',
         'curl -s -w "SPEED_BYTES: %{speed_download}\\nTIME_TOTAL: %{time_total}\\nHTTP_CODE: %{http_code}\\n" -o /dev/null --max-time 4 "https://speed.cloudflare.com/__down?bytes=10000000" 2>/dev/null || echo "SPEED_FAILED"',
+        'echo --- TUNNEL_TEST ---',
+        'WG_IFACE=$( (ip link show type wireguard 2>/dev/null | grep -o "et-[a-zA-Z0-9-]*" ; ls /etc/wireguard/et-*.conf /var/www/project-absenta/tunnels/et-*.conf 2>/dev/null | sed "s/.*\\///;s/\\.conf//" ) | sort -u | head -n1 || true )',
+        'if [ -z "$WG_IFACE" ]; then',
+        '  WG_IFACE=$(ip -o link show 2>/dev/null | grep -oE "(et-[a-zA-Z0-9_-]+|wg[0-9]+)" | head -n1 || true)',
+        'fi',
+        'if [ -n "$WG_IFACE" ] && ip link show "$WG_IFACE" 2>/dev/null | grep -q "UP"; then',
+        '  WG_CLIENT_IP=$(ip -o -4 addr show "$WG_IFACE" 2>/dev/null | awk \'{print $4}\' | cut -d/ -f1 | head -n1 || true)',
+        '  WG_GW_IP="10.0.0.1"',
+        '  echo "TUNNEL_IFACE: $WG_IFACE"',
+        '  echo "TUNNEL_CLIENT_IP: $WG_CLIENT_IP"',
+        '  echo "TUNNEL_GW_IP: $WG_GW_IP"',
+        '  curl --interface "$WG_IFACE" -s -w "TUNNEL_PING_MS: %{time_total}\\nTUNNEL_HTTP_CODE: %{http_code}\\n" -o /dev/null --max-time 3 "http://${WG_GW_IP}:5001/api/speedtest/ping" 2>/dev/null || echo "TUNNEL_PING_FAILED"',
+        '  curl --interface "$WG_IFACE" -s -w "TUNNEL_SPEED_BYTES: %{speed_download}\\nTUNNEL_TIME: %{time_total}\\n" -o /dev/null --max-time 4 "http://${WG_GW_IP}:5001/api/speedtest/download?sizeMb=5" 2>/dev/null || echo "TUNNEL_SPEED_FAILED"',
+        'else',
+        '  echo "TUNNEL_IFACE: NONE"',
+        '  echo "TUNNEL_STATUS: NO_TUNNEL"',
+        'fi',
         'echo --- DISK_INFO ---',
         'lsblk -dn -e 7,11 -o NAME,SIZE,MODEL 2>/dev/null || df -h /',
         'df -h / 2>/dev/null | awk \'NR==2 {print "Root: " $3 " / " $2 " (" $5 " terpakai)"}\'',

@@ -352,7 +352,7 @@ $CF_TOKEN = ""
 $DB_URL = ""
 $INSTALL_POSTGRES = "N"
 $INSTALL_REDIS = "N"
-$DEPLOY_SCENARIO = "hybrid"
+$DEPLOY_SCENARIO = "onpremise"
 $TUNNEL_BASE_DOMAIN = "absenta.id"
 $LICENSE_SERVER_URL = "https://api.absenta.id"
 $REDIS_URL = "redis://localhost:6379"
@@ -366,16 +366,19 @@ if ($IS_SERVER_LISENSI -eq "True") {
     # ─── BAGIAN A: Jaringan, Port & SSL (Network & SSL) ──────────────────────────
     Write-Host "`n[BAGIAN A: Jaringan, Port & SSL]" -ForegroundColor Cyan
     Write-Host "Pilih Skenario Deployment:" -ForegroundColor White
-    Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, contoh: https://app.absenta.id)"
-    Write-Host " 2) Hybrid (Lokal Sekolah + Caddy Proxy, contoh: http://10.10.10.163)"
-    $scenarioChoice = Read-Host "Pilih [1-2] (Default: 1)"
+    Write-Host " 1) saas-public : Cloud VPS Multi-Tenant (Akses publik langsung, contoh: https://app.absenta.id)"
+    Write-Host " 2) saas-local  : Server Rumah/Kantor Multi-Tenant (Online via EasyTunnel WireGuard)"
+    Write-Host " 3) onpremise   : Dedicated 1 Sekolah (Hybrid: Akses cepat LAN Lokal + Online via EasyTunnel)"
+    $scenarioChoice = Read-Host "Pilih [1-3] (Default: 1)"
 
-    $DEPLOY_SCENARIO = "saas"
+    $DEPLOY_SCENARIO = "saas-public"
     if ($scenarioChoice -eq "2") {
-        $DEPLOY_SCENARIO = "hybrid"
+        $DEPLOY_SCENARIO = "saas-local"
+    } elseif ($scenarioChoice -eq "3") {
+        $DEPLOY_SCENARIO = "onpremise"
     }
 
-    if ($DEPLOY_SCENARIO -eq "saas") {
+    if ($DEPLOY_SCENARIO -eq "saas-public" -or $DEPLOY_SCENARIO -eq "saas-local") {
         $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS (Contoh: absenta.id)").Trim()
         if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = "absenta.id" }
     } else {
@@ -389,9 +392,36 @@ if ($IS_SERVER_LISENSI -eq "True") {
     $F_PORT = (Read-Host "Masukkan Port Frontend [5175]").Trim()
     if ([string]::IsNullOrWhiteSpace($F_PORT)) { $F_PORT = "5175" }
 
+    $SSL_SCENARIO = "letsencrypt"
     $CF_TOKEN = ""
-    if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
-        $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk DNS Challenge SSL, kosongkan jika tidak pakai)").Trim()
+    if ($DEPLOY_SCENARIO -eq "saas-public") {
+        Write-Host "`nPilih Konfigurasi SSL untuk SaaS Cloud VPS:" -ForegroundColor White
+        Write-Host " 1) Let's Encrypt Otomatis (HTTP-01, default terpercaya gembok hijau)" -ForegroundColor White
+        Write-Host " 2) Cloudflare DNS-01 Challenge (Wajib untuk Wildcard *.domain.com)" -ForegroundColor White
+        Write-Host " 3) Sinkronisasi / Custom SSL" -ForegroundColor White
+        $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
+        if ($sslChoice -eq "2") {
+            $SSL_SCENARIO = "cloudflare"
+            $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk DNS Challenge SSL)").Trim()
+        } elseif ($sslChoice -eq "3") {
+            $SSL_SCENARIO = "sync"
+        } else {
+            $SSL_SCENARIO = "letsencrypt"
+        }
+    } else {
+        Write-Host "`nPilih Konfigurasi SSL untuk Server Lokal / On-Premise:" -ForegroundColor White
+        Write-Host " 1) Sinkronisasi Otomatis dari Server Lisensi via EasyTunnel (sync, rekomendasi)" -ForegroundColor White
+        Write-Host " 2) SSL Internal / Self-Signed (internal, khusus Full Offline LAN)" -ForegroundColor White
+        Write-Host " 3) Cloudflare DNS-01 Challenge (cloudflare)" -ForegroundColor White
+        $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
+        if ($sslChoice -eq "2") {
+            $SSL_SCENARIO = "internal"
+        } elseif ($sslChoice -eq "3") {
+            $SSL_SCENARIO = "cloudflare"
+            $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk DNS Challenge SSL)").Trim()
+        } else {
+            $SSL_SCENARIO = "sync"
+        }
     }
 
     # ─── BAGIAN B: Database & Cache (Data Storage) ──────────────────────────────────
@@ -825,44 +855,57 @@ if [ "$IS_ABSENTA" = "True" ]; then
     echo "PM2 startup systemd berhasil didaftarkan untuk Project Absenta."
 
     # Configure Caddyfile
-    if [ "$DEPLOY_SCENARIO" != "local" ]; then
-        # Deteksi apakah domain target merupakan IP address atau Domain
-        if [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            CADDY_HOSTS="$TARGET_DOMAIN, http://:80"
-        else
-            if [ "$DEPLOY_SCENARIO" = "hybrid" ]; then
-                CADDY_HOSTS="$TARGET_DOMAIN, http://:80"
-            elif [ ! -z "$CF_TOKEN" ]; then
-                CADDY_HOSTS="$TARGET_DOMAIN, *.$TARGET_DOMAIN"
-            else
-                CADDY_HOSTS="$TARGET_DOMAIN"
-            fi
+    if [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [ -z "$TARGET_DOMAIN" ]; then
+        CADDY_HOSTS=":80"
+        if [ ! -z "$TARGET_DOMAIN" ]; then
+            CADDY_HOSTS="http://$TARGET_DOMAIN, http://:80"
+        fi
+        cat << EOF_CAD > /tmp/Caddyfile
+$CADDY_HOSTS {
+    reverse_proxy /api/* localhost:$B_PORT
+    reverse_proxy /socket.io/* localhost:$B_PORT
+    reverse_proxy /* localhost:$F_PORT
+    encode gzip zstd
+}
+EOF_CAD
+    else
+        HOST_HTTP="http://$TARGET_DOMAIN, http://:80"
+        HOST_HTTPS="https://$TARGET_DOMAIN"
+        if [ "$SSL_SCENARIO" = "cloudflare" ] || [ "$SSL_SCENARIO" = "sync" ] || [ "$SSL_SCENARIO" = "internal" ]; then
+            HOST_HTTP="http://$TARGET_DOMAIN, http://*.$TARGET_DOMAIN, http://:80"
+            HOST_HTTPS="https://$TARGET_DOMAIN, https://*.$TARGET_DOMAIN"
         fi
 
-        echo "http://`$CADDY_HOSTS {" > /tmp/Caddyfile
-        echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
-        echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
-        echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
-        echo "    encode gzip zstd" >> /tmp/Caddyfile
-        echo "}" >> /tmp/Caddyfile
-        echo "" >> /tmp/Caddyfile
-        echo "https://`$CADDY_HOSTS {" >> /tmp/Caddyfile
-        echo "    reverse_proxy /api/* localhost:$B_PORT" >> /tmp/Caddyfile
-        echo "    reverse_proxy /socket.io/* localhost:$B_PORT" >> /tmp/Caddyfile
-        echo "    reverse_proxy /* localhost:$F_PORT" >> /tmp/Caddyfile
-        echo "    encode gzip zstd" >> /tmp/Caddyfile
-        if [ -f /etc/caddy/ssl/cert.pem ]; then
+        cat << EOF_CAD > /tmp/Caddyfile
+$HOST_HTTP {
+    reverse_proxy /api/* localhost:$B_PORT
+    reverse_proxy /socket.io/* localhost:$B_PORT
+    reverse_proxy /* localhost:$F_PORT
+    encode gzip zstd
+}
+
+$HOST_HTTPS {
+    reverse_proxy /api/* localhost:$B_PORT
+    reverse_proxy /socket.io/* localhost:$B_PORT
+    reverse_proxy /* localhost:$F_PORT
+    encode gzip zstd
+EOF_CAD
+        if [ "$SSL_SCENARIO" = "sync" ] || [ -f /etc/caddy/ssl/cert.pem ]; then
             echo "    tls /etc/caddy/ssl/cert.pem /etc/caddy/ssl/key.pem" >> /tmp/Caddyfile
-        elif [ ! -z "$CF_TOKEN" ]; then
-            echo "    tls {" >> /tmp/Caddyfile
-            echo "        dns cloudflare $CF_TOKEN" >> /tmp/Caddyfile
-            echo "    }" >> /tmp/Caddyfile
+        elif [ "$SSL_SCENARIO" = "cloudflare" ] && [ ! -z "$CF_TOKEN" ]; then
+            cat << EOF_CF >> /tmp/Caddyfile
+    tls {
+        dns cloudflare $CF_TOKEN
+    }
+EOF_CF
+        elif [ "$SSL_SCENARIO" = "letsencrypt" ]; then
+            echo "    # Public Let's Encrypt / ZeroSSL automated HTTP-01 certificate" >> /tmp/Caddyfile
+        else
+            echo "    tls internal" >> /tmp/Caddyfile
         fi
         echo "}" >> /tmp/Caddyfile
-        echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
-    else
-        echo "Skenario Lokal terdeteksi. Melewati konfigurasi Caddy Reverse Proxy."
     fi
+    echo '$SUDO_PASS' | sudo -S cp /tmp/Caddyfile /etc/caddy/Caddyfile
 
 elif [ "$IS_SERVER_LISENSI" = "True" ]; then
     # deployment Server Lisensi

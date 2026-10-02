@@ -249,11 +249,11 @@ function handleStreamInstall(req, res, installParams) {
             '-TargetUser', installParams.vpsUser || 'asepsuryadi',
             '-KeyPath', keyPath,
             '-SudoPass', installParams.vpsSudoPass || '',
-            '-DeployScenario', installParams.deployScenario || 'saas',
+            '-DeployScenario', installParams.deployScenario || 'onpremise',
             '-TargetDomain', installParams.targetDomain || '',
             '-BackendPort', installParams.backendPort || '3003',
             '-FrontendPort', installParams.frontendPort || '5175',
-            '-sslScenario', installParams.sslScenario || 'internal',
+            '-sslScenario', installParams.sslScenario || (installParams.deployScenario === 'saas-public' ? 'letsencrypt' : 'sync'),
             '-cfToken', installParams.cfToken || '',
             '-DbUrl', installParams.dbUrl || '',
             '-InstallPostgres', installParams.postgresMode || 'Y',
@@ -276,7 +276,7 @@ function handleStreamInstall(req, res, installParams) {
             '-BackendPort', installParams.backendPort || '3003',
             '-FrontendPort', installParams.frontendPort || '5175',
             '-ServerDomain', installParams.targetDomain || 'localhost',
-            '-DeployMode', installParams.deployScenario || 'local',
+            '-DeployScenario', installParams.deployScenario || 'onpremise',
             '-NodeName', installParams.schoolName || 'absenta-node-1'
         ];
     }
@@ -886,6 +886,99 @@ function handleStreamUpdateDomain(req, res, parsedUrl) {
     });
 }
 
+function handleStreamFactoryReset(req, res, parsedUrl) {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    const presetId = parsedUrl.searchParams.get('id');
+    const presets = getPresets();
+    const preset = presetId ? presets.find(p => p.id === presetId) : null;
+
+    const targetIp = preset ? preset.vpsIp : (parsedUrl.searchParams.get('ip') || '');
+    const targetUser = preset ? (preset.vpsUser || 'asep') : (parsedUrl.searchParams.get('user') || 'asep');
+    const rawKey = preset ? (preset.vpsKeyPath || preset.sshKeyChoice || 'nginxonly.pem') : (parsedUrl.searchParams.get('key') || 'nginxonly.pem');
+    const sudoPass = preset ? (preset.vpsSudoPass || '1') : (parsedUrl.searchParams.get('sudoPass') || '1');
+    const purgeMode = parsedUrl.searchParams.get('mode') || '1'; // '1' = Standar, '2' = Total Wipe
+
+    if (!targetIp) {
+        res.write(`data: [PURGE_FAILED] Target IP tidak boleh kosong.\n\n`);
+        res.end();
+        return;
+    }
+
+    const processKey = presetId || `purge-${targetIp}`;
+    cancelProcess(processKey);
+
+    let keyPath;
+    try {
+        keyPath = createSafeKeyFile(rawKey);
+    } catch (err) {
+        res.write(`data: [PURGE_FAILED] Gagal membaca SSH key: ${err.message}\n\n`);
+        res.end();
+        return;
+    }
+
+    const psArgs = [
+        '-ExecutionPolicy', 'Bypass',
+        '-File', path.join(ROOT_DIR, 'easy-purge.ps1'),
+        '-Silent',
+        '-TargetIP', targetIp,
+        '-TargetUser', targetUser,
+        '-KeyPath', keyPath,
+        '-SudoPass', sudoPass,
+        '-PurgeMode', purgeMode
+    ];
+
+    const modeLabel = purgeMode === '2' ? '⚠️ Total Wipe (/var/www dibersihkan penuh)' : 'Standard Absenta Purge';
+    const logMsg = `[START] Memulai Factory Reset VPS (${targetUser}@${targetIp})\nMode: ${modeLabel}\nMenghapus: Caddy, WireGuard, Node.js, PM2, Postgres, Redis, MinIO, SSL configs\nCommand: powershell.exe ${psArgs.join(' ')}\n\n`;
+    res.write(`data: ${logMsg.replace(/\n/g, '\ndata: ')}\n\n`);
+
+    const heartbeat = setInterval(() => {
+        res.write(': heartbeat\n\n');
+    }, 10000);
+
+    const proc = spawn('powershell.exe', psArgs);
+    activeProcesses.set(processKey, proc);
+
+    proc.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    proc.stderr.on('data', (data) => {
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+            if (line.trim()) {
+                res.write(`data: [WARN] ${line.trim()}\n\n`);
+            }
+        });
+    });
+
+    proc.on('close', (code) => {
+        clearInterval(heartbeat);
+        activeProcesses.delete(processKey);
+        if (keyPath) cleanupSafeKey(keyPath);
+        if (code === 0) {
+            res.write(`data: [PURGE_COMPLETE] Factory Reset VPS selesai! Server telah kembali ke status kertas kosong.\n\n`);
+        } else {
+            res.write(`data: [PURGE_FAILED] Proses selesai dengan kode error: ${code}\n\n`);
+        }
+        res.end();
+    });
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        if (keyPath) cleanupSafeKey(keyPath);
+    });
+}
+
 module.exports = {
     handleStreamQuickUpdate,
     handleStreamSeedWilayah,
@@ -897,5 +990,7 @@ module.exports = {
     handleStreamHardening,
     handleStreamTuning,
     handleStreamUpdateDomain,
+    handleStreamFactoryReset,
     cancelProcess
 };
+

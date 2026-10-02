@@ -4,7 +4,8 @@
 param (
     [string]$BackendPort = "3003",
     [string]$FrontendPort = "5175",
-    [string]$DeployMode = "", # "saas" or "local"
+    [string]$DeployScenario = "onpremise", # "saas-public", "saas-local", or "onpremise"
+    [string]$DeployMode = "", # legacy alias parameter if any
     [string]$ServerDomain = "", # e.g. "api.absenta.id" or "192.168.1.10"
     [string]$NodeName = "",
     [switch]$Silent = $false
@@ -36,8 +37,8 @@ function Install-CaddyLocal {
         [string]$BPort,
         [string]$SSLEmail = "",
         [string]$CFToken = "",
-        [string]$DeployScenario = "hybrid",
-        [string]$SSLScenario = "internal"
+        [string]$DeployScenario = "onpremise",
+        [string]$SSLScenario = "sync"
     )
     
     Show-Header "Setup Reverse Proxy Lokal (Caddy)"
@@ -178,13 +179,13 @@ try {
     }
 
     $hosts = $Domain
-    if ($DeployScenario -eq "saas" -and ($SSLScenario -eq "cloudflare" -and -not [string]::IsNullOrWhiteSpace($CFToken))) {
+    if (($DeployScenario -eq "saas-public" -or $DeployScenario -eq "saas-local") -and ($SSLScenario -eq "cloudflare" -and -not [string]::IsNullOrWhiteSpace($CFToken))) {
         $hosts = "$Domain, *.$Domain"
     }
 
     $caddyfileContent = ""
 
-    if ($DeployScenario -eq "hybrid") {
+    if ($DeployScenario -eq "onpremise") {
         # Blok HTTP Port 80 khusus untuk menerima traffic lokal IP & tunnel (tanpa TLS)
         $caddyfileContent += @"
 http://:80 {
@@ -327,7 +328,7 @@ if (-not $Silent) { Read-Host "Tekan [ENTER] untuk melanjutkan ke konfigurasi sk
 $LicenseServer = "https://api.absenta.id"
 $finalDomain = "your-domain.id"
 $finalScheme = "https"
-$deployScenario = "saas" # default
+$deployScenario = "onpremise" # default
 $nodeName = "absenta-node-1"
 $dbUrl = "postgresql://postgres:123123123@localhost:5432/absensi"
 $existingLicense = ""
@@ -363,18 +364,25 @@ if (-not $Silent) {
         # ─── BAGIAN A: Jaringan, Port & SSL (Network & SSL) ──────────────────────────
         Write-Host "[BAGIAN A: Jaringan, Port & SSL]" -ForegroundColor Cyan
         Write-Host "Pilih Skenario Deployment:" -ForegroundColor White
-        Write-Host " 1. SaaS / Cloud (Akses via Domain Publik, e.g. https://app.absenta.id)"
-        Write-Host " 2. Hybrid (Lokal Sekolah + Reverse Proxy VPS via Caddy/Nginx)"
-        $scenarioChoice = Read-Host "Pilih [1/2] (Default: 1)"
+        Write-Host " 1. saas-public : Cloud VPS Multi-Tenant (Akses publik langsung, contoh: https://app.absenta.id)"
+        Write-Host " 2. saas-local  : Server Rumah/Kantor Multi-Tenant (Online via EasyTunnel WireGuard)"
+        Write-Host " 3. onpremise   : Dedicated 1 Sekolah (Hybrid: Akses cepat LAN Lokal + Online via EasyTunnel)"
+        $scenarioChoice = Read-Host "Pilih [1-3] (Default: 3)"
         
-        $deployScenario = "saas"
-        if ($scenarioChoice -eq "2") { 
-            $deployScenario = "hybrid"
-            $finalScheme = "https" # Biasanya VPS pakai SSL
+        $deployScenario = "onpremise"
+        if ($scenarioChoice -eq "1") { 
+            $deployScenario = "saas-public"
+            $finalScheme = "https"
+        } elseif ($scenarioChoice -eq "2") {
+            $deployScenario = "saas-local"
+            $finalScheme = "https"
+        } else {
+            $deployScenario = "onpremise"
+            $finalScheme = "https"
         }
 
         # 1. Domain / Host
-        if ($deployScenario -eq "saas") {
+        if ($deployScenario -eq "saas-public" -or $deployScenario -eq "saas-local") {
             $inputDomain = Read-Host "Masukkan Domain Utama (misal: platform.com) [$finalDomain]"
             if (-not [string]::IsNullOrWhiteSpace($inputDomain)) { $finalDomain = $inputDomain }
         } else {
@@ -385,9 +393,9 @@ if (-not $Silent) {
         $inputScheme = Read-Host "Gunakan Protokol (http/https) [$finalScheme]"
         if (-not [string]::IsNullOrWhiteSpace($inputScheme)) { $finalScheme = $inputScheme }
         
-        # 3. LAN IP (Untuk akses lokal di skenario Hybrid)
-        if ($deployScenario -eq "hybrid") {
-            $lanIp = Read-Host "Masukkan IP LAN Server (akses bypass VPS) [192.168.1.10]"
+        # 3. LAN IP (Untuk akses lokal di skenario onpremise)
+        if ($deployScenario -eq "onpremise") {
+            $lanIp = Read-Host "Masukkan IP LAN Server (akses bypass EasyTunnel) [192.168.1.10]"
             if ([string]::IsNullOrWhiteSpace($lanIp)) { $lanIp = "192.168.1.10" }
         } else {
             $lanIp = $finalDomain
@@ -430,53 +438,49 @@ if (-not $Silent) {
         Write-Host "`n[BAGIAN C: SSL Configuration]" -ForegroundColor Cyan
         $sslEmail = ""
         $cfToken = ""
-        $sslScenario = "internal"
-        if ($deployScenario -eq "hybrid" -or $deployScenario -eq "saas") {
-            if ($deployScenario -eq "saas") {
-                Write-Host "Opsi SSL SaaS (Memerlukan Cloudflare DNS Challenge untuk Wildcard SSL):" -ForegroundColor Gray
-                Write-Host " 1. Cloudflare DNS Challenge (Sertifikat Resmi Wildcard - Rekomendasi)"
-                Write-Host " 2. SSL Let's Encrypt Standar (Hanya Domain Utama - Tanpa Subdomain)"
-                $sslChoice = Read-Host "Pilih [1/2] (Default: 1)"
-                
-                if ($sslChoice -eq "2") {
-                    $sslScenario = "letsencrypt"
-                    $inputEmail = Read-Host "Email untuk SSL Let's Encrypt"
-                    if (-not [string]::IsNullOrWhiteSpace($inputEmail)) { $sslEmail = $inputEmail }
+        $sslScenario = "sync"
+        if ($deployScenario -eq "saas-public") {
+            Write-Host "Opsi SSL SaaS Cloud VPS:" -ForegroundColor Gray
+            Write-Host " 1. Let's Encrypt Otomatis (HTTP-01, default terpercaya gembok hijau)"
+            Write-Host " 2. Cloudflare DNS Challenge (Wajib untuk Wildcard *.domain.com)"
+            $sslChoice = Read-Host "Pilih [1/2] (Default: 1)"
+            
+            if ($sslChoice -eq "2") {
+                $sslScenario = "cloudflare"
+                $cfPrompt = "Masukkan Cloudflare API Token Anda"
+                if ($existingCFToken) { $cfPrompt += " (Kosongkan untuk menggunakan yang sudah ada: $existingCFToken)" }
+                $inputCF = Read-Host $cfPrompt
+                if ([string]::IsNullOrWhiteSpace($inputCF)) {
+                    $cfToken = $existingCFToken
                 } else {
-                    $sslScenario = "cloudflare"
-                    $cfPrompt = "Masukkan Cloudflare API Token Anda"
-                    if ($existingCFToken) { $cfPrompt += " (Kosongkan untuk menggunakan yang sudah ada: $existingCFToken)" }
-                    $inputCF = Read-Host $cfPrompt
-                    if ([string]::IsNullOrWhiteSpace($inputCF)) {
-                        $cfToken = $existingCFToken
-                    } else {
-                        $cfToken = $inputCF.Trim()
-                    }
+                    $cfToken = $inputCF.Trim()
                 }
             } else {
-                Write-Host "Opsi SSL Lokal (Hybrid):" -ForegroundColor Gray
-                Write-Host " 1. SSL Internal (Bawaan Caddy - CA Lokal)"
-                Write-Host " 2. Sinkronisasi Sertifikat dari Server Lisensi (Otomatis via VPN - Rekomendasi)"
-                Write-Host " 3. Cloudflare DNS Challenge (Sertifikat Resmi - Manual)"
-                $sslChoice = Read-Host "Pilih [1-3] (Default: 2)"
-                
-                if ($sslChoice -eq "1") {
-                    $sslScenario = "internal"
-                    $inputEmail = Read-Host "Email untuk SSL Let's Encrypt (Kosongkan untuk SSL Internal)"
-                    if (-not [string]::IsNullOrWhiteSpace($inputEmail)) { $sslEmail = $inputEmail }
-                } elseif ($sslChoice -eq "3") {
-                    $sslScenario = "cloudflare"
-                    $cfPrompt = "Masukkan Cloudflare API Token Anda"
-                    if ($existingCFToken) { $cfPrompt += " (Kosongkan untuk menggunakan yang sudah ada: $existingCFToken)" }
-                    $inputCF = Read-Host $cfPrompt
-                    if ([string]::IsNullOrWhiteSpace($inputCF)) {
-                        $cfToken = $existingCFToken
-                    } else {
-                        $cfToken = $inputCF.Trim()
-                    }
+                $sslScenario = "letsencrypt"
+            }
+        } else {
+            Write-Host "Opsi SSL On-Premise / SaaS Local:" -ForegroundColor Gray
+            Write-Host " 1. Sinkronisasi Sertifikat dari Server Lisensi (Otomatis via EasyTunnel - Rekomendasi)"
+            Write-Host " 2. SSL Internal (Bawaan Caddy - CA Lokal)"
+            Write-Host " 3. Cloudflare DNS Challenge (Sertifikat Resmi - Manual)"
+            $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
+            
+            if ($sslChoice -eq "2") {
+                $sslScenario = "internal"
+                $inputEmail = Read-Host "Email untuk SSL Let's Encrypt (Kosongkan untuk SSL Internal)"
+                if (-not [string]::IsNullOrWhiteSpace($inputEmail)) { $sslEmail = $inputEmail }
+            } elseif ($sslChoice -eq "3") {
+                $sslScenario = "cloudflare"
+                $cfPrompt = "Masukkan Cloudflare API Token Anda"
+                if ($existingCFToken) { $cfPrompt += " (Kosongkan untuk menggunakan yang sudah ada: $existingCFToken)" }
+                $inputCF = Read-Host $cfPrompt
+                if ([string]::IsNullOrWhiteSpace($inputCF)) {
+                    $cfToken = $existingCFToken
                 } else {
-                    $sslScenario = "sync"
+                    $cfToken = $inputCF.Trim()
                 }
+            } else {
+                $sslScenario = "sync"
             }
         }
 
@@ -484,15 +488,22 @@ if (-not $Silent) {
         Write-Host "`n[BAGIAN D: Lisensi & Tunnel]" -ForegroundColor Cyan
         $licPrompt = "Masukkan Kunci Lisensi"
         if ($existingLicense) { 
-            $licPrompt += " (Ketik 'new' jika ingin registrasi baru) [$existingLicense]" 
+            $licPrompt += " (Ketik 'new' untuk daftar baru, 'migrate' untuk migrasi SaaS) [$existingLicense]" 
         } else {
-            $licPrompt += " (Kosongkan jika ingin registrasi baru)"
+            $licPrompt += " (Ketik 'new' untuk daftar baru, 'migrate' untuk migrasi SaaS)"
         }
         $inputLic = (Read-Host $licPrompt).Trim()
+        $licMode = ""
         if ($inputLic -eq 'new' -or $inputLic -eq 'NEW') {
             $inputLic = ""
             $existingLicense = ""
+            $licMode = "new"
+        } elseif ($inputLic -eq 'migrate' -or $inputLic -eq 'MIGRATE') {
+            $inputLic = ""
+            $existingLicense = ""
+            $licMode = "migrate"
         }
+
         if (-not [string]::IsNullOrWhiteSpace($inputLic)) { 
             $licenseKey = $inputLic
         } else { 
@@ -500,8 +511,115 @@ if (-not $Silent) {
                 $licenseKey = $existingLicense
             } else {
                 $licenseKey = "" 
-                $requestNew = Read-Host "Belum punya lisensi? Ingin registrasi sekarang? [y/N]"
-                if ($requestNew -eq 'y' -or $requestNew -eq 'Y') {
+                if (-not $licMode) {
+                    Write-Host "`nPilihan Aktivasi Lisensi Server:" -ForegroundColor Cyan
+                    Write-Host " 1) Registrasi Baru (Gratis - Sekolah Baru)" -ForegroundColor Gray
+                    Write-Host " 2) Klaim / Migrasi dari Cloud SaaS (Verifikasi OTP WhatsApp)" -ForegroundColor Gray
+                    Write-Host " 3) Lewati / Batal" -ForegroundColor Gray
+                    $licChoice = Read-Host "Pilih opsi [1/2/3] (Default: 1)"
+                    if ($licChoice -eq '2') {
+                        $licMode = "migrate"
+                    } elseif ($licChoice -eq '3') {
+                        $licMode = "skip"
+                    } else {
+                        $licMode = "new"
+                    }
+                }
+
+                if ($licMode -eq "migrate") {
+                    Write-Host "`n[MIGRASI DARI CLOUD SAAS KE SERVER ON-PREMISE]" -ForegroundColor Cyan
+                    Write-Host "Fitur ini mengalihkan subdomain sekolah dari SaaS ke server fisik on-premise ini via verifikasi OTP WhatsApp." -ForegroundColor DarkGray
+                    
+                    $migSuccess = $false
+                    while (-not $migSuccess) {
+                        $slugInput = (Read-Host "Masukkan Subdomain sekolah di Cloud SaaS (contoh 'smkn1', atau ketik 'exit' untuk batal)").Trim().ToLower()
+                        if ([string]::IsNullOrWhiteSpace($slugInput)) {
+                            Write-Host "Subdomain wajib diisi!" -ForegroundColor Red
+                            continue
+                        }
+                        if ($slugInput -eq 'exit') {
+                            Write-Host "Migrasi dibatalkan." -ForegroundColor Yellow
+                            break
+                        }
+
+                        if ($slugInput.EndsWith(".absenta.id")) {
+                            $slugInput = $slugInput.Substring(0, $slugInput.Length - ".absenta.id".Length)
+                        }
+
+                        Write-Host "Memeriksa subdomain '$slugInput.absenta.id' dan mengirimkan kode OTP ke WhatsApp operator..." -ForegroundColor Cyan
+
+                        try {
+                            $reqOtpBody = @{ requested_slug = $slugInput }
+                            $otpRes = Invoke-RestMethod -Uri "$LicenseServer/api/license/request-migration-otp" -Method Post -Body ($reqOtpBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 15
+
+                            if ($otpRes.success) {
+                                Write-Host "[OK] $($otpRes.message)" -ForegroundColor Green
+                                Write-Host "Kode OTP telah dikirim ke WhatsApp: $($otpRes.masked_phone) ($($otpRes.school_name))" -ForegroundColor Cyan
+
+                                $otpVerified = $false
+                                while (-not $otpVerified) {
+                                    $otpCode = (Read-Host "Masukkan 6 Digit Kode OTP WhatsApp (atau ketik 'ulang' / 'batal')").Trim()
+                                    if ($otpCode -eq 'batal') { break }
+                                    if ($otpCode -eq 'ulang') {
+                                        $otpRes = Invoke-RestMethod -Uri "$LicenseServer/api/license/request-migration-otp" -Method Post -Body ($reqOtpBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 15
+                                        Write-Host "Kode baru dikirimkan ke $($otpRes.masked_phone)." -ForegroundColor Yellow
+                                        continue
+                                    }
+                                    if ($otpCode.Length -lt 6) {
+                                        Write-Host "Kode OTP harus 6 digit!" -ForegroundColor Red
+                                        continue
+                                    }
+
+                                    Write-Host "Memverifikasi OTP dan mengalihkan routing..." -ForegroundColor Cyan
+                                    try {
+                                        $confirmBody = @{
+                                            requested_slug = $slugInput
+                                            otp = $otpCode
+                                        }
+                                        $confirmRes = Invoke-RestMethod -Uri "$LicenseServer/api/license/confirm-migration-otp" -Method Post -Body ($confirmBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 20
+
+                                        if ($confirmRes.success) {
+                                            $licenseKey = $confirmRes.license_key
+                                            $deployScenario = "onpremise"
+                                            $finalDomain = "$slugInput.absenta.id"
+                                            Write-Host "`n🎉 SUKSES! Migrasi subdomain ke On-Premise Berhasil!" -ForegroundColor Green
+                                            Write-Host "Lisensi Server Fisik (Gratis/Aktif): $licenseKey" -ForegroundColor Green
+                                            Write-Host "Domain Ditautkan: $finalDomain" -ForegroundColor Green
+                                            $otpVerified = $true
+                                            $migSuccess = $true
+                                        } else {
+                                            Write-Host "[ERROR] $($confirmRes.message)" -ForegroundColor Red
+                                        }
+                                    } catch {
+                                        $cErr = $_.Exception.Message
+                                        if ($_.Exception.Response) {
+                                            try {
+                                                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                                                $respText = $reader.ReadToEnd()
+                                                $errBody = ConvertFrom-Json $respText
+                                                if ($errBody.message) { $cErr = $errBody.message }
+                                            } catch {}
+                                        }
+                                        Write-Host "[ERROR] Gagal verifikasi OTP: $cErr" -ForegroundColor Red
+                                    }
+                                }
+                            } else {
+                                Write-Host "[ERROR] $($otpRes.message)" -ForegroundColor Red
+                            }
+                        } catch {
+                            $errMsg = $_.Exception.Message
+                            if ($_.Exception.Response) {
+                                try {
+                                    $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                                    $respText = $reader.ReadToEnd()
+                                    $errBody = ConvertFrom-Json $respText
+                                    if ($errBody.message) { $errMsg = $errBody.message }
+                                } catch {}
+                            }
+                            Write-Host "[ERROR] Gagal meminta OTP: $errMsg" -ForegroundColor Red
+                        }
+                    }
+                } elseif ($licMode -eq "new") {
                     $schoolName = ""
                     while ([string]::IsNullOrWhiteSpace($schoolName)) {
                         $schoolName = (Read-Host "Masukkan Nama Sekolah / Instansi").Trim()
@@ -553,7 +671,7 @@ if (-not $Silent) {
                                 $regSuccess = $true
                                 
                                 # Set default domain and scenario for next steps
-                                $deployScenario = "hybrid"
+                                $deployScenario = "onpremise"
                                 $finalDomain = "$slugInput.absenta.id"
                             } else {
                                 Write-Host "[ERROR] $($response.message)" -ForegroundColor Red
@@ -607,25 +725,23 @@ if (-not $Silent) {
         Write-Host " - License Key    : $(if($licenseKey){$licenseKey}else{'Tidak Ada'})"
         Write-Host " - Node Identity  : $nodeName"
         Write-Host "-----------------------------" -ForegroundColor Yellow
-        if ($deployScenario -eq "hybrid" -or $deployScenario -eq "saas") {
-            if ($deployScenario -eq "hybrid") {
-                Write-Host " INFO: Frontend akan dikonfigurasi menggunakan domain VPS ($finalDomain)" -ForegroundColor Cyan
-                Write-Host "       Backend akan mengizinkan akses dari domain VPS DAN IP Lokal ($lanIp)" -ForegroundColor Cyan
-            } else {
-                Write-Host " INFO: Skenario SaaS terpusat. Caddy akan dikonfigurasi untuk melayani domain utama ($finalDomain) dan seluruh subdomain (*.$finalDomain)" -ForegroundColor Cyan
-            }
-            $setupCaddy = Read-Host " Apakah Anda ingin memasang/update Reverse Proxy (Caddy) lokal? [Y/n]"
+        if ($deployScenario -eq "onpremise") {
+            Write-Host " INFO: Frontend akan dikonfigurasi menggunakan domain ($finalDomain)" -ForegroundColor Cyan
+            Write-Host "       Backend akan mengizinkan akses dari domain publik DAN IP Lokal ($lanIp)" -ForegroundColor Cyan
+        } else {
+            Write-Host " INFO: Skenario SaaS ($deployScenario). Caddy akan dikonfigurasi untuk melayani domain utama ($finalDomain)" -ForegroundColor Cyan
         }
+        $setupCaddy = Read-Host " Apakah Anda ingin memasang/update Reverse Proxy (Caddy) lokal? [Y/n]"
         Write-Host ""
         $confKey = Read-Host "Apakah sudah benar? [Y/n]"
         if ($confKey -eq 'n' -or $confKey -eq 'N') {
             # Loop again
         } else {
-            if ($deployScenario -eq "hybrid") {
+            if ($deployScenario -eq "onpremise") {
                 Write-Host "Menghubungi server lisensi untuk memvalidasi domain dan lisensi..." -ForegroundColor Cyan
                 try {
                     if ([string]::IsNullOrWhiteSpace($licenseKey)) {
-                        Write-Host "[ERROR] Lisensi wajib diisi untuk skenario Hybrid!" -ForegroundColor Red
+                        Write-Host "[ERROR] Lisensi wajib diisi untuk skenario onpremise!" -ForegroundColor Red
                         $confirmed = $false
                         Read-Host "Tekan [ENTER] untuk mengulangi konfigurasi..."
                         continue
@@ -679,14 +795,18 @@ if (-not $Silent) {
 } else {
     # Logic for Silent mode parameters
     if (-not [string]::IsNullOrWhiteSpace($ServerDomain)) { $finalDomain = $ServerDomain }
-    if (-not [string]::IsNullOrWhiteSpace($DeployMode)) { $deployScenario = $DeployMode }
+    if (-not [string]::IsNullOrWhiteSpace($DeployMode)) { $DeployScenario = $DeployMode }
+    $deployScenario = $DeployScenario.ToLower().Trim()
+    if ($deployScenario -ne "saas-public" -and $deployScenario -ne "saas-local" -and $deployScenario -ne "onpremise") {
+        throw "Invalid DeployScenario '$DeployScenario'. Harus salah satu dari: 'saas-public', 'saas-local', 'onpremise'."
+    }
     if (-not [string]::IsNullOrWhiteSpace($NodeName)) { $nodeName = $NodeName }
 }
 
 # ----------------------------------------------------
-# LANGKAH Tambahan: Setup Caddy (Hybrid/SaaS)
+# LANGKAH Tambahan: Setup Caddy
 # ----------------------------------------------------
-if (($deployScenario -eq "hybrid" -or $deployScenario -eq "saas") -and ($setupCaddy -eq 'y' -or $setupCaddy -eq 'Y' -or [string]::IsNullOrWhiteSpace($setupCaddy))) {
+if ($setupCaddy -eq 'y' -or $setupCaddy -eq 'Y' -or [string]::IsNullOrWhiteSpace($setupCaddy)) {
     Install-CaddyLocal -Domain $finalDomain -FPort $FrontendPort -BPort $BackendPort -SSLEmail $sslEmail -CFToken $cfToken -DeployScenario $deployScenario -SSLScenario $sslScenario
 }
 # Hitung Main Domain (misal: app.absenta.id -> absenta.id)
@@ -751,7 +871,6 @@ $proxyTargetFound = $false
 
 foreach ($line in $frontendEnv) {
     if ($line -match "^VITE_API_BASE_URL=") { 
-        # Hybrid/SaaS scenario: Use relative path '/api' to prevent CORS issues and support dynamic subdomains
         $newFrontendEnv += "VITE_API_BASE_URL=/api"
     }
     elseif ($line -match "^VITE_PROXY_TARGET=") { 
@@ -759,6 +878,10 @@ foreach ($line in $frontendEnv) {
         $proxyTargetFound = $true
     }
     elseif ($line -match "^VITE_SOCKET_URL=") { $newFrontendEnv += "VITE_SOCKET_URL=" }
+    elseif ($line -match "^VITE_DEPLOY_SCENARIO=") {
+        $newFrontendEnv += "VITE_DEPLOY_SCENARIO=$deployScenario"
+        $viteScenarioFound = $true
+    }
     elseif ($line -match "^PORT=") { 
         $newFrontendEnv += "PORT=$FrontendPort"
         $fPortFound = $true
@@ -767,6 +890,7 @@ foreach ($line in $frontendEnv) {
 }
 if (-not $fPortFound) { $newFrontendEnv += "PORT=$FrontendPort" }
 if (-not $proxyTargetFound) { $newFrontendEnv += "VITE_PROXY_TARGET=http://localhost:$BackendPort" }
+if (-not $viteScenarioFound) { $newFrontendEnv += "VITE_DEPLOY_SCENARIO=$deployScenario" }
 $newFrontendEnv | Set-Content "absenta_frontend/.env"
 
 Write-Host "Info: Konfigurasi .env berhasil diperbarui untuk target ${finalScheme}://$finalDomain." -ForegroundColor Gray

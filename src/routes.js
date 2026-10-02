@@ -5,7 +5,7 @@ const { handleGetPresets, handleSavePreset, handleDeletePreset } = require('./co
 const { handleTestConnection, handleFixPortConflict, handleCheckDomainConfig } = require('./controllers/connection.controller');
 const { handleServerHealth, handlePm2List, handleRestartService, handleFlushPm2Logs } = require('./controllers/health.controller');
 const { handleAuditTunnels, handleFixTunnels, handleCleanGhostTunnels, handleRemoveSelectedTunnel, handleWatchdogStatus } = require('./controllers/tunnel.controller');
-const { handleBrowseFile, handleTestSsh, handleTestDb, handleCreateDb, handleRegisterLicense, handleVerifyLicense, handleSaveConfig, handleTestClusterNodes } = require('./controllers/installer.controller');
+const { handleBrowseFile, handleTestSsh, handleTestDb, handleCreateDb, handleRegisterLicense, handleVerifyLicense, handleRequestMigrationOtp, handleConfirmMigrationOtp, handleSaveConfig, handleTestClusterNodes } = require('./controllers/installer.controller');
 const { handleAuditHardeningTuning } = require('./controllers/audit.controller');
 const { handleBenchmarkIops } = require('./controllers/benchmark.controller');
 
@@ -20,6 +20,7 @@ const {
     handleStreamHardening,
     handleStreamTuning,
     handleStreamUpdateDomain,
+    handleStreamFactoryReset,
     cancelProcess
 } = require('./sse');
 
@@ -40,6 +41,26 @@ function serveFile(res, filePath, contentType) {
         }
         res.writeHead(200, { 'Content-Type': contentType });
         res.end(data);
+    });
+}
+
+function serveHtmlWithIncludes(res, filePath) {
+    fs.readFile(filePath, 'utf8', (err, content) => {
+        if (err) {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('File Not Found');
+            return;
+        }
+        const assembled = content.replace(/<!--\s*@@include\(['"]([^'"]+)['"]\)\s*-->/g, (match, includePath) => {
+            const targetPath = path.join(PUBLIC_DIR, includePath);
+            if (fs.existsSync(targetPath)) {
+                return fs.readFileSync(targetPath, 'utf8');
+            }
+            console.warn(`[Template Warning] Include file not found: ${targetPath}`);
+            return match;
+        });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(assembled);
     });
 }
 
@@ -65,7 +86,7 @@ function handleRequest(req, res) {
 
     // Static Files Handler
     if (pathname === '/' || pathname === '/index.html') {
-        serveFile(res, path.join(PUBLIC_DIR, 'index.html'), 'text/html');
+        serveHtmlWithIncludes(res, path.join(PUBLIC_DIR, 'index.html'));
         return;
     }
     if (pathname.startsWith('/css/')) {
@@ -107,6 +128,8 @@ function handleRequest(req, res) {
     if (pathname === '/api/create-db' && req.method === 'POST') return handleCreateDb(req, res);
     if (pathname === '/api/register-license' && req.method === 'POST') return handleRegisterLicense(req, res);
     if (pathname === '/api/verify-license' && req.method === 'POST') return handleVerifyLicense(req, res);
+    if (pathname === '/api/request-migration-otp' && req.method === 'POST') return handleRequestMigrationOtp(req, res);
+    if (pathname === '/api/confirm-migration-otp' && req.method === 'POST') return handleConfirmMigrationOtp(req, res);
     if (pathname === '/api/save-config' && req.method === 'POST') return handleSaveConfig(req, res);
     if (pathname === '/api/test-cluster-nodes' && req.method === 'POST') return handleTestClusterNodes(req, res);
 
@@ -125,9 +148,10 @@ function handleRequest(req, res) {
     if (pathname === '/api/stream-hardening' && req.method === 'GET') return handleStreamHardening(req, res, parsedUrl);
     if (pathname === '/api/stream-tuning' && req.method === 'GET') return handleStreamTuning(req, res, parsedUrl);
     if (pathname === '/api/stream-update-domain' && req.method === 'GET') return handleStreamUpdateDomain(req, res, parsedUrl);
+    if (pathname === '/api/stream-factory-reset' && req.method === 'GET') return handleStreamFactoryReset(req, res, parsedUrl);
 
-    if (pathname === '/api/quick-update/cancel' && req.method === 'POST') {
-        const presetId = parsedUrl.searchParams.get('id');
+    if ((pathname === '/api/quick-update/cancel' || pathname === '/api/factory-reset/cancel') && req.method === 'POST') {
+        const presetId = parsedUrl.searchParams.get('id') || parsedUrl.searchParams.get('key');
         cancelProcess(presetId);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, message: 'Proses pembatalan dikirim.' }));

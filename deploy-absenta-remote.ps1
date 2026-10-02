@@ -6,7 +6,7 @@ param (
     [string]$TargetUser = "asep",
     [string]$KeyPath = "",
     [string]$SudoPass = "",
-    [string]$DeployScenario = "hybrid",
+    [string]$DeployScenario = "onpremise",
     [string]$TargetDomain = "",
     [string]$BackendPort = "3003",
     [string]$FrontendPort = "5175",
@@ -270,7 +270,10 @@ $defaultDomain = Get-EnvValue -Path $localEnvPath -Key "MAIN_DOMAIN" -DefaultVal
 $defaultNodeName = Get-EnvValue -Path $localEnvPath -Key "NODE_NAME" -DefaultValue "node-$($NEW_IP.Replace('.', '-'))"
 
 if ($Silent) {
-    $DEPLOY_SCENARIO = $DeployScenario
+    $DEPLOY_SCENARIO = $DeployScenario.ToLower().Trim()
+    if ($DEPLOY_SCENARIO -ne "saas-public" -and $DEPLOY_SCENARIO -ne "saas-local" -and $DEPLOY_SCENARIO -ne "onpremise") {
+        throw "Invalid DeployScenario '$DeployScenario'. Harus salah satu dari: 'saas-public', 'saas-local', 'onpremise'."
+    }
     $TARGET_DOMAIN = $TargetDomain
     $B_PORT = $BackendPort
     $F_PORT = $FrontendPort
@@ -286,22 +289,25 @@ if ($Silent) {
     $LICENSE_SERVER_URL = $LicenseServerUrl
     $LICENSE_KEY = $LicenseKey
 } else {
-    Write-Host "Pilih Skenario Deployment:"
-    Write-Host " 1) SaaS / Cloud (Akses via Domain Publik, contoh: https://app.absenta.id)"
-    Write-Host " 2) Hybrid (Lokal Sekolah + Caddy Proxy, contoh: http://10.10.10.163)"
-    $scenarioChoice = Read-Host "Pilih [1-2] (Default: 1)"
+    Write-Host "Pilih Skenario Deployment Absenta:"
+    Write-Host " 1) saas-public : Cloud VPS Multi-Tenant (Akses publik langsung, contoh: https://app.absenta.id)"
+    Write-Host " 2) saas-local  : Server Rumah/Kantor Multi-Tenant (Online via EasyTunnel WireGuard)"
+    Write-Host " 3) onpremise   : Dedicated 1 Sekolah (Hybrid: Akses cepat LAN Lokal + Online via EasyTunnel)"
+    $scenarioChoice = Read-Host "Pilih [1-3] (Default: 1)"
 
-    $DEPLOY_SCENARIO = "saas"
+    $DEPLOY_SCENARIO = "saas-public"
     if ($scenarioChoice -eq "2") {
-        $DEPLOY_SCENARIO = "hybrid"
+        $DEPLOY_SCENARIO = "saas-local"
+    } elseif ($scenarioChoice -eq "3") {
+        $DEPLOY_SCENARIO = "onpremise"
     }
 
-    if ($DEPLOY_SCENARIO -eq "saas") {
+    if ($DEPLOY_SCENARIO -eq "saas-public" -or $DEPLOY_SCENARIO -eq "saas-local") {
         $TARGET_DOMAIN = (Read-Host "Masukkan Domain Utama Platform SaaS [$defaultDomain]").Trim()
         if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $defaultDomain }
     } else {
         $suggestedDomain = if (-not [string]::IsNullOrWhiteSpace($defaultDomain) -and $defaultDomain -ne "localhost") { $defaultDomain } else { $NEW_IP }
-        $TARGET_DOMAIN = (Read-Host "Masukkan Domain / IP Akses Hybrid [$suggestedDomain]").Trim()
+        $TARGET_DOMAIN = (Read-Host "Masukkan Domain / IP Akses Sekolah [$suggestedDomain]").Trim()
         if ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) { $TARGET_DOMAIN = $suggestedDomain }
     }
 
@@ -310,21 +316,35 @@ if ($Silent) {
 
     $F_PORT = (Read-Host "Masukkan Port Frontend [5175]").Trim()
     if ([string]::IsNullOrWhiteSpace($F_PORT)) { $F_PORT = "5175" }
-    $SSL_SCENARIO = "1"
+    $SSL_SCENARIO = "letsencrypt"
     $CF_TOKEN = ""
-    if ($DEPLOY_SCENARIO -eq "saas" -or $DEPLOY_SCENARIO -eq "hybrid") {
-        Write-Host "`nPilih Skenario SSL Caddy lokal:" -ForegroundColor White
-        Write-Host " 1) SSL Internal / Self-Signed (Caddy local CA, default)" -ForegroundColor White
-        Write-Host " 2) Sinkronisasi Sertifikat dari Server Lisensi (Otomatis via VPN)" -ForegroundColor White
-        Write-Host " 3) Cloudflare DNS-01 Challenge (Manual)" -ForegroundColor White
+    if ($DEPLOY_SCENARIO -eq "saas-public") {
+        Write-Host "`nPilih Konfigurasi SSL untuk SaaS Cloud VPS:" -ForegroundColor White
+        Write-Host " 1) Let's Encrypt Otomatis (HTTP-01, default terpercaya gembok hijau)" -ForegroundColor White
+        Write-Host " 2) Cloudflare DNS-01 Challenge (Wajib untuk Wildcard *.domain.com)" -ForegroundColor White
+        Write-Host " 3) Sinkronisasi / Custom SSL" -ForegroundColor White
         $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
         if ($sslChoice -eq "2") {
+            $SSL_SCENARIO = "cloudflare"
+            $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL DNS Challenge)").Trim()
+        } elseif ($sslChoice -eq "3") {
             $SSL_SCENARIO = "sync"
+        } else {
+            $SSL_SCENARIO = "letsencrypt"
+        }
+    } else {
+        Write-Host "`nPilih Konfigurasi SSL untuk Server Lokal / On-Premise:" -ForegroundColor White
+        Write-Host " 1) Sinkronisasi Otomatis dari Server Lisensi via EasyTunnel (sync, rekomendasi)" -ForegroundColor White
+        Write-Host " 2) SSL Internal / Self-Signed (internal, khusus Full Offline LAN)" -ForegroundColor White
+        Write-Host " 3) Cloudflare DNS-01 Challenge (cloudflare)" -ForegroundColor White
+        $sslChoice = Read-Host "Pilih [1-3] (Default: 1)"
+        if ($sslChoice -eq "2") {
+            $SSL_SCENARIO = "internal"
         } elseif ($sslChoice -eq "3") {
             $SSL_SCENARIO = "cloudflare"
             $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL DNS Challenge)").Trim()
         } else {
-            $SSL_SCENARIO = "internal"
+            $SSL_SCENARIO = "sync"
         }
     }
 
@@ -364,94 +384,209 @@ if ($Silent) {
     if ([string]::IsNullOrWhiteSpace($LICENSE_SERVER_URL)) { $LICENSE_SERVER_URL = $defaultLicenseServerUrl }
 
     $LICENSE_KEY = ""
-    $inputLic = (Read-Host "Masukkan Kunci Lisensi Absenta (Ketik 'new' jika ingin registrasi baru) [$defaultLicenseKey]").Trim()
+    $inputLic = (Read-Host "Masukkan Kunci Lisensi Absenta (Ketik 'new' untuk daftar baru, 'migrate' untuk migrasi SaaS) [$defaultLicenseKey]").Trim()
+    $licMode = ""
     if ($inputLic -eq 'new' -or $inputLic -eq 'NEW') {
         $inputLic = ""
         $defaultLicenseKey = ""
+        $licMode = "new"
+    } elseif ($inputLic -eq 'migrate' -or $inputLic -eq 'MIGRATE') {
+        $inputLic = ""
+        $defaultLicenseKey = ""
+        $licMode = "migrate"
     }
+
     if (-not [string]::IsNullOrWhiteSpace($inputLic)) {
         $LICENSE_KEY = $inputLic
     } else {
         if ($defaultLicenseKey) {
             $LICENSE_KEY = $defaultLicenseKey
         } else {
-            $requestNew = Read-Host "Belum punya lisensi? Ingin registrasi sekarang? [y/N]"
-        if ($requestNew -eq 'y' -or $requestNew -eq 'Y') {
-            $schoolName = ""
-            while ([string]::IsNullOrWhiteSpace($schoolName)) {
-                $schoolName = (Read-Host "Masukkan Nama Sekolah / Instansi").Trim()
-                if ([string]::IsNullOrWhiteSpace($schoolName)) {
-                    Write-Host "Nama sekolah wajib diisi!" -ForegroundColor Red
+            if (-not $licMode) {
+                Write-Host "`nPilihan Aktivasi Lisensi Server:" -ForegroundColor Cyan
+                Write-Host " 1) Registrasi Baru (Gratis - Sekolah Baru)" -ForegroundColor Gray
+                Write-Host " 2) Klaim / Migrasi dari Cloud SaaS (Verifikasi OTP WhatsApp)" -ForegroundColor Gray
+                Write-Host " 3) Lewati / Batal" -ForegroundColor Gray
+                $licChoice = Read-Host "Pilih opsi [1/2/3] (Default: 1)"
+                if ($licChoice -eq '2') {
+                    $licMode = "migrate"
+                } elseif ($licChoice -eq '3') {
+                    $licMode = "skip"
+                } else {
+                    $licMode = "new"
                 }
             }
 
-            $whatsappNo = ""
-            while ([string]::IsNullOrWhiteSpace($whatsappNo)) {
-                $whatsappNo = (Read-Host "Masukkan Nomor WhatsApp Anda (untuk menerima Kunci Lisensi via WA)").Trim()
-                if ([string]::IsNullOrWhiteSpace($whatsappNo)) {
-                    Write-Host "Nomor WhatsApp wajib diisi!" -ForegroundColor Red
-                }
-            }
-
-            $regSuccess = $false
-            while (-not $regSuccess) {
-                $slugInput = (Read-Host "Masukkan Subdomain/Slug yang diinginkan (contoh 'smp4' untuk smp4.absenta.id, atau ketik 'exit' untuk batal)").Trim().ToLower()
-                if ([string]::IsNullOrWhiteSpace($slugInput)) {
-                    Write-Host "Subdomain wajib diisi!" -ForegroundColor Red
-                    continue
-                }
-                if ($slugInput -eq 'exit') {
-                    Write-Host "Registrasi dibatalkan." -ForegroundColor Yellow
-                    break
-                }
-
-                # Clean human error: strip base domain suffix if input (e.g. demo.absenta.id -> demo)
-                $tunnelBaseDomainToCheck = if ($TUNNEL_BASE_DOMAIN) { $TUNNEL_BASE_DOMAIN } else { $defaultTunnelBaseDomain }
-                $baseDomainCheck = "." + $tunnelBaseDomainToCheck.ToLower().Trim()
-                if ($slugInput.EndsWith($baseDomainCheck)) {
-                    $slugInput = $slugInput.Substring(0, $slugInput.Length - $baseDomainCheck.Length)
-                }
-
-                $licenseServerCheck = if ($LICENSE_SERVER_URL) { $LICENSE_SERVER_URL } else { $defaultLicenseServerUrl }
-                Write-Host "Menghubungi server lisensi untuk mendaftarkan subdomain '$slugInput.absenta.id'..." -ForegroundColor Cyan
-                try {
-                    $regBody = @{
-                        school_name = $schoolName
-                        wa_number = $whatsappNo
-                        requested_slug = $slugInput
+            if ($licMode -eq "migrate") {
+                Write-Host "`n[MIGRASI DARI CLOUD SAAS KE SERVER ON-PREMISE]" -ForegroundColor Cyan
+                Write-Host "Fitur ini mengalihkan subdomain sekolah dari SaaS ke server fisik on-premise ini via verifikasi OTP WhatsApp." -ForegroundColor DarkGray
+                
+                $migSuccess = $false
+                while (-not $migSuccess) {
+                    $slugInput = (Read-Host "Masukkan Subdomain sekolah di Cloud SaaS (contoh 'smkn1', atau ketik 'exit' untuk batal)").Trim().ToLower()
+                    if ([string]::IsNullOrWhiteSpace($slugInput)) {
+                        Write-Host "Subdomain wajib diisi!" -ForegroundColor Red
+                        continue
                     }
-                    $response = Invoke-RestMethod -Uri "$licenseServerCheck/api/license/request-local-free" -Method Post -Body ($regBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 15
-                    
-                    if ($response.success) {
-                        $LICENSE_KEY = $response.license_key
-                        Write-Host "Registrasi Berhasil!" -ForegroundColor Green
-                        Write-Host "Lisensi Anda: $LICENSE_KEY" -ForegroundColor Green
-                        Write-Host "[INFO] Kunci Lisensi dan rincian domain telah dikirimkan ke WhatsApp Anda ($whatsappNo). Silakan cek pesan masuk Anda." -ForegroundColor Green
-                        $regSuccess = $true
+                    if ($slugInput -eq 'exit') {
+                        Write-Host "Migrasi dibatalkan." -ForegroundColor Yellow
+                        break
+                    }
+
+                    if ($slugInput.EndsWith(".absenta.id")) {
+                        $slugInput = $slugInput.Substring(0, $slugInput.Length - ".absenta.id".Length)
+                    }
+
+                    $licenseServerCheck = if ($LICENSE_SERVER_URL) { $LICENSE_SERVER_URL } else { $defaultLicenseServerUrl }
+                    Write-Host "Memeriksa subdomain '$slugInput.absenta.id' dan mengirimkan kode OTP ke WhatsApp operator..." -ForegroundColor Cyan
+
+                    try {
+                        $reqOtpBody = @{ requested_slug = $slugInput }
+                        $otpRes = Invoke-RestMethod -Uri "$licenseServerCheck/api/license/request-migration-otp" -Method Post -Body ($reqOtpBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 15
+
+                        if ($otpRes.success) {
+                            Write-Host "[OK] $($otpRes.message)" -ForegroundColor Green
+                            Write-Host "Kode OTP telah dikirim ke WhatsApp: $($otpRes.masked_phone) ($($otpRes.school_name))" -ForegroundColor Cyan
+
+                            $otpVerified = $false
+                            while (-not $otpVerified) {
+                                $otpCode = (Read-Host "Masukkan 6 Digit Kode OTP WhatsApp (atau ketik 'ulang' / 'batal')").Trim()
+                                if ($otpCode -eq 'batal') { break }
+                                if ($otpCode -eq 'ulang') {
+                                    $otpRes = Invoke-RestMethod -Uri "$licenseServerCheck/api/license/request-migration-otp" -Method Post -Body ($reqOtpBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 15
+                                    Write-Host "Kode baru dikirimkan ke $($otpRes.masked_phone)." -ForegroundColor Yellow
+                                    continue
+                                }
+                                if ($otpCode.Length -lt 6) {
+                                    Write-Host "Kode OTP harus 6 digit!" -ForegroundColor Red
+                                    continue
+                                }
+
+                                Write-Host "Memverifikasi OTP dan mengalihkan routing..." -ForegroundColor Cyan
+                                try {
+                                    $confirmBody = @{
+                                        requested_slug = $slugInput
+                                        otp = $otpCode
+                                    }
+                                    $confirmRes = Invoke-RestMethod -Uri "$licenseServerCheck/api/license/confirm-migration-otp" -Method Post -Body ($confirmBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 20
+
+                                    if ($confirmRes.success) {
+                                        $LICENSE_KEY = $confirmRes.license_key
+                                        $DEPLOY_SCENARIO = "onpremise"
+                                        $TARGET_DOMAIN = $confirmRes.domain
+                                        Write-Host "`n🎉 SUKSES! Migrasi subdomain ke On-Premise Berhasil!" -ForegroundColor Green
+                                        Write-Host "Lisensi Server Fisik (Gratis/Aktif): $LICENSE_KEY" -ForegroundColor Green
+                                        Write-Host "Domain Ditautkan: $TARGET_DOMAIN" -ForegroundColor Green
+                                        $otpVerified = $true
+                                        $migSuccess = $true
+                                    } else {
+                                        Write-Host "[ERROR] $($confirmRes.message)" -ForegroundColor Red
+                                    }
+                                } catch {
+                                    $cErr = $_.Exception.Message
+                                    if ($_.Exception.Response) {
+                                        try {
+                                            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                                            $respText = $reader.ReadToEnd()
+                                            $errBody = ConvertFrom-Json $respText
+                                            if ($errBody.message) { $cErr = $errBody.message }
+                                        } catch {}
+                                    }
+                                    Write-Host "[ERROR] Gagal verifikasi OTP: $cErr" -ForegroundColor Red
+                                }
+                            }
+                        } else {
+                            Write-Host "[ERROR] $($otpRes.message)" -ForegroundColor Red
+                        }
+                    } catch {
+                        $errMsg = $_.Exception.Message
+                        if ($_.Exception.Response) {
+                            try {
+                                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                                $respText = $reader.ReadToEnd()
+                                $errBody = ConvertFrom-Json $respText
+                                if ($errBody.message) { $errMsg = $errBody.message }
+                            } catch {}
+                        }
+                        Write-Host "[ERROR] Gagal meminta OTP: $errMsg" -ForegroundColor Red
+                    }
+                }
+            } elseif ($licMode -eq "new") {
+                $schoolName = ""
+                while ([string]::IsNullOrWhiteSpace($schoolName)) {
+                    $schoolName = (Read-Host "Masukkan Nama Sekolah / Instansi").Trim()
+                    if ([string]::IsNullOrWhiteSpace($schoolName)) {
+                        Write-Host "Nama sekolah wajib diisi!" -ForegroundColor Red
+                    }
+                }
+
+                $whatsappNo = ""
+                while ([string]::IsNullOrWhiteSpace($whatsappNo)) {
+                    $whatsappNo = (Read-Host "Masukkan Nomor WhatsApp Anda (untuk menerima Kunci Lisensi via WA)").Trim()
+                    if ([string]::IsNullOrWhiteSpace($whatsappNo)) {
+                        Write-Host "Nomor WhatsApp wajib diisi!" -ForegroundColor Red
+                    }
+                }
+
+                $regSuccess = $false
+                while (-not $regSuccess) {
+                    $slugInput = (Read-Host "Masukkan Subdomain/Slug yang diinginkan (contoh 'smp4' untuk smp4.absenta.id, atau ketik 'exit' untuk batal)").Trim().ToLower()
+                    if ([string]::IsNullOrWhiteSpace($slugInput)) {
+                        Write-Host "Subdomain wajib diisi!" -ForegroundColor Red
+                        continue
+                    }
+                    if ($slugInput -eq 'exit') {
+                        Write-Host "Registrasi dibatalkan." -ForegroundColor Yellow
+                        break
+                    }
+
+                    # Clean human error: strip base domain suffix if input (e.g. demo.absenta.id -> demo)
+                    $tunnelBaseDomainToCheck = if ($TUNNEL_BASE_DOMAIN) { $TUNNEL_BASE_DOMAIN } else { $defaultTunnelBaseDomain }
+                    $baseDomainCheck = "." + $tunnelBaseDomainToCheck.ToLower().Trim()
+                    if ($slugInput.EndsWith($baseDomainCheck)) {
+                        $slugInput = $slugInput.Substring(0, $slugInput.Length - $baseDomainCheck.Length)
+                    }
+
+                    $licenseServerCheck = if ($LICENSE_SERVER_URL) { $LICENSE_SERVER_URL } else { $defaultLicenseServerUrl }
+                    Write-Host "Menghubungi server lisensi untuk mendaftarkan subdomain '$slugInput.absenta.id'..." -ForegroundColor Cyan
+                    try {
+                        $regBody = @{
+                            school_name = $schoolName
+                            wa_number = $whatsappNo
+                            requested_slug = $slugInput
+                        }
+                        $response = Invoke-RestMethod -Uri "$licenseServerCheck/api/license/request-local-free" -Method Post -Body ($regBody | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 15
                         
-                        # Set default domain and scenario for next steps
-                        $DEPLOY_SCENARIO = "hybrid"
-                        $TARGET_DOMAIN = "$slugInput.$TUNNEL_BASE_DOMAIN"
-                    } else {
-                        Write-Host "[ERROR] $($response.message)" -ForegroundColor Red
+                        if ($response.success) {
+                            $LICENSE_KEY = $response.license_key
+                            Write-Host "Registrasi Berhasil!" -ForegroundColor Green
+                            Write-Host "Lisensi Anda: $LICENSE_KEY" -ForegroundColor Green
+                            Write-Host "[INFO] Kunci Lisensi dan rincian domain telah dikirimkan ke WhatsApp Anda ($whatsappNo). Silakan cek pesan masuk Anda." -ForegroundColor Green
+                            $regSuccess = $true
+                            
+                            # Set default domain and scenario for next steps
+                            $DEPLOY_SCENARIO = "onpremise"
+                            $TARGET_DOMAIN = "$slugInput.$TUNNEL_BASE_DOMAIN"
+                        } else {
+                            Write-Host "[ERROR] $($response.message)" -ForegroundColor Red
+                        }
+                    } catch {
+                        $errMsg = $_.Exception.Message
+                        if ($_.Exception.Response) {
+                            try {
+                                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                                $respText = $reader.ReadToEnd()
+                                $errBody = ConvertFrom-Json $respText
+                                if ($errBody.message) { $errMsg = $errBody.message }
+                            } catch {}
+                        }
+                        Write-Host "[ERROR] Gagal melakukan registrasi: $errMsg" -ForegroundColor Red
+                        Write-Host "Silakan masukkan subdomain alternatif." -ForegroundColor Yellow
                     }
-                } catch {
-                    $errMsg = $_.Exception.Message
-                    if ($_.Exception.Response) {
-                        try {
-                            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                            $respText = $reader.ReadToEnd()
-                            $errBody = ConvertFrom-Json $respText
-                            if ($errBody.message) { $errMsg = $errBody.message }
-                        } catch {}
-                    }
-                    Write-Host "[ERROR] Gagal melakukan registrasi: $errMsg" -ForegroundColor Red
-                    Write-Host "Silakan masukkan subdomain alternatif." -ForegroundColor Yellow
                 }
             }
         }
     }
-}
 }
 
 if ($Silent) {
@@ -485,14 +620,14 @@ if ($Silent) {
     }
 }
 
-# ─── VALIDASI DOMAIN & LISENSI ONLINE (Hybrid Only) ───
-if ($DEPLOY_SCENARIO -eq "hybrid") {
+# ─── VALIDASI DOMAIN & LISENSI ONLINE (onpremise Only) ───
+if ($DEPLOY_SCENARIO -eq "onpremise") {
     Write-Host "Menghubungi server lisensi untuk memvalidasi domain dan lisensi..." -ForegroundColor Cyan
     $shouldExit = $false
     $errMessage = ""
     try {
         if ([string]::IsNullOrWhiteSpace($LICENSE_KEY)) {
-            $errMessage = "Lisensi wajib diisi untuk skenario Hybrid!"
+            $errMessage = "Lisensi wajib diisi untuk skenario onpremise!"
             $shouldExit = $true
         } else {
             $validateUrl = "$LICENSE_SERVER_URL/api/license/check/$LICENSE_KEY"
@@ -510,8 +645,14 @@ if ($DEPLOY_SCENARIO -eq "hybrid") {
                     $expectedSlug = $valRes.data.requested_slug
                     if ($expectedSlug -eq $null) { $expectedSlug = $valRes.data.requestedSlug }
                     
-                    $TARGET_DOMAIN = "$expectedSlug.$TUNNEL_BASE_DOMAIN"
-                    Write-Host "Validasi berhasil! Lisensi aktif untuk domain '$TARGET_DOMAIN'." -ForegroundColor Green
+                    if ($DEPLOY_SCENARIO -eq "saas-public" -or $DEPLOY_SCENARIO -eq "saas-local") {
+                        Write-Host "Validasi berhasil! Lisensi aktif (Node: $expectedSlug). Domain utama platform tetap '$TARGET_DOMAIN' (Mendukung Wildcard multi-tenant *.$TARGET_DOMAIN)." -ForegroundColor Green
+                    } else {
+                        if (-not [string]::IsNullOrWhiteSpace($expectedSlug)) {
+                            $TARGET_DOMAIN = "$expectedSlug.$TUNNEL_BASE_DOMAIN"
+                        }
+                        Write-Host "Validasi berhasil! Lisensi aktif untuk domain '$TARGET_DOMAIN'." -ForegroundColor Green
+                    }
                 }
             } catch {
                 if ($_.Exception.Response) {
@@ -556,8 +697,22 @@ if ($DEPLOY_SCENARIO -eq "hybrid") {
 }
 
 $SCHEME = "https"
-if ($TARGET_DOMAIN -match "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$") {
+$IS_IP_TARGET = ([string]::IsNullOrWhiteSpace($TARGET_DOMAIN) -or ($TARGET_DOMAIN -match "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$"))
+if ($IS_IP_TARGET) {
     $SCHEME = "http"
+    $CADDY_HOST_HTTP = ":80"
+    if (-not [string]::IsNullOrWhiteSpace($TARGET_DOMAIN)) {
+        $CADDY_HOST_HTTP = "http://${TARGET_DOMAIN}, :80"
+    }
+    $CADDY_HOST_HTTPS = ""
+} else {
+    if ($SSL_SCENARIO -eq "cloudflare" -or $SSL_SCENARIO -eq "sync" -or $SSL_SCENARIO -eq "internal") {
+        $CADDY_HOST_HTTP = "http://${TARGET_DOMAIN}, http://*.${TARGET_DOMAIN}, :80"
+        $CADDY_HOST_HTTPS = "https://${TARGET_DOMAIN}, https://*.${TARGET_DOMAIN}"
+    } else {
+        $CADDY_HOST_HTTP = "http://${TARGET_DOMAIN}, :80"
+        $CADDY_HOST_HTTPS = "https://${TARGET_DOMAIN}"
+    }
 }
 $BACKEND_API_URL = "${SCHEME}://${TARGET_DOMAIN}/api"
 $BACKEND_APP_URL = "${SCHEME}://${TARGET_DOMAIN}"
@@ -571,10 +726,24 @@ function Run-RemoteScript {
     param([string]$ScriptContent, [string]$KeyPath, [string]$TargetUser, [string]$TargetIP)
     $tempScript = "$env:TEMP\remote_script.sh"
     $ScriptContent = $ScriptContent -replace "`r`n", "`n"
-    [System.IO.File]::WriteAllText($tempScript, $ScriptContent)
-    & scp -i "$KeyPath" -o StrictHostKeyChecking=no "$tempScript" "${TargetUser}@${TargetIP}:/tmp/remote_script.sh"
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($tempScript, $ScriptContent, $utf8NoBom)
+    
+    & scp -i "$KeyPath" -o StrictHostKeyChecking=no -o LogLevel=ERROR "$tempScript" "${TargetUser}@${TargetIP}:/tmp/remote_script.sh" 2>&1 | ForEach-Object { Write-Host $_ }
     if ($LASTEXITCODE -ne 0) { throw "Gagal menyalin script ke VPS menggunakan SCP." }
-    & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${TargetUser}@${TargetIP}" "bash /tmp/remote_script.sh"
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & ssh -i "$KeyPath" -o StrictHostKeyChecking=no -o LogLevel=ERROR "${TargetUser}@${TargetIP}" "bash /tmp/remote_script.sh" 2>&1 | ForEach-Object {
+            $line = $_.ToString()
+            if ($line -notmatch "\[sudo\] password for") {
+                Write-Host $line
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $oldEAP
+    }
     if ($LASTEXITCODE -ne 0) { throw "Eksekusi script remote gagal dengan Exit Code $LASTEXITCODE" }
 }
 
@@ -608,6 +777,12 @@ try {
 
 $provisionScript = @"
 set -e
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+# Hentikan proses PM2 dan custom service lama jika sedang redeploy agar port bersih
+pm2 kill 2>/dev/null || true
+pkill -9 -f 'absenta-redis|redis_killer|redis-bin' 2>/dev/null || true
+
 # Cepat clear locks
 echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null || true
 echo '$SUDO_PASS' | sudo -S dpkg --configure -a 2>/dev/null || true
@@ -636,6 +811,7 @@ if ! command -v pm2 &>/dev/null; then
 fi
 
 # Install Caddy
+echo '$SUDO_PASS' | sudo -S mkdir -p /usr/share/keyrings
 if [ -f /tmp/caddy_offline ]; then
     echo '$SUDO_PASS' | sudo -S apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' -o /tmp/caddy-gpg.key
@@ -675,11 +851,38 @@ if [[ "$INSTALL_POSTGRES" =~ ^[yY]$ ]]; then
     echo "Menginstal PostgreSQL..."
     echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* 2>/dev/null || true
     echo '$SUDO_PASS' | sudo -S apt-get install -y postgresql postgresql-contrib
+
+    # Jika konfigurasi /etc/postgresql terhapus (misal setelah factory reset/purge), pulihkan paket
+    if [ ! -d /etc/postgresql ] || [ -z "`$(ls -A /etc/postgresql 2>/dev/null)" ]; then
+        echo "Memulihkan paket konfigurasi PostgreSQL yang hilang..."
+        echo '$SUDO_PASS' | sudo -S apt-get install -y --reinstall -o Dpkg::Options::="--force-confmiss" postgresql postgresql-contrib postgresql-14 2>/dev/null || true
+    fi
+
+    # Pastikan database cluster PostgreSQL ada
+    if [ -z "`$(echo '$SUDO_PASS' | sudo -S pg_lsclusters -h 2>/dev/null | tr -d '[:space:]')" ]; then
+        PG_VER=`$(ls /usr/lib/postgresql/ 2>/dev/null | sort -V | tail -n 1)
+        if [ -n "`$PG_VER" ]; then
+            echo "Membuat database cluster baru: PostgreSQL `$PG_VER main..."
+            echo '$SUDO_PASS' | sudo -S pg_createcluster "`$PG_VER" main --start || true
+        fi
+    fi
+
     echo '$SUDO_PASS' | sudo -S systemctl enable postgresql 2>/dev/null
-    echo '$SUDO_PASS' | sudo -S systemctl start postgresql
-    cd / && echo '$SUDO_PASS' | sudo -u postgres psql -c "ALTER USER $DB_USER PASSWORD '$DB_PASS';" || true
-    if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
-        echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;"
+    echo '$SUDO_PASS' | sudo -S systemctl restart postgresql
+
+    # Tunggu kesiapan koneksi PostgreSQL
+    echo "Menunggu kesiapan koneksi PostgreSQL..."
+    for i in {1..15}; do
+        if echo '$SUDO_PASS' | sudo -S -u postgres psql -c "SELECT 1;" &>/dev/null; then
+            echo "✓ Layanan PostgreSQL berhasil terhubung."
+            break
+        fi
+        sleep 1
+    done
+
+    cd / && echo '$SUDO_PASS' | sudo -S -u postgres psql -c "ALTER USER $DB_USER PASSWORD '$DB_PASS';" || true
+    if ! echo '$SUDO_PASS' | sudo -S -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
+        echo '$SUDO_PASS' | sudo -S -u postgres psql -c "CREATE DATABASE $DB_NAME;"
     fi
 
     # Terapkan tuning PostgreSQL jika file konfigurasi Absenta tersedia
@@ -701,15 +904,41 @@ if [[ "$INSTALL_REDIS" =~ ^[yY]$ ]]; then
     echo "Menginstal Redis Server..."
     echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock* 2>/dev/null || true
     echo '$SUDO_PASS' | sudo -S apt-get install -y redis-server
+
+    # Jika file /etc/redis/redis.conf terhapus (misal setelah factory reset/purge), pulihkan paket
+    if [ ! -f /etc/redis/redis.conf ]; then
+        echo "Memulihkan paket konfigurasi Redis yang hilang..."
+        echo '$SUDO_PASS' | sudo -S apt-get install -y --reinstall -o Dpkg::Options::="--force-confmiss" redis-server 2>/dev/null || true
+    fi
+
+    # Bebaskan port 6379 dari process non-systemd jika ada
+    pkill -9 -f 'absenta-redis|redis_killer|redis-bin' 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S sed -i '/^[0-9]\+$/d' /etc/redis/redis.conf 2>/dev/null || true
+
+    # Pastikan direktori log dan data redis ada dengan kepemilikan redis:redis
+    echo '$SUDO_PASS' | sudo -S mkdir -p /var/log/redis /var/lib/redis /etc/redis
+    echo '$SUDO_PASS' | sudo -S touch /var/log/redis/redis-server.log
+    echo '$SUDO_PASS' | sudo -S chown -R redis:redis /var/log/redis /var/lib/redis /etc/redis 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S chmod 755 /var/log/redis /var/lib/redis 2>/dev/null || true
+
     echo '$SUDO_PASS' | sudo -S systemctl enable redis-server 2>/dev/null
-    echo '$SUDO_PASS' | sudo -S systemctl start redis-server
+    echo '$SUDO_PASS' | sudo -S systemctl restart redis-server
+
+    # Tunggu kesiapan koneksi Redis
+    for i in {1..10}; do
+        if echo '$SUDO_PASS' | sudo -S redis-cli ping 2>/dev/null | grep -q PONG; then
+            echo "✓ Layanan Redis Server aktif dan merespons PING."
+            break
+        fi
+        sleep 1
+    done
 
     # Terapkan tuning Redis jika file konfigurasi Absenta tersedia
     if [ -f /etc/absenta/config/redis.conf ] && [ -f /etc/redis/redis.conf ]; then
         if ! grep -q "include /etc/absenta/config/redis.conf" /etc/redis/redis.conf; then
-            echo "" | echo '$SUDO_PASS' | sudo -S tee -a /etc/redis/redis.conf > /dev/null
-            echo "# Project Absenta Production Redis Tuning" | echo '$SUDO_PASS' | sudo -S tee -a /etc/redis/redis.conf > /dev/null
-            echo "include /etc/absenta/config/redis.conf" | echo '$SUDO_PASS' | sudo -S tee -a /etc/redis/redis.conf > /dev/null
+            echo '$SUDO_PASS' | sudo -S bash -c "echo '' >> /etc/redis/redis.conf"
+            echo '$SUDO_PASS' | sudo -S bash -c "echo '# Project Absenta Production Redis Tuning' >> /etc/redis/redis.conf"
+            echo '$SUDO_PASS' | sudo -S bash -c "echo 'include /etc/absenta/config/redis.conf' >> /etc/redis/redis.conf"
             echo '$SUDO_PASS' | sudo -S systemctl restart redis-server 2>/dev/null || echo '$SUDO_PASS' | sudo -S systemctl restart redis 2>/dev/null || true
             echo "✓ Konfigurasi Tuning Redis berhasil di-include ke /etc/redis/redis.conf \u0026 Redis di-restart!"
         fi
@@ -980,16 +1209,16 @@ echo '$SUDO_PASS' | sudo -S env PATH=`${PATH}:/usr/bin /usr/lib/node_modules/pm2
 echo '$SUDO_PASS' | sudo -S env PATH=`${PATH}:/usr/local/bin pm2 startup systemd -u $NEW_USER --hp /home/$NEW_USER 2>/dev/null || true
 pm2 save
 
-# # Configure Caddyfile
-if [ "$DEPLOY_SCENARIO" != "local" ]; then
-    echo "=== MENGONFIGURASI CADDY WEB SERVER & REVERSE PROXY ==="
-    echo '$SUDO_PASS' | sudo -S mkdir -p /etc/caddy /etc/caddy/ssl
-    echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /etc/caddy/ssl || true
+# Configure Caddyfile
+echo "=== MENGONFIGURASI CADDY WEB SERVER & REVERSE PROXY ==="
+echo '$SUDO_PASS' | sudo -S mkdir -p /etc/caddy /etc/caddy/ssl /var/log/caddy /var/lib/caddy
+echo '$SUDO_PASS' | sudo -S chown -R caddy:caddy /var/log/caddy /var/lib/caddy 2>/dev/null || true
+echo '$SUDO_PASS' | sudo -S chown -R ${NEW_USER}:${NEW_USER} /etc/caddy/ssl || true
 
-    # 1. Sinkronisasi SSL jika skenario sync dipilih
-    if [ "$SSL_SCENARIO" = "sync" ]; then
-        echo "Mengunduh sertifikat SSL dari Server Lisensi ($LICENSE_SERVER_URL)..."
-        cat << 'EOF_SYNC_SSL' > /tmp/sync-ssl.sh
+# 1. Sinkronisasi SSL jika skenario sync dipilih
+if [ "$SSL_SCENARIO" = "sync" ]; then
+    echo "Mengunduh sertifikat SSL dari Server Lisensi ($LICENSE_SERVER_URL)..."
+    cat << 'EOF_SYNC_SSL' > /tmp/sync-ssl.sh
 #!/bin/bash
 echo "=== SINKRONISASI SSL DARI SERVER LISENSI ==="
 mkdir -p /etc/caddy/ssl
@@ -1004,69 +1233,60 @@ fi
 rm -f /tmp/ssl_response.json
 EOF_SYNC_SSL
 
-        sed -i "s|TARGET_DOMAIN_PLACEHOLDER|$TARGET_DOMAIN|g" /tmp/sync-ssl.sh
-        sed -i "s|LICENSE_KEY_PLACEHOLDER|$LICENSE_KEY|g" /tmp/sync-ssl.sh
-        sed -i "s|LICENSE_SERVER_URL_PLACEHOLDER|$LICENSE_SERVER_URL|g" /tmp/sync-ssl.sh
-        echo '$SUDO_PASS' | sudo -S cp /tmp/sync-ssl.sh /usr/local/bin/sync-ssl.sh
-        echo '$SUDO_PASS' | sudo -S chmod +x /usr/local/bin/sync-ssl.sh
-        
-        # Jalankan sekali untuk mendapatkan sertifikat awal
-        /usr/local/bin/sync-ssl.sh || true
-        
-        # Jadwalkan cron harian
-        echo '#!/bin/bash' > /tmp/sync-ssl-cron
-        echo '/usr/local/bin/sync-ssl.sh >/dev/null 2>&1' >> /tmp/sync-ssl-cron
-        echo '$SUDO_PASS' | sudo -S cp /tmp/sync-ssl-cron /etc/cron.daily/sync-ssl
-        echo '$SUDO_PASS' | sudo -S chmod +x /etc/cron.daily/sync-ssl
-        rm -f /tmp/sync-ssl-cron
-    fi
+    sed -i "s|TARGET_DOMAIN_PLACEHOLDER|$TARGET_DOMAIN|g" /tmp/sync-ssl.sh
+    sed -i "s|LICENSE_KEY_PLACEHOLDER|$LICENSE_KEY|g" /tmp/sync-ssl.sh
+    sed -i "s|LICENSE_SERVER_URL_PLACEHOLDER|$LICENSE_SERVER_URL|g" /tmp/sync-ssl.sh
+    echo '$SUDO_PASS' | sudo -S cp /tmp/sync-ssl.sh /usr/local/bin/sync-ssl.sh
+    echo '$SUDO_PASS' | sudo -S chmod +x /usr/local/bin/sync-ssl.sh
+    
+    # Jalankan sekali untuk mendapatkan sertifikat awal
+    /usr/local/bin/sync-ssl.sh || true
+    
+    # Jadwalkan cron harian
+    echo '#!/bin/bash' > /tmp/sync-ssl-cron
+    echo '/usr/local/bin/sync-ssl.sh >/dev/null 2>&1' >> /tmp/sync-ssl-cron
+    echo '$SUDO_PASS' | sudo -S cp /tmp/sync-ssl-cron /etc/cron.daily/sync-ssl
+    echo '$SUDO_PASS' | sudo -S chmod +x /etc/cron.daily/sync-ssl
+    rm -f /tmp/sync-ssl-cron
+fi
 
-    # 2. Susun blok konfigurasi Caddy Absenta
-    if [ -z "$TARGET_DOMAIN" ] || [[ "$TARGET_DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        HOST_DEF=":80"
-        if [ ! -z "$TARGET_DOMAIN" ]; then
-            HOST_DEF="http://$TARGET_DOMAIN, http://:80"
-        fi
-        cat << EOF_CADDY > /tmp/caddy_absenta_block.conf
-$HOST_DEF {
+# 2. Susun blok konfigurasi Caddy Absenta
+cat << EOF_CADDY_HTTP > /tmp/caddy_absenta_block.conf
+$CADDY_HOST_HTTP {
     reverse_proxy /api/* 127.0.0.1:$B_PORT
     reverse_proxy /socket.io/* 127.0.0.1:$B_PORT
     reverse_proxy /absenta-storage/* 127.0.0.1:9000
     reverse_proxy 127.0.0.1:$F_PORT
     encode gzip zstd
 }
-EOF_CADDY
-    else
-        cat << EOF_CADDY > /tmp/caddy_absenta_block.conf
-http://$TARGET_DOMAIN, http://*.$TARGET_DOMAIN, http://:80 {
+EOF_CADDY_HTTP
+
+if [ ! -z "$CADDY_HOST_HTTPS" ]; then
+    cat << EOF_CADDY_HTTPS >> /tmp/caddy_absenta_block.conf
+
+$CADDY_HOST_HTTPS {
     reverse_proxy /api/* 127.0.0.1:$B_PORT
     reverse_proxy /socket.io/* 127.0.0.1:$B_PORT
     reverse_proxy /absenta-storage/* 127.0.0.1:9000
     reverse_proxy 127.0.0.1:$F_PORT
     encode gzip zstd
-}
+EOF_CADDY_HTTPS
 
-https://$TARGET_DOMAIN, https://*.$TARGET_DOMAIN {
-    reverse_proxy /api/* 127.0.0.1:$B_PORT
-    reverse_proxy /socket.io/* 127.0.0.1:$B_PORT
-    reverse_proxy /absenta-storage/* 127.0.0.1:9000
-    reverse_proxy 127.0.0.1:$F_PORT
-    encode gzip zstd
-EOF_CADDY
-
-        if [ "$SSL_SCENARIO" = "sync" ] || [ -f /etc/caddy/ssl/cert.pem ]; then
-            echo "    tls /etc/caddy/ssl/cert.pem /etc/caddy/ssl/key.pem" >> /tmp/caddy_absenta_block.conf
-        elif [ "$SSL_SCENARIO" = "cloudflare" ] && [ ! -z "$CF_TOKEN" ]; then
-            cat << EOF_CF >> /tmp/caddy_absenta_block.conf
+    if [ "$SSL_SCENARIO" = "sync" ] || [ -f /etc/caddy/ssl/cert.pem ]; then
+        echo "    tls /etc/caddy/ssl/cert.pem /etc/caddy/ssl/key.pem" >> /tmp/caddy_absenta_block.conf
+    elif [ "$SSL_SCENARIO" = "cloudflare" ] && [ ! -z "$CF_TOKEN" ]; then
+        cat << EOF_CF >> /tmp/caddy_absenta_block.conf
     tls {
         dns cloudflare $CF_TOKEN
     }
 EOF_CF
-        else
-            echo "    tls internal" >> /tmp/caddy_absenta_block.conf
-        fi
-        echo "}" >> /tmp/caddy_absenta_block.conf
+    elif [ "$SSL_SCENARIO" = "letsencrypt" ]; then
+        echo "    # Public Let's Encrypt / ZeroSSL automated HTTP-01 certificate" >> /tmp/caddy_absenta_block.conf
+    else
+        echo "    tls internal" >> /tmp/caddy_absenta_block.conf
     fi
+    echo "}" >> /tmp/caddy_absenta_block.conf
+fi
 
     # 3. Merger Caddyfile multi-app cerdas
     echo "Menggabungkan konfigurasi Caddyfile dengan Smart Multi-App Merger..."
@@ -1121,7 +1341,6 @@ with open('/tmp/caddy_base.txt', 'w') as f:
         echo '$SUDO_PASS' | sudo -S cp /etc/caddy/Caddyfile.bak /etc/caddy/Caddyfile 2>/dev/null || true
         echo '$SUDO_PASS' | sudo -S systemctl restart caddy 2>/dev/null || true
     fi
-fi
 "@
 
 Run-RemoteScript -ScriptContent $setupScript -KeyPath $SAFE_NEW_KEY -TargetUser $NEW_USER -TargetIP $NEW_IP
