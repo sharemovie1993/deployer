@@ -558,6 +558,7 @@ function updateStepUI() {
     if (currentStep === 5) {
         renderSummary();
     }
+}
 
 function nextStep() {
     if (currentStep === 1) {
