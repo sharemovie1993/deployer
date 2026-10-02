@@ -278,6 +278,11 @@ if ($Silent) {
     $B_PORT = $BackendPort
     $F_PORT = $FrontendPort
     $SSL_SCENARIO = $sslScenario
+    $isPrivateIP = ($NEW_IP -match "^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.)")
+    if ($isPrivateIP -and $SSL_SCENARIO -eq "letsencrypt") {
+        Show-Log "Deteksi IP Jaringan Lokal ($NEW_IP) -> Mengalihkan SSL Scenario dari letsencrypt ke sync (Server Lisensi Wildcard)..." "Yellow"
+        $SSL_SCENARIO = "sync"
+    }
     $CF_TOKEN = $cfToken
     $DB_URL = $DbUrl
     $INSTALL_POSTGRES = if ($InstallPostgres) { $InstallPostgres } else { if ($DbUrl.Contains("localhost") -or $DbUrl.Contains("127.0.0.1")) { "Y" } else { "N" } }
@@ -1194,6 +1199,7 @@ npx prisma generate
 npm rebuild bcrypt 2>/dev/null || true
 npx prisma db push --skip-generate || echo "Prisma DB push dilewati atau gagal."
 npx prisma db seed || echo "Prisma DB seed dilewati atau gagal."
+npx ts-node scripts/adhoc/sync-tenant-subscription.ts 2>/dev/null || echo "Sinkronisasi langganan tenant dilewati."
 npm run build
 
 # Install & Build Frontend
