@@ -85,6 +85,33 @@ function selectScenario(scenario) {
             domainTip.innerHTML = '🏫 <strong>Dedicated 1 Sekolah:</strong> Masukkan subdomain resmi sekolah ini. Jika Anda memasukkan atau meregistrasikan Serial Key di Langkah 4 nanti, kolom ini akan otomatis diselaraskan.';
         }
     }
+
+    // Dynamic Step 4 UI switching
+    const licSaasContainer = document.getElementById('container-lic-saas');
+    const licOnpremContainer = document.getElementById('container-lic-onpremise');
+    const step4Title = document.getElementById('step-4-title');
+    const step4Subtitle = document.getElementById('step-4-subtitle');
+    const badgeSaasType = document.getElementById('badge-saas-mode-type');
+    const saasLocalGatewayGroup = document.getElementById('saas-local-gateway-group');
+
+    if (scenario === 'saas-public' || scenario === 'saas-local') {
+        if (licSaasContainer) licSaasContainer.style.display = 'block';
+        if (licOnpremContainer) licOnpremContainer.style.display = 'none';
+        if (step4Title) step4Title.innerText = 'Inisialisasi Akun Super Administrator Master';
+        if (step4Subtitle) step4Subtitle.innerText = 'Konfigurasikan identitas platform master dan akun Super Admin untuk mengelola seluruh tenant sekolah.';
+        if (badgeSaasType) {
+            badgeSaasType.innerText = scenario === 'saas-public' ? 'Cloud Multi-Tenant' : 'Home-Lab Multi-Tenant';
+            badgeSaasType.className = scenario === 'saas-public' ? 'badge badge-purple' : 'badge badge-primary';
+        }
+        if (saasLocalGatewayGroup) {
+            saasLocalGatewayGroup.style.display = scenario === 'saas-local' ? 'block' : 'none';
+        }
+    } else {
+        if (licSaasContainer) licSaasContainer.style.display = 'none';
+        if (licOnpremContainer) licOnpremContainer.style.display = 'block';
+        if (step4Title) step4Title.innerText = 'Aktivasi Lisensi Server Absenta';
+        if (step4Subtitle) step4Subtitle.innerText = 'Tentukan apakah Anda sudah memiliki Serial Key atau ingin registrasi baru secara instan.';
+    }
 }
 
 function setPostgresMode(mode) {
@@ -526,9 +553,22 @@ function nextStep() {
             installConfig.redisUrl = redisUrlEl.value;
         }
     } else if (currentStep === 4) {
-        installConfig.licenseKey = document.getElementById('license-key').value;
-        installConfig.schoolName = document.getElementById('school-name').value;
-        installConfig.adminEmail = document.getElementById('admin-email').value;
+        if (installConfig.deployScenario === 'saas-public' || installConfig.deployScenario === 'saas-local') {
+            const brandInput = document.getElementById('saas-brand-name');
+            const adminEmailInput = document.getElementById('saas-admin-email');
+            const gatewayKeyInput = document.getElementById('saas-gateway-key');
+
+            installConfig.schoolName = (brandInput && brandInput.value.trim()) ? brandInput.value.trim() : 'Absenta Indonesia';
+            installConfig.adminEmail = (adminEmailInput && adminEmailInput.value.trim()) ? adminEmailInput.value.trim() : 'admin@absenta.id';
+            installConfig.licenseKey = gatewayKeyInput ? gatewayKeyInput.value.trim() : '';
+        } else {
+            const licKeyEl = document.getElementById('license-key');
+            const schoolNameEl = document.getElementById('school-name');
+            const adminEmailEl = document.getElementById('admin-email');
+            installConfig.licenseKey = licKeyEl ? licKeyEl.value.trim() : '';
+            installConfig.schoolName = schoolNameEl ? schoolNameEl.value.trim() : '';
+            installConfig.adminEmail = adminEmailEl ? adminEmailEl.value.trim() : '';
+        }
     } else if (currentStep === 5) {
         startInstallation();
         currentStep = 6;
@@ -562,6 +602,22 @@ function renderSummary() {
 
     let domainSummaryLabel = installConfig.deployScenario === 'onpremise' ? '🌐 Domain Akses Sekolah:' : '🌐 Domain Induk Platform:';
 
+    let summaryLicenseInfo = '';
+    if (installConfig.deployScenario === 'saas-public' || installConfig.deployScenario === 'saas-local') {
+        summaryLicenseInfo =
+            '<strong>🏢 Brand Platform SaaS:</strong> ' + (installConfig.schoolName || 'Absenta Indonesia') + '<br>' +
+            '<strong>👤 Super Admin Master:</strong> ' + (installConfig.adminEmail || 'admin@absenta.id') + '<br>' +
+            '<strong>🛡️ Status Lisensi:</strong> Multi-Tenant Master Host (Aktivasi lisensi tenant dikelola via Dashboard Super Admin)';
+        if (installConfig.deployScenario === 'saas-local' && installConfig.licenseKey) {
+            summaryLicenseInfo += '<br><strong>🔑 Gateway Tunnel Key:</strong> ' + installConfig.licenseKey;
+        }
+    } else {
+        summaryLicenseInfo =
+            '<strong>🏫 Lembaga/Sekolah:</strong> ' + (installConfig.schoolName || '-') + '<br>' +
+            '<strong>📧 Email Admin:</strong> ' + (installConfig.adminEmail || '-') + '<br>' +
+            '<strong>🛡️ Serial Key Lisensi:</strong> ' + (installConfig.licenseKey || 'Belum diisi (Trial Mode)');
+    }
+
     summary.innerHTML =
         '<strong>📌 Target Server:</strong> ' + installConfig.targetOS.toUpperCase() + ' (' + (installConfig.targetOS === 'linux' ? installConfig.vpsIp : 'Localhost') + ')<br>' +
         '<strong>🚀 Skenario Akses:</strong> ' + scenarioLabel + '<br>' +
@@ -570,7 +626,7 @@ function renderSummary() {
         '<strong>🕒 Zona Waktu:</strong> ' + (installConfig.defaultTimezone || 'Asia/Jakarta') + '<br>' +
         '<strong>🗄️ Database PostgreSQL:</strong> ' + (installConfig.postgresMode === 'Y' ? 'Otomatis Install Lokal' : 'Database Eksisting') + ' (' + installConfig.dbUrl + ')<br>' +
         '<strong>⚡ Redis Cache:</strong> ' + (installConfig.redisMode === 'Y' ? 'Otomatis Install Lokal di VPS' : 'Lewati / Eksternal (' + installConfig.redisUrl + ')') + '<br>' +
-        '<strong>🛡️ Serial Key Lisensi:</strong> ' + (installConfig.licenseKey || 'Belum diisi (Trial Mode)');
+        summaryLicenseInfo;
 }
 
 function startInstallation() {

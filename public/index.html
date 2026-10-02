@@ -232,23 +232,61 @@
 
             <!-- STEP 4: LISENSI APLIKASI -->
             <div class="step-panel" id="panel-4">
-                <h2>Aktivasi Lisensi Server Absenta</h2>
-                <p class="subtitle">Tentukan apakah Anda sudah memiliki Serial Key atau ingin registrasi baru secara instan.</p>
+                <h2 id="step-4-title">Aktivasi Lisensi Server Absenta</h2>
+                <p class="subtitle" id="step-4-subtitle">Tentukan apakah Anda sudah memiliki Serial Key atau ingin registrasi baru secara instan.</p>
 
-                <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px;">
-                    <div class="selection-card selected" id="card-lic-existing" onclick="toggleLicenseMode('existing')">
-                        <div class="card-title">🔑 Sudah Punya Serial Key</div>
-                        <div class="card-desc">Masukkan kunci lisensi resmi yang sudah Anda miliki untuk diverifikasi.</div>
+                <!-- CONTAINER 1: KHUSUS MODE SAAS (saas-public & saas-local) -->
+                <div id="container-lic-saas" style="display: none;">
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 10px; font-weight: 700; color: #34d399; font-size: 15px; margin-bottom: 6px;">
+                            <span>🛡️</span>
+                            <span>Mode Platform SaaS Master Aktif</span>
+                            <span class="badge badge-purple" style="font-size: 11px;" id="badge-saas-mode-type">Cloud Multi-Tenant</span>
+                        </div>
+                        <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.6; margin: 0;">
+                            Server ini disiapkan sebagai <strong>Pusat Layanan Multi-Tenant</strong> untuk menampung banyak sekolah sekaligus. Lisensi appliance sekolah tunggal <strong>tidak diperlukan</strong> pada server ini karena server induk ini yang akan menerbitkan subdomain dan mengelola langganan sekolah-sekolah pelanggan Anda.
+                        </p>
                     </div>
-                    <div class="selection-card" id="card-lic-register" onclick="toggleLicenseMode('register')">
-                        <div class="card-title">✨ Registrasi Baru (Gratis)</div>
-                        <div class="card-desc">Daftarkan sekolah baru dan dapatkan Serial Key server otomatis via WhatsApp.</div>
+
+                    <div class="form-group">
+                        <label for="saas-brand-name">Nama Entitas / Brand Platform SaaS Anda</label>
+                        <input type="text" id="saas-brand-name" value="Absenta Indonesia" placeholder="Contoh: Absenta Edu Cloud / PT Baraya Global">
+                        <small style="color: var(--text-muted); display: block; margin-top: 4px;">Nama brand platform yang akan tertera pada landing page dan laporan portal.</small>
                     </div>
-                    <div class="selection-card" id="card-lic-migrate" onclick="toggleLicenseMode('migrate')">
-                        <div class="card-title">🔄 Klaim / Migrasi dari SaaS</div>
-                        <div class="card-desc">Pindahkan sekolah dari Cloud SaaS ke Server Fisik On-Premise via verifikasi OTP WA.</div>
+
+                    <div class="form-group">
+                        <label for="saas-admin-email">Email Super Administrator Master <span style="color: var(--error);">*</span></label>
+                        <input type="text" id="saas-admin-email" value="admin@absenta.id" placeholder="admin@absenta.id">
+                        <small style="color: var(--text-muted); display: block; margin-top: 4px;">Email ini akan didaftarkan sebagai akun Super Admin tingkat tertinggi untuk mengelola seluruh tenant sekolah.</small>
+                    </div>
+
+                    <div id="saas-local-gateway-group" style="display: none; margin-top: 15px; background: rgba(30, 41, 59, 0.4); border: 1px solid var(--glass-border); border-radius: 10px; padding: 14px;">
+                        <label for="saas-gateway-key">Kunci Integrasi EasyTunnel Gateway (Khusus Home-Lab)</label>
+                        <input type="text" id="saas-gateway-key" placeholder="Opsional / Masukkan lisensi gateway jika ada">
+                        <small style="color: var(--text-muted); display: block; margin-top: 4px;">Kunci tunnel untuk menyambungkan server Home-Lab ke Server Lisensi pusat (bisa diatur nanti di tab Easy Tunnel).</small>
+                    </div>
+
+                    <div class="alert-box success" style="display: block; margin-top: 15px;">
+                        ✅ Konfigurasi platform SaaS telah siap. Anda dapat langsung mengklik <strong>Berikutnya</strong> untuk melanjutkan.
                     </div>
                 </div>
+
+                <!-- CONTAINER 2: KHUSUS MODE ON-PREMISE (1 SEKOLAH) -->
+                <div id="container-lic-onpremise">
+                    <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                        <div class="selection-card selected" id="card-lic-existing" onclick="toggleLicenseMode('existing')">
+                            <div class="card-title">🔑 Sudah Punya Serial Key</div>
+                            <div class="card-desc">Masukkan kunci lisensi resmi yang sudah Anda miliki untuk diverifikasi.</div>
+                        </div>
+                        <div class="selection-card" id="card-lic-register" onclick="toggleLicenseMode('register')">
+                            <div class="card-title">✨ Registrasi Baru (Gratis)</div>
+                            <div class="card-desc">Daftarkan sekolah baru dan dapatkan Serial Key server otomatis via WhatsApp.</div>
+                        </div>
+                        <div class="selection-card" id="card-lic-migrate" onclick="toggleLicenseMode('migrate')">
+                            <div class="card-title">🔄 Klaim / Migrasi dari SaaS</div>
+                            <div class="card-desc">Pindahkan sekolah dari Cloud SaaS ke Server Fisik On-Premise via verifikasi OTP WA.</div>
+                        </div>
+                    </div>
 
                 <!-- Form 1: Sudah punya Serial Key -->
                 <div id="form-lic-existing">
@@ -326,6 +364,7 @@
                             ✅ Verifikasi OTP & Klaim Lisensi On-Premise
                         </button>
                     </div>
+                </div>
                 </div>
 
                 <div id="license-test-alert" class="alert-box"></div>
