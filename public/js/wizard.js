@@ -6,12 +6,12 @@ let installConfig = {
     vpsKeyChoice: 'nginxonly.pem',
     vpsKeyPath: '',
     vpsSudoPass: '1',
-    deployScenario: 'saas',
+    deployScenario: 'saas-public',
     targetDomain: 'absenta.sekolah.sch.id',
     backendPort: '3003',
     frontendPort: '5175',
     defaultTimezone: 'Asia/Jakarta',
-    sslScenario: 'internal',
+    sslScenario: 'letsencrypt',
     cfToken: '',
     postgresMode: 'Y',
     dbUrl: 'postgresql://postgres:123123123@localhost:5432/absensi',
@@ -37,12 +37,54 @@ function handleKeySelection() {
 
 function selectScenario(scenario) {
     installConfig.deployScenario = scenario;
-    const saasCard = document.getElementById('card-mode-saas');
-    const hybridCard = document.getElementById('card-mode-hybrid');
-    const onpremCard = document.getElementById('card-mode-onprem');
-    if (saasCard) saasCard.classList.toggle('selected', scenario === 'saas');
-    if (hybridCard) hybridCard.classList.toggle('selected', scenario === 'hybrid');
-    if (onpremCard) onpremCard.classList.toggle('selected', scenario === 'onprem');
+    const saasPublicCard = document.getElementById('card-mode-saas-public');
+    const saasLocalCard = document.getElementById('card-mode-saas-local');
+    const onpremiseCard = document.getElementById('card-mode-onpremise');
+    if (saasPublicCard) saasPublicCard.classList.toggle('selected', scenario === 'saas-public');
+    if (saasLocalCard) saasLocalCard.classList.toggle('selected', scenario === 'saas-local');
+    if (onpremiseCard) onpremiseCard.classList.toggle('selected', scenario === 'onpremise');
+
+    const domainLabel = document.getElementById('label-target-domain');
+    const domainInput = document.getElementById('target-domain');
+    const domainTip = document.getElementById('domain-helper-tip');
+
+    if (scenario === 'saas-public') {
+        installConfig.sslScenario = 'letsencrypt';
+        if (domainLabel) domainLabel.innerText = 'Domain Induk Platform SaaS (Cloud VPS)';
+        if (domainInput) {
+            domainInput.placeholder = 'Contoh: absenta.id (tanpa titik di depan)';
+            if (!domainInput.value || domainInput.value === 'absenta.sekolah.sch.id' || domainInput.value === 'smkn1pld.absenta.id' || domainInput.value === 'home.absenta.id') {
+                domainInput.value = 'absenta.id';
+            }
+        }
+        if (domainTip) {
+            domainTip.innerHTML = '🌐 <strong>Cloud Multi-Tenant:</strong> Masukkan domain induk platform Anda (tanpa subdomain). Sekolah-sekolah pelanggan nanti otomatis mendapatkan subdomain resmi di bawah domain ini (contoh: <code style="color:#6ee7b7;font-weight:bold;">smkn1.absenta.id</code>).';
+        }
+    } else if (scenario === 'saas-local') {
+        installConfig.sslScenario = 'sync';
+        if (domainLabel) domainLabel.innerText = 'Domain Layanan Home-Lab (Multi-Tenant)';
+        if (domainInput) {
+            domainInput.placeholder = 'Contoh: absenta.id atau home.absenta.id';
+            if (!domainInput.value || domainInput.value === 'absenta.sekolah.sch.id' || domainInput.value === 'smkn1pld.absenta.id') {
+                domainInput.value = 'home.absenta.id';
+            }
+        }
+        if (domainTip) {
+            domainTip.innerHTML = '🏠 <strong>Home-Lab Multi-Tenant:</strong> Server fisik di rumah/kantor sendiri (online via EasyTunnel). Jika Anda juga menyewa Cloud VPS untuk <code>absenta.id</code>, gunakan pembeda seperti <code style="color:#6ee7b7;font-weight:bold;">home.absenta.id</code> agar sekolah di server rumah beralamat di <code style="color:#6ee7b7;font-weight:bold;">smkn1.home.absenta.id</code>.';
+        }
+    } else if (scenario === 'onpremise') {
+        installConfig.sslScenario = 'sync';
+        if (domainLabel) domainLabel.innerText = 'Subdomain / Domain Akses Sekolah (Dedicated)';
+        if (domainInput) {
+            domainInput.placeholder = 'Contoh: smkn1pld.absenta.id atau aduhay.absenta.id';
+            if (!domainInput.value || domainInput.value === 'absenta.id' || domainInput.value === 'home.absenta.id' || domainInput.value === 'absenta.sekolah.sch.id') {
+                domainInput.value = 'smkn1pld.absenta.id';
+            }
+        }
+        if (domainTip) {
+            domainTip.innerHTML = '🏫 <strong>Dedicated 1 Sekolah:</strong> Masukkan subdomain resmi sekolah ini. Jika Anda memasukkan atau meregistrasikan Serial Key di Langkah 4 nanti, kolom ini akan otomatis diselaraskan.';
+        }
+    }
 }
 
 function setPostgresMode(mode) {
@@ -152,23 +194,138 @@ function createDatabaseAuto() {
 function toggleLicenseMode(mode) {
     const cardExisting = document.getElementById('card-lic-existing');
     const cardRegister = document.getElementById('card-lic-register');
+    const cardMigrate = document.getElementById('card-lic-migrate');
     const formExisting = document.getElementById('form-lic-existing');
     const formRegister = document.getElementById('form-lic-register');
+    const formMigrate = document.getElementById('form-lic-migrate');
     const alertBox = document.getElementById('license-test-alert');
 
     if (alertBox) alertBox.className = 'alert-box';
 
-    if (mode === 'register') {
-        if (cardExisting) cardExisting.classList.remove('selected');
-        if (cardRegister) cardRegister.classList.add('selected');
-        if (formExisting) formExisting.style.display = 'none';
-        if (formRegister) formRegister.style.display = 'block';
-    } else {
-        if (cardExisting) cardExisting.classList.add('selected');
-        if (cardRegister) cardRegister.classList.remove('selected');
-        if (formExisting) formExisting.style.display = 'block';
-        if (formRegister) formRegister.style.display = 'none';
+    if (cardExisting) cardExisting.classList.toggle('selected', mode === 'existing');
+    if (cardRegister) cardRegister.classList.toggle('selected', mode === 'register');
+    if (cardMigrate) cardMigrate.classList.toggle('selected', mode === 'migrate');
+
+    if (formExisting) formExisting.style.display = (mode === 'existing') ? 'block' : 'none';
+    if (formRegister) formRegister.style.display = (mode === 'register') ? 'block' : 'none';
+    if (formMigrate) formMigrate.style.display = (mode === 'migrate') ? 'block' : 'none';
+}
+
+function requestMigrationOtp() {
+    const alertBox = document.getElementById('license-test-alert');
+    const slugInput = document.getElementById('mig-slug');
+    const slug = (slugInput ? slugInput.value : '').trim().toLowerCase();
+    const btnSendOtp = document.getElementById('btn-mig-send-otp');
+    const otpSection = document.getElementById('mig-otp-section');
+    const phoneNotice = document.getElementById('mig-phone-notice');
+
+    if (!slug) {
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Masukkan subdomain sekolah di Cloud SaaS yang ingin dipindahkan.';
+        return;
     }
+
+    alertBox.className = 'alert-box warning';
+    alertBox.innerHTML = '⏳ Menghubungi server lisensi untuk verifikasi subdomain & mengirim kode OTP WhatsApp...';
+    if (btnSendOtp) btnSendOtp.disabled = true;
+
+    fetch('/api/request-migration-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestedSlug: slug })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (btnSendOtp) btnSendOtp.disabled = false;
+        if (data.success) {
+            alertBox.className = 'alert-box success';
+            alertBox.innerHTML = `✅ ${data.message}`;
+            if (otpSection) otpSection.style.display = 'block';
+            if (phoneNotice) {
+                phoneNotice.innerHTML = `📱 Kode OTP 6 digit telah dikirim ke nomor WhatsApp operator: <strong>${data.masked_phone}</strong> (${data.school_name}). Masukkan kode di bawah:`;
+            }
+            const otpInput = document.getElementById('mig-otp-code');
+            if (otpInput) otpInput.focus();
+        } else {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = '❌ ' + (data.message || 'Gagal mengirim OTP migrasi.');
+        }
+    })
+    .catch(err => {
+        if (btnSendOtp) btnSendOtp.disabled = false;
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Gagal menghubungi server: ' + err.message;
+    });
+}
+
+function confirmMigrationOtp() {
+    const alertBox = document.getElementById('license-test-alert');
+    const slugInput = document.getElementById('mig-slug');
+    const slug = (slugInput ? slugInput.value : '').trim().toLowerCase();
+    const otpInput = document.getElementById('mig-otp-code');
+    const otp = (otpInput ? otpInput.value : '').trim();
+    const btnConfirm = document.getElementById('btn-mig-confirm-otp');
+
+    if (!otp || otp.length < 6) {
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Masukkan 6 digit kode OTP WhatsApp yang Anda terima.';
+        return;
+    }
+
+    alertBox.className = 'alert-box warning';
+    alertBox.innerHTML = '⏳ Memvalidasi kode OTP dan mengalihkan konfigurasi rute lisensi ke server fisik...';
+    if (btnConfirm) btnConfirm.disabled = true;
+
+    fetch('/api/confirm-migration-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestedSlug: slug, otp })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (btnConfirm) btnConfirm.disabled = false;
+        if (data.success && data.license_key) {
+            document.getElementById('license-key').value = data.license_key;
+            const schoolNameInput = document.getElementById('school-name');
+            if (schoolNameInput) schoolNameInput.value = data.school_name || '';
+            installConfig.licenseKey = data.license_key;
+            installConfig.schoolName = data.school_name || '';
+
+            if (installConfig.deployScenario === 'onpremise' && data.domain) {
+                installConfig.targetDomain = data.domain;
+                const domainInput = document.getElementById('target-domain');
+                if (domainInput) domainInput.value = data.domain;
+            }
+
+            toggleLicenseMode('existing');
+
+            alertBox.className = 'alert-box success';
+            alertBox.style.background = 'rgba(16, 185, 129, 0.1)';
+            alertBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+            alertBox.style.padding = '16px';
+            alertBox.style.borderRadius = '12px';
+            alertBox.innerHTML = `
+                <div style="font-weight: 700; font-size: 15px; color: #34d399; margin-bottom: 8px;">
+                    🎉 Migrasi Berhasil! Subdomain Resmi Ditautkan ke Server On-Premise
+                </div>
+                <div style="font-size: 13px; color: #e2e8f0; line-height: 1.6;">
+                    <strong>Serial Key Server (Gratis/Aktif):</strong> <code style="color: #6ee7b7; font-weight: bold; font-size: 14px;">${data.license_key}</code><br>
+                    <strong>Sekolah:</strong> ${data.school_name || ''}<br>
+                    <strong>Domain Akses Dialihkan:</strong> <span style="color: #38bdf8; font-weight: 600;">${data.domain}</span><br>
+                    <strong>Mode Lisensi:</strong> <span style="color: #a78bfa; font-weight: 600;">On-Premise Server Appliance (Aktif Permanen)</span><br>
+                    <span style="color: #6ee7b7;">Gateway routing Caddy telah disinkronkan secara otomatis. Anda siap melanjutkan instalasi!</span>
+                </div>
+            `;
+        } else {
+            alertBox.className = 'alert-box error';
+            alertBox.innerHTML = '❌ ' + (data.message || 'Verifikasi kode OTP gagal.');
+        }
+    })
+    .catch(err => {
+        if (btnConfirm) btnConfirm.disabled = false;
+        alertBox.className = 'alert-box error';
+        alertBox.innerHTML = '❌ Gagal verifikasi kode OTP: ' + err.message;
+    });
 }
 
 function requestNewLicense() {
@@ -210,7 +367,7 @@ function requestNewLicense() {
             installConfig.licenseKey = data.licenseKey;
             installConfig.schoolName = data.schoolName;
 
-            if (installConfig.deployScenario === 'hybrid' && data.domain) {
+            if (installConfig.deployScenario === 'onpremise' && data.domain) {
                 installConfig.targetDomain = data.domain;
                 const domainInput = document.getElementById('target-domain');
                 if (domainInput) domainInput.value = data.domain;
@@ -396,17 +553,19 @@ function renderSummary() {
     const summary = document.getElementById('summary-container');
     if (!summary) return;
 
-    let scenarioLabel = '🌐 SaaS / Cloud Direct (Domain Publik Mandiri)';
-    if (installConfig.deployScenario === 'hybrid') {
-        scenarioLabel = '🔗 Hybrid (Lokal Sekolah + Easy-Tunnel WireGuard)';
-    } else if (installConfig.deployScenario === 'onprem') {
-        scenarioLabel = '🏫 On-Premise Intranet Murni (Tanpa Internet Publik)';
+    let scenarioLabel = '🌐 saas-public (Cloud VPS Multi-Tenant, Let\'s Encrypt SSL)';
+    if (installConfig.deployScenario === 'saas-local') {
+        scenarioLabel = '🏠 saas-local (Server Rumah/Kantor Multi-Tenant + EasyTunnel)';
+    } else if (installConfig.deployScenario === 'onpremise') {
+        scenarioLabel = '🏫 onpremise (Dedicated 1 Sekolah: LAN Port 80 + EasyTunnel)';
     }
+
+    let domainSummaryLabel = installConfig.deployScenario === 'onpremise' ? '🌐 Domain Akses Sekolah:' : '🌐 Domain Induk Platform:';
 
     summary.innerHTML =
         '<strong>📌 Target Server:</strong> ' + installConfig.targetOS.toUpperCase() + ' (' + (installConfig.targetOS === 'linux' ? installConfig.vpsIp : 'Localhost') + ')<br>' +
         '<strong>🚀 Skenario Akses:</strong> ' + scenarioLabel + '<br>' +
-        '<strong>🌐 Domain Sekolah:</strong> ' + installConfig.targetDomain + '<br>' +
+        '<strong>' + domainSummaryLabel + '</strong> ' + installConfig.targetDomain + '<br>' +
         '<strong>🔌 Port Aplikasi:</strong> Backend ' + installConfig.backendPort + ' | Frontend ' + installConfig.frontendPort + '<br>' +
         '<strong>🕒 Zona Waktu:</strong> ' + (installConfig.defaultTimezone || 'Asia/Jakarta') + '<br>' +
         '<strong>🗄️ Database PostgreSQL:</strong> ' + (installConfig.postgresMode === 'Y' ? 'Otomatis Install Lokal' : 'Database Eksisting') + ' (' + installConfig.dbUrl + ')<br>' +
@@ -463,3 +622,7 @@ function startInstallation() {
         };
     });
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    selectScenario(installConfig.deployScenario || 'saas-public');
+});

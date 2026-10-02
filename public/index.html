@@ -134,23 +134,24 @@
                 <p class="subtitle">Tentukan bagaimana pengguna akan mengakses portal sekolah ini.</p>
 
                 <div class="card-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
-                    <div class="selection-card selected" id="card-mode-saas" onclick="selectScenario('saas')">
-                        <div class="card-title">🌐 SaaS / Cloud Direct</div>
-                        <div class="card-desc">VPS Cloud dengan IP Publik. Domain sekolah langsung diarahkan ke server ini tanpa VPN tunnel.</div>
+                    <div class="selection-card selected" id="card-mode-saas-public" onclick="selectScenario('saas-public')">
+                        <div class="card-title">🌐 saas-public</div>
+                        <div class="card-desc"><strong>Penyedia SaaS (Cloud VPS)</strong>. Server disewa di cloud dengan IP Publik langsung. Multi-Tenant melayani banyak sekolah.</div>
                     </div>
-                    <div class="selection-card" id="card-mode-hybrid" onclick="selectScenario('hybrid')">
-                        <div class="card-title">🔗 Hybrid (Easy-Tunnel)</div>
-                        <div class="card-desc">Server fisik di sekolah (IP lokal). Terhubung ke internet via WireGuard ke Server Lisensi.</div>
+                    <div class="selection-card" id="card-mode-saas-local" onclick="selectScenario('saas-local')">
+                        <div class="card-title">🏠 saas-local</div>
+                        <div class="card-desc"><strong>Penyedia SaaS (Home-Lab)</strong>. Server di rumah/kantor sendiri (Broadband non-IP publik). Multi-Tenant online via EasyTunnel.</div>
                     </div>
-                    <div class="selection-card" id="card-mode-onprem" onclick="selectScenario('onprem')">
-                        <div class="card-title">🏫 On-Premise Intranet</div>
-                        <div class="card-desc">Hanya diakses melalui IP lokal / intranet sekolah tanpa akses internet publik.</div>
+                    <div class="selection-card" id="card-mode-onpremise" onclick="selectScenario('onpremise')">
+                        <div class="card-title">🏫 onpremise</div>
+                        <div class="card-desc"><strong>Milik Sekolah (Single-Tenant)</strong>. Server dedicated di gedung 1 sekolah. Akses cepat LAN Port 80 + Online via EasyTunnel.</div>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label for="target-domain">Domain Akses Utama Sekolah</label>
-                    <input type="text" id="target-domain" value="absenta.sekolah.sch.id" placeholder="Contoh: absenta.sekolah.sch.id">
+                    <label for="target-domain" id="label-target-domain">Domain Induk Platform SaaS (Cloud VPS)</label>
+                    <input type="text" id="target-domain" value="absenta.id" placeholder="Contoh: absenta.id (tanpa titik di depan)">
+                    <div id="domain-helper-tip" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.5;"></div>
                 </div>
 
                 <div class="form-row">
@@ -234,14 +235,18 @@
                 <h2>Aktivasi Lisensi Server Absenta</h2>
                 <p class="subtitle">Tentukan apakah Anda sudah memiliki Serial Key atau ingin registrasi baru secara instan.</p>
 
-                <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
+                <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px;">
                     <div class="selection-card selected" id="card-lic-existing" onclick="toggleLicenseMode('existing')">
                         <div class="card-title">🔑 Sudah Punya Serial Key</div>
                         <div class="card-desc">Masukkan kunci lisensi resmi yang sudah Anda miliki untuk diverifikasi.</div>
                     </div>
                     <div class="selection-card" id="card-lic-register" onclick="toggleLicenseMode('register')">
-                        <div class="card-title">✨ Registrasi Baru (Gratis / Trial)</div>
-                        <div class="card-desc">Daftarkan sekolah Anda sekarang dan dapatkan Serial Key otomatis via WhatsApp.</div>
+                        <div class="card-title">✨ Registrasi Baru (Gratis)</div>
+                        <div class="card-desc">Daftarkan sekolah baru dan dapatkan Serial Key server otomatis via WhatsApp.</div>
+                    </div>
+                    <div class="selection-card" id="card-lic-migrate" onclick="toggleLicenseMode('migrate')">
+                        <div class="card-title">🔄 Klaim / Migrasi dari SaaS</div>
+                        <div class="card-desc">Pindahkan sekolah dari Cloud SaaS ke Server Fisik On-Premise via verifikasi OTP WA.</div>
                     </div>
                 </div>
 
@@ -293,6 +298,36 @@
                     </button>
                 </div>
 
+                <!-- Form 3: Migrasi dari Cloud SaaS -->
+                <div id="form-lic-migrate" style="display: none;">
+                    <div class="form-group">
+                        <label for="mig-slug">Subdomain Sekolah di Cloud SaaS <span style="color: var(--error);">*</span></label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="text" id="mig-slug" placeholder="contoh: smkn1" style="flex: 1;">
+                            <span style="color: var(--primary); font-weight: 700; font-size: 14px;">.absenta.id</span>
+                        </div>
+                        <small style="color: var(--text-muted); display: block; margin-top: 4px;">Subdomain sekolah yang saat ini aktif di Cloud SaaS dan ingin dipindahkan ke server fisik on-premise ini.</small>
+                    </div>
+
+                    <div style="margin-top: 10px; margin-bottom: 12px;">
+                        <button class="btn btn-secondary" type="button" id="btn-mig-send-otp" onclick="requestMigrationOtp()">
+                            📲 Kirim Kode OTP WhatsApp
+                        </button>
+                    </div>
+
+                    <!-- OTP Section (Hidden until OTP is requested) -->
+                    <div id="mig-otp-section" style="display: none; background: rgba(15, 23, 42, 0.5); border: 1px solid var(--glass-border); border-radius: 12px; padding: 16px; margin-top: 12px;">
+                        <div id="mig-phone-notice" style="color: #38bdf8; font-size: 13px; margin-bottom: 12px;"></div>
+                        <div class="form-group">
+                            <label for="mig-otp-code">Kode Verifikasi OTP WhatsApp (6 Digit) <span style="color: var(--error);">*</span></label>
+                            <input type="text" id="mig-otp-code" maxlength="6" placeholder="Contoh: 123456" style="letter-spacing: 4px; font-weight: 700; font-size: 18px; text-align: center; max-width: 220px;">
+                        </div>
+                        <button class="btn btn-primary" type="button" id="btn-mig-confirm-otp" onclick="confirmMigrationOtp()" style="margin-top: 6px;">
+                            ✅ Verifikasi OTP & Klaim Lisensi On-Premise
+                        </button>
+                    </div>
+                </div>
+
                 <div id="license-test-alert" class="alert-box"></div>
             </div>
 
@@ -342,50 +377,190 @@
         </div>
     </div>
 
-    <!-- VIEW 2: MULTI-PRESET QUICK UPDATE -->
+    <!-- VIEW 2: MULTI-PRESET MANAGEMENT (INVENTORY & FOCUSED WORKSPACE) -->
     <div class="container" id="preset-view-container" style="display: none;">
-        <div class="wizard-header">
-            <div class="logo-section">
-                <h1>⚡ QUICK UPDATE MULTI-PRESET</h1>
-                <p>Pembaruan Cepat 1-Click Server Remote Terdaftar</p>
+        
+        <!-- SECTION 1: SERVER INVENTORY LIST VIEW (ENTRY POINT) -->
+        <div id="presets-inventory-section">
+            <div class="wizard-header">
+                <div class="logo-section">
+                    <h1>⚡ DAFTAR SERVER & MULTI-PRESET</h1>
+                    <p>Manajemen Terpadu & Pembaruan Cepat Server Remote Terdaftar</p>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span id="presets-count-badge" class="badge badge-purple" style="font-size: 12px; padding: 6px 12px;">0 Server Terdaftar</span>
+                    <button class="btn btn-primary" type="button" onclick="openPresetModal()">➕ Tambah Preset Server</button>
+                </div>
             </div>
-            <button class="btn btn-primary" type="button" onclick="openPresetModal()">➕ Tambah Preset Server</button>
+
+            <div class="wizard-body">
+                <div class="server-inventory-toolbar">
+                    <div class="server-search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="preset-search-input" placeholder="Cari berdasarkan nama server, IP target, atau tipe proyek..." oninput="filterPresetsList()">
+                    </div>
+                </div>
+
+                <div id="presets-grid-container" class="server-list-table">
+                    <!-- Dynamically populated via presets-ui.js -->
+                </div>
+            </div>
         </div>
 
-        <div class="wizard-body">
-            <div id="presets-grid-container" class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
-                <!-- Dynamically populated via presets.js -->
+        <!-- SECTION 2: FOCUSED SERVER WORKSPACE (SERVER TERPILIH) -->
+        <div id="presets-workspace-section" style="display: none;">
+            <div class="workspace-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button class="btn btn-secondary" type="button" onclick="showPresetsListView()" style="padding: 8px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                        ← Kembali ke Daftar Server
+                    </button>
+                    <div style="font-size: 13px; color: var(--text-muted);" id="ws-breadcrumb">
+                        Daftar Server / <strong style="color: var(--text-main);" id="ws-breadcrumb-server-name">-</strong>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-secondary" type="button" style="padding: 8px 14px; font-size: 12.5px;" onclick="editCurrentSelectedPreset()">✏️ Edit Preset</button>
+                    <button class="btn btn-secondary" type="button" style="padding: 8px 14px; font-size: 12.5px; border-color: rgba(239,68,68,0.4); color: #f87171; background: rgba(239,68,68,0.1);" onclick="deleteCurrentSelectedPreset()">🗑️ Hapus</button>
+                </div>
             </div>
 
-            <!-- Quick Update SSE Console -->
-            <div id="quick-update-console-section" style="display: none; margin-top: 30px; border-top: 1px solid var(--glass-border); padding-top: 25px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 id="quick-update-target-title" style="font-size: 16px; color: #a78bfa; font-weight: 600;">⚡ Sedang Melakukan Quick Update...</h3>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="quick-update-timer" style="font-family: 'Fira Code', monospace; font-size: 13px; font-weight: 700; color: #6ee7b7; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 8px; display: none;">⏱️ 0s</span>
-                        <span id="quick-update-status-badge" class="badge badge-purple">Memproses...</span>
-                        <button id="quick-update-cancel-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px; border-color: rgba(239,68,68,0.5); color: #f87171; background: rgba(239,68,68,0.15);" onclick="cancelCurrentQuickUpdate()">🛑 Force Stop</button>
+            <div class="wizard-body">
+                <!-- HERO SPEC BANNER -->
+                <div class="workspace-hero-card">
+                    <div style="display: flex; align-items: center; gap: 18px;">
+                        <div class="server-avatar-icon" style="width: 56px; height: 56px; font-size: 26px;">
+                            🖥️
+                        </div>
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                                <h2 id="ws-server-name" style="font-size: 20px; font-weight: 800; color: #fff; margin: 0;">Server Target</h2>
+                                <span id="ws-project-badge" class="badge badge-purple">Project Absenta</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px; font-family: 'Fira Code', monospace; font-size: 13.5px; color: #a78bfa;">
+                                <span>🌐 <strong id="ws-server-ip" style="color: #6ee7b7;">10.10.10.99</strong></span>
+                                <span style="color: rgba(255,255,255,0.2);">|</span>
+                                <span>👤 User: <strong id="ws-server-user" style="color: #e2e8f0;">asepsuryadi</strong></span>
+                                <span style="color: rgba(255,255,255,0.2);">|</span>
+                                <span>🔑 Key: <strong id="ws-server-key" style="color: #cbd5e1;">nginxonly.pem</strong></span>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="progress-bar-container">
-                    <div class="progress-bar-fill" id="quick-progress-fill"></div>
-                </div>
-                <div class="progress-text-container" style="margin-bottom: 15px;">
-                    <span id="quick-progress-status">Menghubungkan SSH...</span>
-                    <span id="quick-progress-percent">0%</span>
+
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <span id="ws-buildmode-badge" class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); font-size: 11px;">☁️ Remote Build</span>
+                        <span id="ws-obfuscate-badge" class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); font-size: 11px;">⚡ Obfuscate: Off</span>
+                        <button id="ws-ping-btn" class="btn btn-secondary" type="button" onclick="testWorkspaceConnection()" style="padding: 8px 16px; font-size: 12px; border-color: rgba(52,211,153,0.4); color: #34d399; background: rgba(52,211,153,0.1);">
+                            🔌 Tes Koneksi Live
+                        </button>
+                    </div>
                 </div>
 
-                <div class="terminal-header">
-                    <div class="terminal-dots">
-                        <span class="dot dot-red"></span>
-                        <span class="dot dot-yellow"></span>
-                        <span class="dot dot-green"></span>
-                    </div>
-                    <div style="font-family: 'Fira Code', monospace; font-size: 12px; color: var(--text-muted);">bash - ssh remote update session</div>
-                    <div></div>
+                <!-- LIVE CONNECTION & WATCHDOG PANELS -->
+                <div id="ws-conn-panel" style="display: none; margin-bottom: 20px; background: rgba(10,30,20,0.7); border: 1px solid rgba(52,211,153,0.3); border-radius: 14px; padding: 16px; font-size: 12.5px;">
+                    <div id="ws-conn-content" style="color: var(--text-muted);">Menghubungkan...</div>
                 </div>
-                <div class="console-container" id="quick-terminal-logs" style="height: 320px; border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;"></div>
+                <div id="ws-watchdog-panel" style="display: none; margin-bottom: 20px; background: rgba(10,15,30,0.7); border: 1px solid rgba(167,139,250,0.3); border-radius: 14px; padding: 16px; font-size: 12.5px;">
+                    <div style="font-weight: 700; color: #a78bfa; margin-bottom: 8px; font-size: 13.5px;">🛡️ Status Watchdog Daemon</div>
+                    <div id="ws-watchdog-content" style="color: var(--text-muted);">Mengambil data...</div>
+                </div>
+
+                <!-- ACTION HUB (3 CATEGORY COLUMNS) -->
+                <div class="workspace-groups-grid">
+                    <!-- COLUMN 1: DEPLOYMENT & DATABASE -->
+                    <div class="workspace-group-card">
+                        <div class="workspace-group-title" style="color: #c084fc;">
+                            <span>🚀</span> 1. Deployment & Eksekusi
+                        </div>
+                        <button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 13px; font-size: 14px; font-weight: 800; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);" onclick="runWorkspaceQuickUpdate()">
+                            ⚡ Quick Update Sekarang
+                        </button>
+                        <button class="workspace-action-btn" onclick="openWorkspaceDomainModal()">
+                            <span>🌐 Guided Ganti Domain</span>
+                            <span style="color: #38bdf8; font-size: 11px;">Subdomain & SSL ↗</span>
+                        </button>
+                        <button class="workspace-action-btn" onclick="runWorkspaceSeedWilayah()">
+                            <span>🗺️ Seed Full Wilayah</span>
+                            <span style="color: #34d399; font-size: 11px;">Postgres DB ↗</span>
+                        </button>
+                    </div>
+
+                    <!-- COLUMN 2: DIAGNOSTICS & TUNNEL -->
+                    <div class="workspace-group-card">
+                        <div class="workspace-group-title" style="color: #34d399;">
+                            <span>🛡️</span> 2. Diagnostics & Tunnel
+                        </div>
+                        <button class="workspace-action-btn" onclick="testWorkspaceConnection()">
+                            <span>🔌 Uji Koneksi SSH & Spek</span>
+                            <span style="color: #34d399; font-size: 11px;">Ping & RAM ↗</span>
+                        </button>
+                        <button class="workspace-action-btn" onclick="checkWorkspaceWatchdog()">
+                            <span>🛡️ Status Watchdog Lisensi</span>
+                            <span style="color: #a78bfa; font-size: 11px;">Timer & Port ↗</span>
+                        </button>
+                        <button class="workspace-action-btn" onclick="auditWorkspaceTunnel()">
+                            <span>🌐 Audit Multi-Tunnel</span>
+                            <span style="color: #38bdf8; font-size: 11px;">WireGuard ↗</span>
+                        </button>
+                        <button class="workspace-action-btn" onclick="fixWorkspaceTunnel()">
+                            <span>🔧 Perbaiki Netmask /32</span>
+                            <span style="color: #fbbf24; font-size: 11px;">Auto Sanitize ↗</span>
+                        </button>
+                    </div>
+
+                    <!-- COLUMN 3: MONITORING & PERFORMANCE -->
+                    <div class="workspace-group-card">
+                        <div class="workspace-group-title" style="color: #38bdf8;">
+                            <span>📊</span> 3. Performa & Monitoring
+                        </div>
+                        <button class="workspace-action-btn" onclick="openWorkspaceHealth()">
+                            <span>🩺 System Health & Services</span>
+                            <span style="color: #60a5fa; font-size: 11px;">Restart PM2 ↗</span>
+                        </button>
+                        <button class="workspace-action-btn" onclick="openWorkspaceLogs()">
+                            <span>📜 Monitor Log PM2</span>
+                            <span style="color: #c084fc; font-size: 11px;">Real-Time SSE ↗</span>
+                        </button>
+                        <button class="workspace-action-btn" onclick="openWorkspaceTuning()">
+                            <span>🚀 Tuning Kernel 524k/BBR</span>
+                            <span style="color: #f472b6; font-size: 11px;">High Concurrency ↗</span>
+                        </button>
+                        <button class="workspace-action-btn" onclick="openWorkspaceIops()">
+                            <span>⚡ Disk IOPS & Kapasitas</span>
+                            <span style="color: #38bdf8; font-size: 11px;">Benchmark FIO ↗</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Update SSE Console Area (Inside Workspace) -->
+                <div id="quick-update-console-section" style="display: none; margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 id="quick-update-target-title" style="font-size: 16px; color: #a78bfa; font-weight: 600;">⚡ Sedang Melakukan Quick Update...</h3>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span id="quick-update-timer" style="font-family: 'Fira Code', monospace; font-size: 13px; font-weight: 700; color: #6ee7b7; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 8px; display: none;">⏱️ 0s</span>
+                            <span id="quick-update-status-badge" class="badge badge-purple">Memproses...</span>
+                            <button id="quick-update-cancel-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px; border-color: rgba(239,68,68,0.5); color: #f87171; background: rgba(239,68,68,0.15);" onclick="cancelCurrentQuickUpdate()">🛑 Force Stop</button>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="quick-progress-fill"></div>
+                    </div>
+                    <div class="progress-text-container" style="margin-bottom: 15px;">
+                        <span id="quick-progress-status">Menghubungkan SSH...</span>
+                        <span id="quick-progress-percent">0%</span>
+                    </div>
+
+                    <div class="terminal-header">
+                        <div class="terminal-dots">
+                            <span class="dot dot-red"></span>
+                            <span class="dot dot-yellow"></span>
+                            <span class="dot dot-green"></span>
+                        </div>
+                        <div style="font-family: 'Fira Code', monospace; font-size: 12px; color: var(--text-muted);">bash - ssh remote update session</div>
+                        <div></div>
+                    </div>
+                    <div class="console-container" id="quick-terminal-logs" style="height: 320px; border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -637,665 +812,28 @@
 
 </div> <!-- end .app-wrapper -->
 
-<!-- Modal Dialog Audit Stream (Hardening/Tuning Execution) -->
-<div id="audit-stream-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center;">
-    <div style="background: #0f172a; border: 1px solid var(--glass-border); border-radius: 20px; width: 90%; max-width: 800px; padding: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h3 id="audit-stream-modal-title" style="font-size: 16px; font-weight: 700; color: #fff; margin: 0;">Proses Sedang Berjalan...</h3>
-            <button onclick="closeAuditStreamModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
-        </div>
-        <div id="audit-stream-terminal" style="height: 380px; background: #000; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); padding: 14px; font-family: 'Fira Code', monospace; font-size: 12px; overflow-y: auto; color: #e2e8f0; line-height: 1.6;">
-        </div>
-        <div style="display: flex; justify-content: flex-end;">
-            <button class="btn btn-secondary" onclick="closeAuditStreamModal()">Tutup Jendela</button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Dialog Add/Edit Preset -->
-<div id="preset-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center;">
-    <div style="background: #1e293b; border: 1px solid var(--glass-border); border-radius: 20px; width: 90%; max-width: 550px; padding: 30px; box-shadow: 0 25px 60px rgba(0,0,0,0.6);">
-        <h3 id="preset-modal-title" style="font-size: 18px; margin-bottom: 20px; color: var(--text-main);">➕ Tambah Preset Server</h3>
-        <input type="hidden" id="preset-modal-id">
-        
-        <div class="form-group">
-            <label for="preset-modal-name">Nama Identitas Server / Sekolah</label>
-            <input type="text" id="preset-modal-name" placeholder="Contoh: Server Sekolah (10.10.10.99)">
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label for="preset-modal-ip">Alamat IP VPS Target</label>
-                <input type="text" id="preset-modal-ip" placeholder="10.10.10.99">
-            </div>
-            <div class="form-group">
-                <label for="preset-modal-user">User SSH</label>
-                <input type="text" id="preset-modal-user" value="asepsuryadi">
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label for="preset-modal-project">Target Proyek Deployment</label>
-            <select id="preset-modal-project" onchange="toggleBuildModeField()">
-                <option value="absenta">Project Absenta (Aplikasi Absensi Utama)</option>
-                <option value="licensing">Server Lisensi (VPS Licensing System)</option>
-                <option value="undangan">Project Undangan Digital (Digital Invitation Studio)</option>
-                <option value="rekber">Project Rekening Bersama (B-Pay Gateway & Rekber Hub)</option>
-            </select>
-        </div>
-
-        <div class="form-group" id="preset-buildmode-group" style="display: none;">
-            <label for="preset-modal-buildmode">🔨 Mode Build Aplikasi</label>
-            <select id="preset-modal-buildmode">
-                <option value="remote">☁️ Remote Build — TypeScript dikompilasi langsung di VPS</option>
-                <option value="local">🖥️ Local Build + SCP — Kompilasi di PC ini, upload dist/ ke VPS (untuk VPS spek kecil)</option>
-                <option value="skip">🚀 Skip Build — Langsung upload folder dist/ eksisting (Instan 3-5 detik!)</option>
-            </select>
-            <small style="color: var(--text-muted); display: block; margin-top: 6px; line-height: 1.5;">
-                💡 <strong>Skip Build</strong> mengunggah folder <code>dist/</code> lokal yang sudah Anda kompilasi manual di terminal secara instan.
-            </small>
-        </div>
-
-        <div class="form-group" id="preset-obfuscate-group">
-            <label for="preset-modal-obfuscate">🛡️ Proteksi Pengacakan Kode (Obfuscation / Enkripsi HKI)</label>
-            <select id="preset-modal-obfuscate">
-                <option value="N">⚡ Nonaktif (Off — Build Cepat untuk Trial & Error / Testing)</option>
-                <option value="Y">🛡️ Aktif (On — Proteksi Enkripsi HKI untuk Release Produksi)</option>
-            </select>
-            <small style="color: var(--text-muted); display: block; margin-top: 6px; line-height: 1.5;">
-                💡 Pilih <strong>Nonaktif</strong> saat masa pengujian/trial & error agar proses build berlangsung sangat cepat.
-            </small>
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label for="preset-modal-keychoice">Pilih SSH Key File</label>
-                <select id="preset-modal-keychoice" onchange="togglePresetCustomKey()">
-                    <option value="nginxonly.pem">🔑 Default (nginxonly.pem)</option>
-                    <option value="ls-key.pem">🔑 LS Key (ls-key.pem)</option>
-                    <option value="custom">📁 Pilih File Lain...</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="preset-modal-sudopass">Password Sudo VPS <span style="color: var(--text-muted); font-size: 11px; font-weight: 400;">(opsional)</span></label>
-                <input type="password" id="preset-modal-sudopass" placeholder="Kosongkan jika NOPASSWD sudo">
-            </div>
-        </div>
-
-        <div class="form-group" id="preset-custom-key-group" style="display: none;">
-            <label>File SSH Key (.pem)</label>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="text" id="preset-modal-customkey" placeholder="Belum ada file dipilih..." readonly
-                    style="flex: 1; cursor: default; background: rgba(15,23,42,0.6); color: var(--text-muted); font-family: 'Fira Code', monospace; font-size: 12px;">
-                <button type="button" onclick="browseSSHKeyFile()"
-                    style="white-space: nowrap; padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(167,139,250,0.4); background: rgba(167,139,250,0.12); color: #a78bfa; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
-                    onmouseover="this.style.background='rgba(167,139,250,0.25)'" 
-                    onmouseout="this.style.background='rgba(167,139,250,0.12)'"
-                    id="browse-key-btn">
-                    📂 Browse...
-                </button>
-            </div>
-            <small style="color: var(--text-muted); display: block; margin-top: 6px;">
-                Klik <strong>Browse</strong> untuk membuka dialog pilih file .pem dari komputer Anda.
-            </small>
-        </div>
-
-        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 25px;">
-            <button class="btn btn-secondary" type="button" onclick="closePresetModal()">Batal</button>
-            <button class="btn btn-primary" type="button" onclick="savePresetSubmit()">Simpan Preset</button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Guided Domain & Subdomain Switcher -->
-<div id="domain-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 10000; justify-content: center; align-items: center;">
-    <div style="background: #1e293b; border: 1px solid rgba(167,139,250,0.3); border-radius: 20px; width: 90%; max-width: 680px; max-height: 90vh; overflow-y: auto; padding: 28px; box-shadow: 0 25px 70px rgba(0,0,0,0.7);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h3 style="font-size: 19px; color: var(--text-main); display: flex; align-items: center; gap: 10px; margin: 0;">
-                <span>🌐</span> Guided Domain & Subdomain Switcher
-            </h3>
-            <button onclick="closeDomainModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
-        </div>
-
-        <div id="domain-modal-server-badge" style="background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.25); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #c4b5fd; margin-bottom: 18px;">
-            Target Server: <strong>-</strong>
-        </div>
-        <input type="hidden" id="domain-modal-preset-id">
-
-        <div id="domain-modal-form-area">
-            <!-- Pre-Check Box -->
-            <div id="domain-modal-precheck-box" style="background: rgba(15,23,42,0.7); border: 1px solid rgba(59,130,246,0.25); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <div style="font-size: 13px; font-weight: 600; color: #93c5fd; display: flex; align-items: center; gap: 8px;">
-                        <span>🔍</span> Status Konfigurasi VPS Saat Ini (Pre-Check)
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span id="domain-precheck-status-badge" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">
-                            ⏳ Memeriksa...
-                        </span>
-                        <button type="button" onclick="runDomainPrecheck()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; border-radius: 6px; padding: 2px 8px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Cek ulang konfigurasi VPS">
-                            🔄 Refresh
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="domain-precheck-content" style="font-size: 12px; color: var(--text-muted);">
-                    <div style="text-align: center; padding: 8px 0; color: #94a3b8;">
-                        <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #60a5fa; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
-                        Sedang membaca .env backend, .env frontend, dan database tenant di VPS...
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="domain-modal-old-subdomain">Subdomain Lama <span style="color: var(--text-muted); font-size: 11px;">(opsional)</span></label>
-                    <input type="text" id="domain-modal-old-subdomain" placeholder="Contoh: smkn1pld">
-                    <small style="color: var(--text-muted); font-size: 11px;">Untuk pencocokan rekaman tenant di database.</small>
-                </div>
-                <div class="form-group">
-                    <label for="domain-modal-new-subdomain">Subdomain Baru <span style="color: #34d399; font-weight: 700;">*</span></label>
-                    <input type="text" id="domain-modal-new-subdomain" placeholder="Contoh: demo" oninput="updateDomainPreview()">
-                    <small style="color: var(--text-muted); font-size: 11px;">Subdomain utama baru yang akan aktif.</small>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="domain-modal-base-domain">Base Domain Platform</label>
-                    <input type="text" id="domain-modal-base-domain" value="absenta.id" oninput="updateDomainPreview()">
-                </div>
-                <div class="form-group">
-                    <label for="domain-modal-custom-domain">Custom Domain Penuh <span style="color: var(--text-muted); font-size: 11px;">(opsional)</span></label>
-                    <input type="text" id="domain-modal-custom-domain" placeholder="Contoh: absensi.sekolah.sch.id" oninput="updateDomainPreview()">
-                </div>
-            </div>
-
-            <!-- Live URL Preview -->
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px; margin-bottom: 18px;">
-                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Preview URL Akses Baru:</div>
-                <div id="domain-modal-preview-url" style="font-family: 'Fira Code', monospace; font-size: 14px; font-weight: 600; color: #34d399;">
-                    https://demo.absenta.id
-                </div>
-            </div>
-
-            <!-- Automation Checklist -->
-            <div style="background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 14px; margin-bottom: 20px; font-size: 12px; line-height: 1.8; color: var(--text-muted);">
-                <div style="font-weight: 600; color: var(--text-main); margin-bottom: 6px;">Tahapan Otomasi yang Akan Dijalankan:</div>
-                <div>🛡️ <strong>1. Backup:</strong> Otomatis membuat <code>.env.bak_[timestamp]</code> di VPS.</div>
-                <div>📝 <strong>2. Variabel .env:</strong> Memperbarui <code>MAIN_DOMAIN</code>, <code>APP_URL</code>, <code>PUBLIC_DOMAIN_BASE</code>.</div>
-                <div>🗄️ <strong>3. Database Tenant:</strong> Mengupdate <code>subdomain</code> pada tabel Tenant PostgreSQL.</div>
-                <div>📡 <strong>4. Server Lisensi:</strong> Sinkronisasi Caddy Cloud Gateway & regenerasi routing SSL.</div>
-                <div>🔁 <strong>5. PM2 & Caddy:</strong> Reload zero-downtime tanpa memutus sesi pengguna.</div>
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="btn btn-secondary" type="button" onclick="closeDomainModal()">Batal</button>
-                <button class="btn btn-primary" id="domain-modal-apply-btn" type="button" onclick="startDomainUpdateStream()">
-                    🚀 Terapkan Pembaruan Domain
-                </button>
-            </div>
-        </div>
-
-        <!-- Terminal Output Log Area (Hidden during form input) -->
-        <div id="domain-modal-terminal-area" style="display: none; margin-top: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span id="domain-stream-status" style="font-size: 13px; font-weight: 600; color: #60a5fa;">⏳ Menghubungkan ke VPS...</span>
-                <span id="domain-stream-spinner" class="spinner" style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #60a5fa; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite;"></span>
-            </div>
-            <pre id="domain-stream-terminal" style="background: #090d16; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; font-family: 'Fira Code', monospace; font-size: 12px; color: #a5f3fc; height: 320px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;"></pre>
-            
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
-                <button class="btn btn-secondary" id="domain-modal-close-stream-btn" type="button" onclick="closeDomainModal()">Tutup Jendela</button>
-                <a id="domain-modal-open-link-btn" href="#" target="_blank" class="btn btn-primary" style="display: none; text-decoration: none;">
-                    🌐 Buka Aplikasi Baru ↗
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- ========================================================================= -->
-<!-- MODAL: TUNING KERNEL & SISTEM PRODUKSI (REMOTE SSE)                      -->
+<!-- MODALS (Modular HTML Partials)                                            -->
 <!-- ========================================================================= -->
-<div id="tuning-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 10000; justify-content: center; align-items: center;" onclick="if(event.target===this) closeTuningModal()">
-    <div style="background: #1e293b; border: 1px solid rgba(244,114,182,0.3); border-radius: 20px; width: 90%; max-width: 680px; max-height: 90vh; overflow-y: auto; padding: 28px; box-shadow: 0 25px 70px rgba(0,0,0,0.7);" onclick="event.stopPropagation()">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid var(--glass-border); padding-bottom: 12px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(244,114,182,0.15); border: 1px solid rgba(244,114,182,0.3); display: flex; align-items: center; justify-content: center; font-size: 18px;">
-                    🚀
-                </div>
-                <div>
-                    <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">Tuning Kernel & Sistem Produksi</h3>
-                    <p style="margin: 2px 0 0; font-size: 12px; color: var(--text-muted);">Optimasi OS Linux, Conntrack 524k, TCP BBR, Postgres, Redis, & WireGuard</p>
-                </div>
-            </div>
-            <button class="btn-close" onclick="closeTuningModal()" style="background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer;">✕</button>
-        </div>
+<!-- @@include('modals/audit-stream-modal.html') -->
+<!-- @@include('modals/preset-modal.html') -->
+<!-- @@include('modals/domain-modal.html') -->
+<!-- @@include('modals/tuning-modal.html') -->
+<!-- @@include('modals/iops-modal.html') -->
 
-        <!-- Form Input Parameter Tuning -->
-        <div id="tuning-modal-form-area">
-            <input type="hidden" id="tuning-modal-preset-id">
-
-            <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Target Server:</div>
-                    <div id="tuning-modal-target-info" style="font-family: 'Fira Code', monospace; font-size: 13.5px; font-weight: 600; color: #f472b6;">
-                        10.10.10.116 (asep)
-                    </div>
-                </div>
-                <span class="badge" style="background: rgba(244,114,182,0.12); color: #f472b6; border: 1px solid rgba(244,114,182,0.3); font-size: 11px;">
-                    ⚡ High-Concurrency
-                </span>
-            </div>
-
-            <!-- Live Pre-Check Status Matrix -->
-            <div id="tuning-precheck-container" style="background: rgba(15,23,42,0.7); border: 1px solid rgba(244,114,182,0.25); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <div style="font-size: 12px; font-weight: 700; color: #f472b6; display: flex; align-items: center; gap: 6px;">
-                        <span>🔍</span> Kondisi Parameter Sistem Saat Ini (Live Pre-Check)
-                    </div>
-                    <span id="tuning-precheck-badge" class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); font-size: 11px;">
-                        ⏳ Memeriksa...
-                    </span>
-                </div>
-                <div id="tuning-precheck-content" style="font-size: 11.5px; color: var(--text-muted);">
-                    <div style="text-align: center; padding: 10px 0;">
-                        <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #f472b6; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
-                        Sedang membaca parameter kernel sysctl, conntrack, memory, dan limits di VPS...
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="tuning-modal-role">Profil Peran Server (Workload Profile)</label>
-                    <select id="tuning-modal-role" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: var(--text-main); font-size: 12.5px;">
-                        <option value="all-in-one" selected>All-In-One (App + DB Postgres + Redis + Tunnel) [Rekomendasi]</option>
-                        <option value="dedicated-postgres">Dedicated PostgreSQL Database Server (50% RAM ke DB)</option>
-                        <option value="dedicated-redis">Dedicated Redis Caching Server (70% RAM ke Redis)</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="tuning-modal-timezone">Zona Waktu Server OS & Sinkronisasi NTP</label>
-                    <select id="tuning-modal-timezone" style="width: 100%; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: var(--text-main); font-size: 12.5px;">
-                        <option value="Asia/Jakarta" selected>Asia/Jakarta (WIB - Jawa, Sumatera, Kalbar, Kalteng)</option>
-                        <option value="Asia/Makassar">Asia/Makassar (WITA - Bali, Sulawesi, NTB, NTT, Kalsel, Kaltim)</option>
-                        <option value="Asia/Jayapura">Asia/Jayapura (WIT - Papua, Maluku)</option>
-                        <option value="UTC">UTC (Standar Cloud Multi-Tenant)</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Detail Optimasi yang Diterapkan -->
-            <div style="background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 14px; margin-bottom: 20px; font-size: 12px; line-height: 1.8; color: var(--text-muted);">
-                <div style="font-weight: 600; color: var(--text-main); margin-bottom: 6px;">Komponen yang Otomatis Dioptimalkan:</div>
-                <div>⚡ <strong>1. Kernel & WireGuard:</strong> Conntrack 524.288, Google TCP BBR, Buffer Socket 16MB, SOMAXCONN 65.535, IP Forwarding.</div>
-                <div>🛡️ <strong>2. Limits & Sockets:</strong> Open Files 65.536 s/d 1.048.576 (mencegah error <em>too many open files</em>).</div>
-                <div>🗄️ <strong>3. PostgreSQL:</strong> Auto-tuning <code>shared_buffers</code>, <code>max_connections</code>, & worker threads adaptif RAM/CPU.</div>
-                <div>⚡ <strong>4. Redis:</strong> Maxmemory dinamis & eviction policy <code>allkeys-lru</code> untuk caching cepat.</div>
-                <div>🐳 <strong>5. Docker & MTU:</strong> Log rotation 50MB x 5 file & TCP MSS Clamping anti-fragmentasi.</div>
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="btn btn-secondary" type="button" onclick="closeTuningModal()">Batal</button>
-                <button class="btn btn-primary" id="tuning-modal-apply-btn" type="button" style="background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none;" onclick="startTuningStream()">
-                    🚀 Jalankan Tuning Server Sekarang
-                </button>
-            </div>
-        </div>
-
-        <!-- Terminal Output Log Area (Hidden during form input) -->
-        <div id="tuning-modal-terminal-area" style="display: none; margin-top: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span id="tuning-stream-status" style="font-size: 13px; font-weight: 600; color: #f472b6;">⏳ Memulai proses tuning kernel remote...</span>
-                <span id="tuning-stream-spinner" class="spinner" style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #f472b6; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite;"></span>
-            </div>
-            <pre id="tuning-stream-terminal" style="background: #090d16; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; font-family: 'Fira Code', monospace; font-size: 12px; color: #fbcfe8; height: 320px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;"></pre>
-            
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
-                <button class="btn btn-secondary" id="tuning-modal-close-stream-btn" type="button" onclick="closeTuningModal()">Tutup Jendela</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL: IOPS CHECKER & STORAGE BENCHMARK (FULL PAGE) -->
-<div id="iops-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(7, 13, 24, 0.96); backdrop-filter: blur(14px); z-index: 99999; overflow-y: auto; padding: 24px 30px; box-sizing: border-box;">
-    <div style="background: #0b1120; border: 1px solid rgba(255,255,255,0.14); border-radius: 24px; width: 100%; max-width: 1440px; margin: 0 auto; padding: 32px 36px; box-shadow: 0 25px 60px -15px rgba(0,0,0,0.9); display: flex; flex-direction: column; gap: 22px;">
-        
-        <!-- Header Bar -->
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 18px; flex-wrap: wrap; gap: 12px;">
-            <div>
-                <h2 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 6px 0; display: flex; align-items: center; gap: 10px;">
-                    ⚡ DISK IOPS BENCHMARK & CONCURRENT CAPACITY AUDITOR
-                </h2>
-                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
-                    Uji Performa Direct I/O Disk Real-Time, Kalkulator Daya Tampung Concurrent User, & Evaluasi Kelayakan Single Instance vs SaaS
-                </p>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <button class="btn btn-secondary" type="button" onclick="closeIopsModal()" style="padding: 10px 20px; font-size: 13px; font-weight: 700; border-color: rgba(255,255,255,0.2); color: #e2e8f0; display: flex; align-items: center; gap: 6px;">
-                    ✕ Tutup Layar Penuh
-                </button>
-            </div>
-        </div>
-
-        <!-- Target Info & Action Bar -->
-        <div style="background: rgba(15,23,42,0.65); border: 1px solid var(--glass-border); border-radius: 16px; padding: 18px 24px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
-            <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center;">
-                <div>
-                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 2px;">Target Server VPS Terpilih</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #38bdf8;" id="iops-target-server-label">10.10.10.116 (asep)</div>
-                </div>
-                <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
-                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 4px;">Hardware & Storage Terdeteksi</div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;" id="iops-hardware-chips">
-                        <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #cbd5e1; font-family: monospace;" id="iops-chip-cpu">🖥️ CPU: Memuat...</span>
-                        <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #cbd5e1; font-family: monospace;" id="iops-chip-ram">🧠 RAM: Memuat...</span>
-                        <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #cbd5e1; font-family: monospace;" id="iops-chip-disk">💽 Disk: Memuat...</span>
-                        <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #38bdf8; font-family: monospace;" id="iops-chip-link">🌐 Link: 100 Mbps VPS</span>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <button class="btn btn-primary" id="iops-run-btn" type="button" onclick="runIopsBenchmark()" style="background: linear-gradient(135deg, #0284c7, #2563eb); border: none; padding: 12px 26px; font-weight: 800; font-size: 13.5px; box-shadow: 0 10px 20px -5px rgba(2,132,199,0.5);">
-                    ⚡ Jalankan Uji IOPS (5 Detik)
-                </button>
-            </div>
-        </div>
-
-        <!-- Loading State -->
-        <div id="iops-loading-container" style="display: none; text-align: center; padding: 60px 20px; background: rgba(15,23,42,0.4); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.1);">
-            <span class="spinner" style="width: 38px; height: 38px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; margin-bottom: 16px;"></span>
-            <div style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">Sedang Menjalankan Direct I/O Random 4K Benchmark...</div>
-            <div style="font-size: 13px; color: var(--text-muted);">Menguji Direct I/O (libaio, iodepth=32, randrw 70/30) via fio di server target. Mohon tunggu ~5-7 detik.</div>
-        </div>
-
-        <!-- Benchmark Result Display Container -->
-        <div id="iops-result-container" style="display: none; flex-direction: column; gap: 22px;">
-            <!-- Score Cards Grid (Top Metrics) -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
-                <!-- Total IOPS Card -->
-                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Random IOPS</div>
-                    <div style="font-size: 32px; font-weight: 900; color: #fff; margin: 10px 0;" id="iops-val-total">0</div>
-                    <div>
-                        <span id="iops-badge-grade" style="display: inline-block; padding: 4px 12px; border-radius: 8px; font-size: 11.5px; font-weight: 800; background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3);">
-                            GRADE S
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Read vs Write IOPS -->
-                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Read vs Write IOPS</div>
-                    <div style="font-size: 14px; color: var(--text-main); margin: 10px 0; line-height: 1.7;">
-                        <div>📖 Read: <strong style="color: #38bdf8; font-size: 16px;" id="iops-val-read">0</strong> IOPS</div>
-                        <div>✍️ Write: <strong style="color: #f472b6; font-size: 16px;" id="iops-val-write">0</strong> IOPS</div>
-                    </div>
-                    <div style="font-size: 11px; color: var(--text-muted);">4K Random Mix (70% Read / 30% Write)</div>
-                </div>
-
-                <!-- Average Latency -->
-                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Disk Latency</div>
-                    <div style="font-size: 32px; font-weight: 900; color: #a78bfa; margin: 10px 0;" id="iops-val-latency">0 ms</div>
-                    <div style="font-size: 11px; color: var(--text-muted);" id="iops-desc-latency">Rata-rata waktu tunggu akses I/O disk</div>
-                </div>
-
-                <!-- Throughput Bandwidth -->
-                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Throughput</div>
-                    <div style="font-size: 32px; font-weight: 900; color: #34d399; margin: 10px 0;" id="iops-val-throughput">0 MB/s</div>
-                    <div style="font-size: 11px; color: var(--text-muted);" id="iops-desc-throughput">Bandwidth Read/Write simultan</div>
-                </div>
-            </div>
-
-            <!-- TWO COLUMNS LAYOUT: CALCULATOR (LEFT) & SCENARIOS (RIGHT) -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 20px; align-items: start;">
-                
-                <!-- LEFT COLUMN: CONCURRENT CAPACITY CALCULATOR -->
-                <div style="background: linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.75)); border: 1px solid rgba(56,189,248,0.3); border-radius: 18px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 18px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px;">
-                        <div>
-                            <h4 style="font-size: 15px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 8px;">
-                                🧮 KALKULATOR KAPASITAS CONCURRENT USER
-                            </h4>
-                            <p style="font-size: 12px; color: var(--text-muted); margin: 3px 0 0 0;">
-                                Multi-Faktor: Disk IOPS + RAM + CPU Compute + Network Link
-                            </p>
-                        </div>
-                        <span style="font-size: 11px; background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); padding: 4px 10px; border-radius: 6px; font-weight: 600;">
-                            Live Calculator
-                        </span>
-                    </div>
-
-                    <!-- Scenario Mode Selector & Link Speed Selector -->
-                    <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 12px;">
-                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(56,189,248,0.2); border-radius: 12px; padding: 12px 14px;">
-                            <label style="display: block; font-size: 11.5px; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">
-                                🎯 Skenario Penggunaan
-                            </label>
-                            <select id="calc-scenario-mode" onchange="onScenarioModeChange(); calculateServerCapacity();" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px; font-weight: 700;">
-                                <option value="operational-only">🏢 Skenario 1: Operational Only</option>
-                                <option value="full-ecosystem" selected>🌐 Skenario 2: Full Ecosystem (Lengkap)</option>
-                            </select>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(56,189,248,0.2); border-radius: 12px; padding: 12px 14px;">
-                            <label style="display: block; font-size: 11.5px; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">
-                                🌐 Port Link Internet Server
-                            </label>
-                            <select id="calc-input-link" onchange="calculateServerCapacity();" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 12px; font-weight: 700;">
-                                <option value="1000">1 Gbps (Datacenter/Baremetal)</option>
-                                <option value="100" selected>100 Mbps (Standard Cloud VPS)</option>
-                                <option value="50">50 Mbps (Dedicated Fiber)</option>
-                                <option value="20">20 Mbps (Broadband Sekolah)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Input Grid (4 Inputs) -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <div>
-                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">
-                                📟 Terminal RFID Gerbang
-                            </label>
-                            <input type="number" id="calc-input-terminal" value="10" min="1" max="200" step="1" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">
-                                🏫 Jumlah Rombel / Kelas KBM
-                            </label>
-                            <input type="number" id="calc-input-guru" value="55" min="1" max="1000" step="5" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">
-                                🎓 Jumlah Siswa Total
-                            </label>
-                            <input type="number" id="calc-input-siswa" value="2000" min="50" max="100000" step="50" oninput="calculateServerCapacity()" style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: #fff; font-size: 13px; font-weight: 700;">
-                        </div>
-
-                        <div id="calc-ortu-container">
-                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">
-                                👨‍👩‍👦 Estimasi Orang Tua (1:1)
-                            </label>
-                            <input type="text" id="calc-input-ortu" value="2.000 Akun Ortu" disabled style="width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.06); color: #94a3b8; font-size: 13px; font-weight: 600; cursor: not-allowed;">
-                        </div>
-                    </div>
-
-                    <!-- 4 Pilar Daya Tampung Komponen Server (Multi-Faktor) -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 11px; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em;">
-                                ⚖️ 4 Pilar Kapasitas Komponen (Hukum Bottleneck)
-                            </span>
-                            <span id="calc-val-bottleneck-badge" style="font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);">
-                                Deteksi Komponen...
-                            </span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-                            <!-- Disk Pillar -->
-                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 6px; text-align: center;">
-                                <div style="font-size: 9.5px; color: var(--text-muted); font-weight: 600;">💽 Disk IOPS</div>
-                                <div style="font-size: 14px; font-weight: 800; color: #38bdf8; margin: 2px 0;" id="calc-cap-disk">~6.500 User</div>
-                                <div style="font-size: 9px; color: var(--text-muted);" id="calc-cap-disk-sub">65.903 IOPS</div>
-                            </div>
-                            <!-- RAM Pillar -->
-                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 6px; text-align: center;">
-                                <div style="font-size: 9.5px; color: var(--text-muted); font-weight: 600;">🧠 RAM Memory</div>
-                                <div style="font-size: 14px; font-weight: 800; color: #a78bfa; margin: 2px 0;" id="calc-cap-ram">~5.800 User</div>
-                                <div style="font-size: 9px; color: var(--text-muted);" id="calc-cap-ram-sub">16 GB RAM</div>
-                            </div>
-                            <!-- CPU Pillar -->
-                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 6px; text-align: center;">
-                                <div style="font-size: 9.5px; color: var(--text-muted); font-weight: 600;">⚡ CPU Compute</div>
-                                <div style="font-size: 14px; font-weight: 800; color: #34d399; margin: 2px 0;" id="calc-cap-cpu">~4.000 User</div>
-                                <div style="font-size: 9px; color: var(--text-muted);" id="calc-cap-cpu-sub">4 Cores</div>
-                            </div>
-                            <!-- Network Link Pillar -->
-                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 6px; text-align: center;">
-                                <div style="font-size: 9.5px; color: var(--text-muted); font-weight: 600;">🌐 Network Link</div>
-                                <div style="font-size: 14px; font-weight: 800; color: #f59e0b; margin: 2px 0;" id="calc-cap-link">~6.250 User</div>
-                                <div style="font-size: 9px; color: var(--text-muted);" id="calc-cap-link-sub">100 Mbps Port</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Metrics Summary 3 Cards -->
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
-                            <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Batas Aman Terpadu</div>
-                            <div style="font-size: 17px; font-weight: 800; color: #38bdf8; margin: 4px 0;" id="calc-val-max-capacity">~4.000 User</div>
-                            <div style="font-size: 10px; color: var(--text-muted);" id="calc-val-max-sub">Komponen Terendah</div>
-                        </div>
-
-                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
-                            <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Kebutuhan Puncak</div>
-                            <div style="font-size: 17px; font-weight: 800; color: #f472b6; margin: 4px 0;" id="calc-val-peak-needed">~1.355 User</div>
-                            <div style="font-size: 10px; color: var(--text-muted);">Peak jam masuk/KBM</div>
-                        </div>
-
-                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
-                            <div style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Beban Puncak</div>
-                            <div style="font-size: 17px; font-weight: 800; color: #10b981; margin: 4px 0;" id="calc-val-load-percent">33.9%</div>
-                            <div style="font-size: 10px; color: #10b981; font-weight: 600;" id="calc-val-verdict-tag">SANGAT LEGA</div>
-                        </div>
-                    </div>
-
-                    <!-- Progress Bar -->
-                    <div>
-                        <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 5px;">
-                            <span style="color: var(--text-muted);">Utilisasi Terhadap Batas Aman Server:</span>
-                            <span id="calc-bar-label" style="font-weight: 700; color: #10b981;">33.9% dari Kapasitas Terpadu</span>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.08); height: 10px; border-radius: 5px; overflow: hidden;">
-                            <div id="calc-load-bar" style="width: 33.9%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 5px; transition: width 0.4s ease, background 0.4s ease;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Recommendation Box -->
-                    <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: 12px; padding: 14px 16px;" id="calc-recommendation-box">
-                        <div style="font-size: 13px; font-weight: 700; color: #34d399; margin-bottom: 5px;" id="calc-recommendation-title">
-                            ✅ Rekomendasi: Server Sangat Ideal untuk Kebutuhan Sekolah Ini
-                        </div>
-                        <div style="font-size: 12px; color: #e2e8f0; line-height: 1.6;" id="calc-recommendation-desc">
-                            Server memiliki daya tampung hingga <strong>~4.000 Concurrent User</strong>. Beban puncak sekolah Anda diperkirakan hanya menyerap <strong>33.9%</strong> kapasitas.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- RIGHT COLUMN: DETAILED SCENARIOS SUITABILITY -->
-                <div style="background: rgba(15,23,42,0.75); border: 1px solid var(--glass-border); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 14px;">
-                    <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px;">
-                        <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px;">
-                            📊 EVALUASI KELAYAKAN 5 SKENARIO BEBAN NYATA
-                        </h4>
-                        <p style="font-size: 12px; color: var(--text-muted); margin: 3px 0 0 0;">
-                            Analisa spesifik per peran pengguna pada jam operasional sekolah
-                        </p>
-                    </div>
-
-                    <!-- Skenario 1: Guru -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">👨‍🏫 Guru Login & Sesi KBM (55 Kelas Serentak)</span>
-                            <span id="iops-guru-status" style="font-size: 11px; font-weight: 800; color: #10b981;">SANGAT INSTAN</span>
-                        </div>
-                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-guru-desc">
-                            55 Guru buka sesi & update 2.000 status siswa serentak dalam 1 menit selesai tanpa ada I/O lock (&lt;10ms).
-                        </p>
-                    </div>
-
-                    <!-- Skenario 2: Siswa -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">🎓 Siswa Login & Akses Rekap (~2.000 Siswa)</span>
-                            <span id="iops-siswa-status" style="font-size: 11px; font-weight: 800; color: #10b981;">SANGAT PRIMA</span>
-                        </div>
-                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-siswa-desc">
-                            2.000 - 5.000 Siswa login & buka portal akademik bersamaan tanpa antrean disk.
-                        </p>
-                    </div>
-
-                    <!-- Skenario 3: Ortu -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">👨‍👩‍👦 Orang Tua Login & Notifikasi (~2.000+ Ortu)</span>
-                            <span id="iops-ortu-status" style="font-size: 11px; font-weight: 800; color: #10b981;">SANGAT PRIMA</span>
-                        </div>
-                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-ortu-desc">
-                            3.000+ Orang tua menerima & memantau notifikasi real-time saat jam masuk tanpa latency.
-                        </p>
-                    </div>
-
-                    <!-- Skenario 4: Terminal RFID -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">📟 Terminal RFID Gerbang (10 - 55 Mesin)</span>
-                            <span id="iops-terminal-status" style="font-size: 11px; font-weight: 800; color: #10b981;">ULTRA CEPAT</span>
-                        </div>
-                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-terminal-desc">
-                            55 Perangkat RFID tapping serentak (30-50 tap/detik) tercatat instan di PostgreSQL direct write.
-                        </p>
-                    </div>
-
-                    <!-- Skenario 5: SaaS Multi-Tenant -->
-                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 12.5px; font-weight: 700; color: #e2e8f0;">🌐 SaaS Multi-Tenant (Puluhan Ribu Siswa)</span>
-                            <span id="iops-saas-status" style="font-size: 11px; font-weight: 800; color: #10b981;">ENTERPRISE READY</span>
-                        </div>
-                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0;" id="iops-saas-desc">
-                            Sangat siap melayani 15-30+ sekolah / puluhan ribu siswa aktif serentak (SaaS High Load & CBT Ready).
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer Action -->
-        <div style="display: flex; justify-content: flex-end; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
-            <button class="btn btn-secondary" type="button" onclick="closeIopsModal()" style="padding: 11px 28px; font-weight: 700; font-size: 13.5px;">
-                ✕ Tutup Layar Penuh
-            </button>
-        </div>
-    </div>
-</div>
-
-<script src="/js/preset-picker.js?v=20260919_scenarios"></script>
-<script src="/js/app.js?v=20260919_scenarios"></script>
-<script src="/js/wizard.js?v=20260919_scenarios"></script>
-<script src="/js/presets.js?v=20260919_scenarios"></script>
-<script src="/js/cluster.js?v=20260919_scenarios"></script>
-<script src="/js/logs.js?v=20260919_scenarios"></script>
-<script src="/js/health.js?v=20260919_scenarios"></script>
-<script src="/js/audit.js?v=20260919_scenarios"></script>
+<script src="/js/preset-picker.js?v=20260919_v5"></script>
+<script src="/js/app.js?v=20260919_v5"></script>
+<script src="/js/wizard.js?v=20260919_v5"></script>
+<script src="/js/presets/capacity-calc.js?v=20260919_v5"></script>
+<script src="/js/presets/audit-report-pdf.js?v=20260919_v5"></script>
+<script src="/js/presets/benchmark-iops.js?v=20260919_v5"></script>
+<script src="/js/presets/presets-ui.js?v=20260919_v5"></script>
+<script src="/js/presets/presets-runner.js?v=20260919_v5"></script>
+<script src="/js/presets.js?v=20260919_v5"></script>
+<script src="/js/cluster.js?v=20260919_v5"></script>
+<script src="/js/logs.js?v=20260919_v5"></script>
+<script src="/js/health.js?v=20260919_v5"></script>
+<script src="/js/audit.js?v=20260919_v5"></script>
 
 </body>
 </html>
