@@ -48,8 +48,11 @@ function selectScenario(scenario) {
     const domainInput = document.getElementById('target-domain');
     const domainTip = document.getElementById('domain-helper-tip');
 
+    const currentIp = (document.getElementById('vps-ip') ? document.getElementById('vps-ip').value : '') || installConfig.vpsIp || '';
+    const isPrivateIp = /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(currentIp);
+
     if (scenario === 'saas-public') {
-        installConfig.sslScenario = 'letsencrypt';
+        installConfig.sslScenario = isPrivateIp ? 'sync' : 'letsencrypt';
         if (domainLabel) domainLabel.innerText = 'Domain Induk Platform SaaS (Cloud VPS)';
         if (domainInput) {
             domainInput.placeholder = 'Contoh: absenta.id (tanpa titik di depan)';
@@ -58,7 +61,11 @@ function selectScenario(scenario) {
             }
         }
         if (domainTip) {
-            domainTip.innerHTML = '🌐 <strong>Cloud Multi-Tenant:</strong> Masukkan domain induk platform Anda (tanpa subdomain). Sekolah-sekolah pelanggan nanti otomatis mendapatkan subdomain resmi di bawah domain ini (contoh: <code style="color:#6ee7b7;font-weight:bold;">smkn1.absenta.id</code>).';
+            if (isPrivateIp) {
+                domainTip.innerHTML = '🌐 <strong>Cloud Multi-Tenant (Node LAN Terdeteksi):</strong> Target adalah IP LAN lokal (' + currentIp + '). Sertifikat SSL Wildcard otomatis dialihkan ke <strong>Sync dari Server Lisensi</strong> agar akses Split-DNS HTTPS langsung aktif tanpa terblokir firewall ACME.';
+            } else {
+                domainTip.innerHTML = '🌐 <strong>Cloud Multi-Tenant:</strong> Masukkan domain induk platform Anda (tanpa subdomain). Sekolah-sekolah pelanggan nanti otomatis mendapatkan subdomain resmi di bawah domain ini (contoh: <code style="color:#6ee7b7;font-weight:bold;">smkn1.absenta.id</code>).';
+            }
         }
     } else if (scenario === 'saas-local') {
         installConfig.sslScenario = 'sync';
@@ -66,11 +73,11 @@ function selectScenario(scenario) {
         if (domainInput) {
             domainInput.placeholder = 'Contoh: absenta.id atau home.absenta.id';
             if (!domainInput.value || domainInput.value === 'absenta.sekolah.sch.id' || domainInput.value === 'smkn1pld.absenta.id') {
-                domainInput.value = 'home.absenta.id';
+                domainInput.value = 'absenta.id';
             }
         }
         if (domainTip) {
-            domainTip.innerHTML = '🏠 <strong>Home-Lab Multi-Tenant:</strong> Server fisik di rumah/kantor sendiri (online via EasyTunnel). Jika Anda juga menyewa Cloud VPS untuk <code>absenta.id</code>, gunakan pembeda seperti <code style="color:#6ee7b7;font-weight:bold;">home.absenta.id</code> agar sekolah di server rumah beralamat di <code style="color:#6ee7b7;font-weight:bold;">smkn1.home.absenta.id</code>.';
+            domainTip.innerHTML = '🏠 <strong>Home-Lab Multi-Tenant:</strong> Server fisik di rumah/kantor sendiri (online via EasyTunnel / Split-DNS). Gunakan domain induk seperti <code style="color:#6ee7b7;font-weight:bold;">absenta.id</code> agar sekolah pelanggan mendapatkan subdomain resmi (contoh: <code>smkn1.absenta.id</code>). Sertifikat SSL Wildcard otomatis disinkronkan dari Server Lisensi.';
         }
     } else if (scenario === 'onpremise') {
         installConfig.sslScenario = 'sync';
@@ -82,7 +89,7 @@ function selectScenario(scenario) {
             }
         }
         if (domainTip) {
-            domainTip.innerHTML = '🏫 <strong>Dedicated 1 Sekolah:</strong> Masukkan subdomain resmi sekolah ini. Jika Anda memasukkan atau meregistrasikan Serial Key di Langkah 4 nanti, kolom ini akan otomatis diselaraskan.';
+            domainTip.innerHTML = '🏫 <strong>Dedicated 1 Sekolah:</strong> Masukkan subdomain resmi sekolah ini (contoh: <code style="color:#6ee7b7;font-weight:bold;">smkn1pld.absenta.id</code>). Sertifikat SSL resmi otomatis diunduh dari Server Lisensi Pusat.';
         }
     }
 
@@ -551,17 +558,22 @@ function updateStepUI() {
     if (currentStep === 5) {
         renderSummary();
     }
-}
 
 function nextStep() {
     if (currentStep === 1) {
         // targetOS already set via selectTargetOS() click handler
         if (installConfig.targetOS === 'linux') {
-            installConfig.vpsIp = document.getElementById('vps-ip').value;
-            installConfig.vpsUser = document.getElementById('vps-user').value;
+            installConfig.vpsIp = (document.getElementById('vps-ip').value || '').trim();
+            installConfig.vpsUser = (document.getElementById('vps-user').value || '').trim();
             installConfig.vpsSudoPass = document.getElementById('vps-sudo-pass').value;
             const keyChoiceEl = document.getElementById('vps-key-select');
             if (keyChoiceEl) installConfig.vpsKeyChoice = keyChoiceEl.value;
+
+            // Auto check if target IP is private LAN IP
+            const isPrivate = /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(installConfig.vpsIp);
+            if (isPrivate && installConfig.sslScenario === 'letsencrypt') {
+                installConfig.sslScenario = 'sync';
+            }
         } else {
             // Windows on-premise: clear SSH fields so they don't confuse the backend
             installConfig.vpsIp = 'localhost';
@@ -623,9 +635,9 @@ function renderSummary() {
 
     let scenarioLabel = '🌐 saas-public (Cloud VPS Multi-Tenant, Let\'s Encrypt SSL)';
     if (installConfig.deployScenario === 'saas-local') {
-        scenarioLabel = '🏠 saas-local (Server Rumah/Kantor Multi-Tenant + EasyTunnel)';
+        scenarioLabel = '🏠 saas-local (Server Rumah/Kantor Multi-Tenant + Wildcard SSL Sync)';
     } else if (installConfig.deployScenario === 'onpremise') {
-        scenarioLabel = '🏫 onpremise (Dedicated 1 Sekolah: LAN Port 80 + EasyTunnel)';
+        scenarioLabel = '🏫 onpremise (Dedicated 1 Sekolah: LAN Port 80 + Wildcard SSL Sync)';
     }
 
     let domainSummaryLabel = installConfig.deployScenario === 'onpremise' ? '🌐 Domain Akses Sekolah:' : '🌐 Domain Induk Platform:';
@@ -677,7 +689,7 @@ function startInstallation() {
                 
                 let domainUrl = '';
                 if (installConfig.targetDomain && installConfig.targetDomain !== 'localhost' && !/^[0-9.]+$/.test(installConfig.targetDomain)) {
-                    const proto = (installConfig.sslScenario === 'letsencrypt' || installConfig.sslScenario === 'cloudflare') ? 'https://' : 'http://';
+                    const proto = (installConfig.sslScenario === 'letsencrypt' || installConfig.sslScenario === 'cloudflare' || installConfig.sslScenario === 'sync') ? 'https://' : 'http://';
                     domainUrl = `${proto}${installConfig.targetDomain}`;
                 }
 

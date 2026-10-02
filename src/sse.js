@@ -241,6 +241,12 @@ function handleStreamInstall(req, res, installParams) {
             keyPath = path.isAbsolute(rawKey) ? rawKey : path.join(ROOT_DIR, rawKey);
         }
 
+        let resolvedSslScenario = installParams.sslScenario || (installParams.deployScenario === 'saas-public' ? 'letsencrypt' : 'sync');
+        const isPrivateTarget = /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(installParams.vpsIp || '');
+        if (isPrivateTarget && resolvedSslScenario === 'letsencrypt') {
+            resolvedSslScenario = 'sync';
+        }
+
         psArgs = [
             '-ExecutionPolicy', 'Bypass',
             '-File', path.join(ROOT_DIR, 'deploy-absenta-remote.ps1'),
@@ -253,7 +259,7 @@ function handleStreamInstall(req, res, installParams) {
             '-TargetDomain', installParams.targetDomain || '',
             '-BackendPort', installParams.backendPort || '3003',
             '-FrontendPort', installParams.frontendPort || '5175',
-            '-sslScenario', installParams.sslScenario || (installParams.deployScenario === 'saas-public' ? 'letsencrypt' : 'sync'),
+            '-sslScenario', resolvedSslScenario,
             '-cfToken', installParams.cfToken || '',
             '-DbUrl', installParams.dbUrl || '',
             '-InstallPostgres', installParams.postgresMode || 'Y',
