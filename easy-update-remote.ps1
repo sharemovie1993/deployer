@@ -876,6 +876,14 @@ pm2 save || true
 pm2 save || true
 
 
+# Sync blocked.html fallback to Caddy root
+if [ -f "/var/www/licensing-server/public/blocked.html" ]; then
+    echo "📋 Menyinkronkan blocked.html ke root web Caddy (/var/www/absenta.id)..."
+    run_sudo mkdir -p /var/www/absenta.id
+    run_sudo cp -f /var/www/licensing-server/public/blocked.html /var/www/absenta.id/blocked.html
+    run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/absenta.id 2>/dev/null || true
+fi
+
 # 5. Jalankan kembali Caddy (non-fatal — Caddy mungkin tidak terpakai di semua setup)
 echo "Menjalankan kembali Caddy..."
 run_sudo systemctl start caddy
@@ -1205,6 +1213,14 @@ fi
 
 # Simpan status PM2 terbaru
 pm2 save || true
+
+# Sync blocked.html fallback to Caddy root
+if [ -f "/var/www/licensing-server/public/blocked.html" ]; then
+    echo "📋 Menyinkronkan blocked.html ke root web Caddy (/var/www/absenta.id)..."
+    run_sudo mkdir -p /var/www/absenta.id
+    run_sudo cp -f /var/www/licensing-server/public/blocked.html /var/www/absenta.id/blocked.html
+    run_sudo chown -R ${NEW_USER}:${NEW_USER} /var/www/absenta.id 2>/dev/null || true
+fi
 
 echo "Menjalankan kembali Caddy..."
 run_sudo systemctl start caddy
