@@ -289,8 +289,7 @@ echo '$SUDO_PASS' | sudo -S apt-get update -y || {
     echo '$SUDO_PASS' | sudo -S rm -f /var/lib/dpkg/lock-* /var/lib/apt/lists/lock 2>/dev/null || true
     echo '$SUDO_PASS' | sudo -S dpkg --configure -a
     echo '$SUDO_PASS' | sudo -S apt-get update -y
-}
-echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw build-essential wireguard openresolv
+echo '$SUDO_PASS' | sudo -S apt-get install -y curl git tar ufw build-essential wireguard openresolv snmpd snmp softether-vpnserver softether-vpncmd
 
 # Install Node 20
 if ! command -v node &>/dev/null; then
@@ -353,6 +352,60 @@ echo '$SUDO_PASS' | sudo -S cp /tmp/90-wireguard /etc/sudoers.d/90-wireguard
 echo '$SUDO_PASS' | sudo -S chown root:root /etc/sudoers.d/90-wireguard
 echo '$SUDO_PASS' | sudo -S chmod 440 /etc/sudoers.d/90-wireguard
 rm -f /tmp/90-wireguard
+
+# ============================================================
+# SETUP SNMP MONITORING (THE DUDE SERVER + PM2 PROBE)
+# ============================================================
+echo "Mengonfigurasi SNMP daemon untuk monitoring The Dude..."
+echo '$SUDO_PASS' | sudo -S tee /usr/local/bin/check_pm2_snmp.sh > /dev/null << 'EOF'
+#!/bin/bash
+PID=`$(pgrep -f "licensing-server|license-server" | head -n 1)
+HTTP_CODE=`$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://127.0.0.1:5001/ 2>/dev/null)
+
+if [ -n "`$PID" ] && [ "`$HTTP_CODE" = "200" ]; then
+    echo "OK: licensing-server online (PID: `$PID, HTTP: `$HTTP_CODE)"
+    exit 0
+else
+    echo "CRITICAL: licensing-server down (PID: `${PID:-none}, HTTP: `$HTTP_CODE)"
+    exit 1
+fi
+EOF
+echo '$SUDO_PASS' | sudo -S chmod +x /usr/local/bin/check_pm2_snmp.sh
+
+echo '$SUDO_PASS' | sudo -S tee /etc/snmp/snmpd.conf > /dev/null << 'EOF'
+sysLocation    Server Lisensi Absenta
+sysContact     admin@absenta.id
+sysServices    72
+agentAddress   udp:161,udp6:161
+rocommunity    public default
+rocommunity6   public default
+includeAllDisks 10%
+extend pm2_license /usr/local/bin/check_pm2_snmp.sh
+includeDir /etc/snmp/snmpd.conf.d
+EOF
+
+echo '$SUDO_PASS' | sudo -S systemctl enable snmpd
+echo '$SUDO_PASS' | sudo -S systemctl restart snmpd
+
+# ============================================================
+# SETUP SOFTETHER VPN SERVER (OPENVPN, SSTP, L2TP UNTUK ROS v6)
+# ============================================================
+echo "Mengonfigurasi SoftEther VPN Server (OpenVPN, SSTP, L2TP)..."
+echo '$SUDO_PASS' | sudo -S systemctl stop xl2tpd 2>/dev/null || true
+echo '$SUDO_PASS' | sudo -S systemctl disable xl2tpd 2>/dev/null || true
+echo '$SUDO_PASS' | sudo -S systemctl enable softether-vpnserver
+echo '$SUDO_PASS' | sudo -S systemctl restart softether-vpnserver
+sleep 2
+
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /CMD HubCreate DEFAULT /PASSWORD:'' || true
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /CMD ListenerDisable 443 || true
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /CMD ListenerCreate 4443 || true
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /CMD ListenerCreate 1194 || true
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /CMD ListenerCreate 992 || true
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /CMD ProtoOptionsSet OpenVPN /NAME:Enabled /VALUE:True || true
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /CMD IPsecEnable /L2TP:yes /L2TPRAW:yes /ETHERIP:yes /PSK:absenta /DEFAULTHUB:DEFAULT || true
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /HUB:DEFAULT /CMD SecureNatEnable || true
+vpncmd 127.0.0.1:5555 /SERVER /PASSWORD:'' /HUB:DEFAULT /CMD SecureNatHostSet /IP:10.0.1.1 /MASK:255.255.255.0 || true
 
 echo '$SUDO_PASS' | sudo -S mkdir -p /var/www/$TARGET_SUBDIR
 echo '$SUDO_PASS' | sudo -S chown ${NEW_USER}:${NEW_USER} /var/www/$TARGET_SUBDIR
@@ -475,6 +528,12 @@ if systemctl is-active --quiet caddy; then echo -e "\e[1;32mACTIVE\e[0m"; else e
 
 echo -n "Status WireGuard (wg0): "
 if systemctl is-active --quiet wg-quick@wg0; then echo -e "\e[1;32mACTIVE\e[0m"; else echo -e "\e[1;31mINACTIVE\e[0m"; fi
+
+echo -n "Status SNMP Daemon: "
+if systemctl is-active --quiet snmpd; then echo -e "\e[1;32mACTIVE\e[0m"; else echo -e "\e[1;31mINACTIVE\e[0m"; fi
+
+echo -n "Status SoftEther VPN Server: "
+if systemctl is-active --quiet softether-vpnserver; then echo -e "\e[1;32mACTIVE\e[0m"; else echo -e "\e[1;31mINACTIVE\e[0m"; fi
 "@
 
 & ssh -i "$SAFE_NEW_KEY" -o StrictHostKeyChecking=no "${NEW_USER}@${NEW_IP}" "$verifyScript"
