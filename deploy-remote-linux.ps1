@@ -822,6 +822,18 @@ if [ "$IS_ABSENTA" = "True" ]; then
     else
         echo "VITE_DEPLOY_SCENARIO=$DEPLOY_SCENARIO" >> absenta_frontend/.env
     fi
+    if [ -f absenta_frontend/.env.production ]; then
+        if grep -q "^VITE_MAIN_DOMAIN=" absenta_frontend/.env.production; then
+            sed -i "s|^VITE_MAIN_DOMAIN=.*|VITE_MAIN_DOMAIN=$TARGET_DOMAIN|g" absenta_frontend/.env.production
+        else
+            echo "VITE_MAIN_DOMAIN=$TARGET_DOMAIN" >> absenta_frontend/.env.production
+        fi
+        if grep -q "^VITE_DEPLOY_SCENARIO=" absenta_frontend/.env.production; then
+            sed -i "s|^VITE_DEPLOY_SCENARIO=.*|VITE_DEPLOY_SCENARIO=$DEPLOY_SCENARIO|g" absenta_frontend/.env.production
+        else
+            echo "VITE_DEPLOY_SCENARIO=$DEPLOY_SCENARIO" >> absenta_frontend/.env.production
+        fi
+    fi
 
     # Install & Build Backend
     cd absenta_backend

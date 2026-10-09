@@ -183,6 +183,10 @@ if [ -f "absenta_frontend/.env" ]; then
     echo "   [Frontend] -> VITE_MAIN_DOMAIN=__NEW_BASE_DOMAIN__"
 fi
 
+if [ -f "absenta_frontend/.env.production" ]; then
+    update_env_var "absenta_frontend/.env.production" "VITE_MAIN_DOMAIN" "__NEW_BASE_DOMAIN__"
+fi
+
 echo "✅ [2/5] Pembaruan .env backend & frontend selesai."
 
 # ------------------------------------------------------------
@@ -306,7 +310,7 @@ async function syncGateway() {
             schoolName: tenants[0] ? tenants[0].name : 'Absenta Node',
             tenants: tenants.map(t => ({ id: t.id, name: t.name, subdomain: t.subdomain })),
             appDomain: '__NEW_FULL_DOMAIN__',
-            deployMode: 'hybrid',
+            deployMode: process.env.DEPLOY_SCENARIO || 'saas-local',
             timestamp: new Date().toISOString()
         });
 

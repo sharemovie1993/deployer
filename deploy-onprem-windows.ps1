@@ -892,6 +892,9 @@ if (-not $fPortFound) { $newFrontendEnv += "PORT=$FrontendPort" }
 if (-not $proxyTargetFound) { $newFrontendEnv += "VITE_PROXY_TARGET=http://localhost:$BackendPort" }
 if (-not $viteScenarioFound) { $newFrontendEnv += "VITE_DEPLOY_SCENARIO=$deployScenario" }
 $newFrontendEnv | Set-Content "absenta_frontend/.env"
+if (Test-Path "absenta_frontend/.env.production") {
+    $newFrontendEnv | Set-Content "absenta_frontend/.env.production"
+}
 
 Write-Host "Info: Konfigurasi .env berhasil diperbarui untuk target ${finalScheme}://$finalDomain." -ForegroundColor Gray
 
