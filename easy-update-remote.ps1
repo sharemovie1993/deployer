@@ -84,8 +84,8 @@ if (-not (Test-Path $NEW_KEY_SOURCE)) {
     exit
 }
 
-# Set key permission for Windows SSH client
-$SAFE_NEW_KEY = "$env:TEMP\new-update-key.pem"
+# Set key permission for Windows SSH client (Unique per process PID to allow safe parallel multi-tab updates)
+$SAFE_NEW_KEY = "$env:TEMP\new-update-key-$PID-$([System.Guid]::NewGuid().ToString().Substring(0,8)).pem"
 Remove-Item $SAFE_NEW_KEY -Force -ErrorAction SilentlyContinue
 Get-Content -Path $NEW_KEY_SOURCE | Set-Content -Path $SAFE_NEW_KEY
 $acl = New-Object System.Security.AccessControl.FileSecurity
