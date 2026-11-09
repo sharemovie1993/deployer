@@ -1271,6 +1271,8 @@ fi
 # 2. Susun blok konfigurasi Caddy Absenta
 cat << EOF_CADDY_HTTP > /tmp/caddy_absenta_block.conf
 $CADDY_HOST_HTTP {
+    @hashedAssets path /assets/*
+    header @hashedAssets Cache-Control "public, max-age=31536000, immutable"
     reverse_proxy /api/* 127.0.0.1:$B_PORT
     reverse_proxy /socket.io/* 127.0.0.1:$B_PORT
     reverse_proxy /absenta-storage/* 127.0.0.1:9000
@@ -1283,6 +1285,8 @@ if [ ! -z "$CADDY_HOST_HTTPS" ]; then
     cat << EOF_CADDY_HTTPS >> /tmp/caddy_absenta_block.conf
 
 $CADDY_HOST_HTTPS {
+    @hashedAssets path /assets/*
+    header @hashedAssets Cache-Control "public, max-age=31536000, immutable"
     reverse_proxy /api/* 127.0.0.1:$B_PORT
     reverse_proxy /socket.io/* 127.0.0.1:$B_PORT
     reverse_proxy /absenta-storage/* 127.0.0.1:9000
