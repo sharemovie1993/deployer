@@ -463,7 +463,8 @@ check_wireguard() {
   # Smart DB-Aware Query via Node.js CLI Script
   DB_STATUS_JSON=""
   if [ -f "/var/www/project-absenta/absenta_backend/dist/scripts/watchdog-sync.js" ]; then
-    DB_STATUS_JSON=`$(cd /var/www/project-absenta/absenta_backend && export PATH=`$PATH:/home/asepsuryadi/.nvm/versions/node/`$(ls /home/asepsuryadi/.nvm/versions/node 2>/dev/null | tail -n 1)/bin; node dist/scripts/watchdog-sync.js 2>/dev/null || echo "")
+    NODE_BIN_DIR=`$(ls -d /home/*/.nvm/versions/node/* 2>/dev/null | tail -n 1)/bin
+    DB_STATUS_JSON=`$(cd /var/www/project-absenta/absenta_backend && export PATH=`$PATH:/usr/bin:/usr/local/bin:`$NODE_BIN_DIR; node dist/scripts/watchdog-sync.js 2>/dev/null || echo "")
   fi
 
   CONF_FILES=`$(ls /var/www/project-absenta/tunnels/*.conf /etc/wireguard/*.conf 2>/dev/null || true)
@@ -526,7 +527,7 @@ check_wireguard() {
 check_pm2() {
   if ! pgrep -f "pm2" &>/dev/null; then
     log "⚠️  PM2 tidak berjalan - mencoba resurrect..."
-    su - asepsuryadi -c "pm2 resurrect" 2>/dev/null || true
+    su - $NEW_USER -c "pm2 resurrect" 2>/dev/null || su - asep -c "pm2 resurrect" 2>/dev/null || su - asepsuryadi -c "pm2 resurrect" 2>/dev/null || true
     sleep 5
     pgrep -f "pm2" &>/dev/null && log "✅ PM2 di-resurrect" || log "❌ PM2 gagal resurrect"
   fi
