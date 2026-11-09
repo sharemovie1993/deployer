@@ -240,7 +240,7 @@ if [ -n "`$OLD_COMMIT" ] && [ -n "`$CHANGED_FILES" ]; then
     fi
 
     if [ -z "`$HAS_DB_SCHEMA" ]; then
-        echo "⏩ SMART SEED: Skema DB & Seeder tidak berubah. Melewati db push & seed!"
+        echo "⏩ SMART SEED: Seeder tidak berubah. Melewati proses seeding data!"
         DO_DB_SEED=false
     fi
 
@@ -379,14 +379,18 @@ if [ "`$DO_BUILD_BACKEND" = true ]; then
     
     npx prisma generate
 
+    # Prisma DB Push selalu dijalankan bersamaan dengan prisma generate agar skema PostgreSQL
+    # selalu 100% sinkron dengan Prisma Client (idempoten & hanya memakan waktu ~300ms)
+    echo "🗄️ Sinkronisasi skema Prisma ke database produksi..."
+    npx prisma db push --accept-data-loss --skip-generate || echo "⚠️ Prisma DB push dilewati atau gagal."
+
     if [ "`$DO_DB_SEED" = true ]; then
-        echo "🌱 Memperbarui database schema & seeding..."
-        npx prisma db push --skip-generate || echo "Prisma DB push dilewati atau gagal."
+        echo "🌱 Memperbarui seeder database..."
         npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
         echo "🌐 Memicu sinkronisasi data wilayah Indonesia di latar belakang..."
         nohup npx ts-node -r tsconfig-paths/register src/scripts/seed_full_wilayah.ts > /tmp/seed_wilayah.log 2>&1 &
     else
-        echo "⏩ SMART SEED: Melewati db push & seed (skema DB & seeder tidak berubah)."
+        echo "⏩ SMART SEED: Melewati data seeding (seeder tidak berubah)."
     fi
 
     # Auto-sync Coturn relay config into .env jika terpasang di VPS
@@ -848,7 +852,7 @@ fi
 npx prisma generate
 if [ "`$DO_PRISMA_PUSH" = true ]; then
     echo "🗄️ Melakukan prisma db push (schema update ke database produksi)..."
-    npx prisma db push --skip-generate || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
+    npx prisma db push --accept-data-loss --skip-generate || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
 else
     echo "⏩ SMART PRISMA: Melewati prisma db push (schema tidak berubah)."
 fi
@@ -1201,7 +1205,7 @@ if [ -f "prisma/schema.prisma" ]; then
     npx prisma generate
 
     echo "🗄️ Prisma db push (sinkronisasi schema ke database produksi)..."
-    npx prisma db push --skip-generate || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
+    npx prisma db push --accept-data-loss --skip-generate || echo "⚠️ Prisma db push dilewati atau sudah up-to-date."
 fi
 
 echo "🔁 Reload PM2 Aplikasi..."

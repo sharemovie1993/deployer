@@ -843,7 +843,7 @@ if [ "$IS_ABSENTA" = "True" ]; then
     npx prisma generate
 
     # Jalankan prisma db push & seed (jika database postgresql sudah siap)
-    npx prisma db push --skip-generate || echo "Prisma DB push dilewati atau gagal. Pastikan PostgreSQL siap."
+    npx prisma db push --accept-data-loss --skip-generate || echo "Prisma DB push dilewati atau gagal. Pastikan PostgreSQL siap."
     npx prisma db seed || echo "Prisma DB seed dilewati atau gagal."
 
     npm run build
@@ -964,7 +964,7 @@ elif [ "$IS_SERVER_LISENSI" = "True" ]; then
     cd /var/www/licensing-server
     npm install --production
     npx prisma generate
-    npx prisma db push --skip-generate || echo "Prisma db push dilewati atau gagal."
+    npx prisma db push --accept-data-loss --skip-generate || echo "Prisma db push dilewati atau gagal."
     npx prisma db seed || echo "Prisma db seed dilewati atau gagal."
 
     pm2 delete licensing-server || true

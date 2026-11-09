@@ -1209,7 +1209,7 @@ npm install --ignore-scripts
 npm install zod@3.23.8 --save-exact --ignore-scripts || true
 npx prisma generate
 npm rebuild bcrypt 2>/dev/null || true
-npx prisma db push --skip-generate || echo "Prisma DB push dilewati atau gagal."
+npx prisma db push --accept-data-loss --skip-generate || echo "Prisma DB push dilewati atau gagal."
 npx prisma db seed || echo "Prisma DB seed dilewati atau gagal."
 npx ts-node scripts/adhoc/sync-tenant-subscription.ts 2>/dev/null || echo "Sinkronisasi langganan tenant dilewati."
 npm run build

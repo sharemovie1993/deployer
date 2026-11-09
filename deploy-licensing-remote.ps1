@@ -228,15 +228,16 @@ $CF_TOKEN = (Read-Host "Masukkan Cloudflare API Token (untuk SSL Caddy, kosongka
 if ([string]::IsNullOrWhiteSpace($CF_TOKEN)) { $CF_TOKEN = $defaultCfToken }
 Write-Host "`nPilih Skenario Database PostgreSQL:" -ForegroundColor White
 Write-Host " 1) Database Eksternal (Gunakan database terpisah / cloud / VM lain)" -ForegroundColor White
-Write-Host " 2) Database Internal (Instal secara lokal di VPS ini)" -ForegroundColor White
-$dbChoice = Read-Host "Pilih [1-2] (Default: 1)"
+Write-Host " 2) Database Internal Localhost (Standar Rekomendasi: VPS 127.0.0.1:5432)" -ForegroundColor White
+$dbChoice = Read-Host "Pilih [1-2] (Default: 2)"
 
-$INSTALL_POSTGRES = "N"
-if ($dbChoice -eq "2") {
+$INSTALL_POSTGRES = "Y"
+if ($dbChoice -eq "1") {
+    $INSTALL_POSTGRES = "N"
+    $suggestedDbUrl = $defaultDbUrl
+} else {
     $INSTALL_POSTGRES = "Y"
     $suggestedDbUrl = "postgresql://postgres:123123123@localhost:5432/orkestrator_licensing"
-} else {
-    $suggestedDbUrl = $defaultDbUrl
 }
 
 $DB_URL = (Read-Host "Masukkan DATABASE_URL PostgreSQL [$suggestedDbUrl]").Trim()
@@ -342,6 +343,11 @@ if [[ "$INSTALL_POSTGRES" =~ ^[yY]$ ]]; then
     if ! echo '$SUDO_PASS' | sudo -u postgres psql -t -A -c "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
         echo '$SUDO_PASS' | sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;"
     fi
+    echo "Menerapkan tuning konfigurasi PostgreSQL (hemat memori untuk VPS 1GB RAM)..."
+    echo '$SUDO_PASS' | sudo -S sed -i "s/^#*listen_addresses = .*/listen_addresses = '127.0.0.1'/" /etc/postgresql/*/main/postgresql.conf 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S sed -i "s/^#*max_connections = .*/max_connections = 50/" /etc/postgresql/*/main/postgresql.conf 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S sed -i "s/^#*shared_buffers = .*/shared_buffers = 64MB/" /etc/postgresql/*/main/postgresql.conf 2>/dev/null || true
+    echo '$SUDO_PASS' | sudo -S systemctl restart postgresql
 fi
 
 # Konfigurasi Sysctl Forwarding & Sudo Passwordless untuk WireGuard
@@ -493,7 +499,7 @@ npm install --production
 npx prisma generate
 
 # Sinkronisasi Skema & Seeding
-npx prisma db push --skip-generate || echo "Prisma db push dilewati/gagal."
+npx prisma db push --accept-data-loss --skip-generate || echo "Prisma db push dilewati/gagal."
 npx prisma db seed || echo "Prisma db seed dilewati/gagal."
 
 # PM2 Restart
