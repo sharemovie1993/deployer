@@ -106,6 +106,10 @@ function runQuickUpdatePreset(presetId) {
             span.appendChild(document.createTextNode('\n=============================================\n  QUICK UPDATE SELESAI SAKSES! (Durasi: ' + durationFormatted + ')\n=============================================\n'));
             consoleContainer.appendChild(span);
             consoleContainer.scrollTop = consoleContainer.scrollHeight;
+
+            if (typeof window.refreshWorkspaceGitStatus === 'function') {
+                window.refreshWorkspaceGitStatus();
+            }
             return;
         }
 
@@ -134,6 +138,10 @@ function runQuickUpdatePreset(presetId) {
             span.appendChild(document.createTextNode('\n[ERROR] ' + line + ' (Total Waktu: ' + durationFormatted + ')\n'));
             consoleContainer.appendChild(span);
             consoleContainer.scrollTop = consoleContainer.scrollHeight;
+
+            if (typeof window.refreshWorkspaceGitStatus === 'function') {
+                window.refreshWorkspaceGitStatus();
+            }
             return;
         }
 
@@ -290,6 +298,10 @@ function runSeedWilayahPreset(presetId) {
             span.appendChild(document.createTextNode('\n=============================================\n  SEEDER FULL WILAYAH INDONESIA SELESAI SAKSES! (Durasi: ' + durationFormatted + ')\n=============================================\n'));
             consoleContainer.appendChild(span);
             consoleContainer.scrollTop = consoleContainer.scrollHeight;
+
+            if (typeof window.refreshWorkspaceGitStatus === 'function') {
+                window.refreshWorkspaceGitStatus();
+            }
             return;
         }
 
@@ -319,6 +331,10 @@ function runSeedWilayahPreset(presetId) {
             span.appendChild(document.createTextNode('\n[ERROR] ' + line + ' (Total Waktu: ' + durationFormatted + ')\n'));
             consoleContainer.appendChild(span);
             consoleContainer.scrollTop = consoleContainer.scrollHeight;
+
+            if (typeof window.refreshWorkspaceGitStatus === 'function') {
+                window.refreshWorkspaceGitStatus();
+            }
             return;
         }
 

@@ -8,6 +8,7 @@ const { handleAuditTunnels, handleFixTunnels, handleCleanGhostTunnels, handleRem
 const { handleBrowseFile, handleTestSsh, handleTestDb, handleCreateDb, handleRegisterLicense, handleVerifyLicense, handleRequestMigrationOtp, handleConfirmMigrationOtp, handleSaveConfig, handleTestClusterNodes } = require('./controllers/installer.controller');
 const { handleAuditHardeningTuning } = require('./controllers/audit.controller');
 const { handleBenchmarkIops } = require('./controllers/benchmark.controller');
+const { handleGetGitStatus } = require('./controllers/git.controller');
 
 const {
     handleStreamQuickUpdate,
@@ -102,6 +103,7 @@ function handleRequest(req, res) {
     if (pathname === '/api/presets' && req.method === 'GET') return handleGetPresets(req, res);
     if (pathname === '/api/presets' && req.method === 'POST') return handleSavePreset(req, res);
     if (pathname === '/api/presets' && req.method === 'DELETE') return handleDeletePreset(req, res, parsedUrl);
+    if (pathname === '/api/git-status' && req.method === 'GET') return handleGetGitStatus(req, res, parsedUrl);
 
     // 2. SSH Connection & Port Resolution
     if (pathname === '/api/test-connection' && req.method === 'GET') return handleTestConnection(req, res, parsedUrl);

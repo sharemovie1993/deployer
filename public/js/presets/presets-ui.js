@@ -140,6 +140,9 @@ function selectPresetServer(presetId) {
         pingBtn.style.borderColor = 'rgba(52,211,153,0.4)';
     }
 
+    // Ambil Git Commit & Push Status secara otomatis
+    loadWorkspaceGitStatus(presetId);
+
     // Scroll workspace into view smoothly
     workspaceSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -319,6 +322,132 @@ function fixWorkspaceTunnel() {
     if (window.currentSelectedPresetId && typeof fixTunnelPreset === 'function') {
         fixTunnelPreset(window.currentSelectedPresetId);
     }
+}
+
+function refreshWorkspaceGitStatus(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (window.currentSelectedPresetId) {
+        loadWorkspaceGitStatus(window.currentSelectedPresetId, true);
+    }
+}
+
+function loadWorkspaceGitStatus(presetId, isManualRefresh) {
+    const syncBadge = document.getElementById('ws-git-sync-badge');
+    const localHashEl = document.getElementById('ws-git-local-hash');
+    const localMsgEl = document.getElementById('ws-git-local-msg');
+    const localTimeEl = document.getElementById('ws-git-local-time');
+    const pushStatusEl = document.getElementById('ws-git-push-status');
+
+    const remoteHashEl = document.getElementById('ws-git-remote-hash');
+    const remoteMsgEl = document.getElementById('ws-git-remote-msg');
+    const remoteTimeEl = document.getElementById('ws-git-remote-time');
+    const remoteBranchEl = document.getElementById('ws-git-remote-branch');
+
+    if (!syncBadge) return;
+
+    syncBadge.innerText = 'Memeriksa...';
+    syncBadge.style.background = 'rgba(148, 163, 184, 0.2)';
+    syncBadge.style.color = '#94a3b8';
+    syncBadge.style.borderColor = 'rgba(148, 163, 184, 0.3)';
+
+    if (isManualRefresh) {
+        if (localMsgEl) localMsgEl.innerText = 'Memperbarui status git...';
+        if (remoteMsgEl) remoteMsgEl.innerText = 'Memeriksa status VPS...';
+    }
+
+    fetch('/api/git-status?id=' + encodeURIComponent(presetId))
+        .then(function(res) { return res.json(); })
+        .then(function(res) {
+            if (!res.success || !res.data) {
+                syncBadge.innerText = 'Gagal Cek';
+                syncBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+                syncBadge.style.color = '#f87171';
+                syncBadge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                return;
+            }
+
+            const local = res.data.local;
+            const remote = res.data.remote;
+            const sync = res.data.sync;
+
+            // 1. Render Local Info
+            if (local && local.exists) {
+                if (localHashEl) localHashEl.innerText = local.hash;
+                if (localMsgEl) {
+                    localMsgEl.innerText = local.message || 'No commit message';
+                    localMsgEl.title = '[' + local.hash + '] ' + local.message + '\nAuthor: ' + (local.author || '-') + '\nDate: ' + (local.dateIso || '-');
+                }
+                if (localTimeEl) {
+                    localTimeEl.innerText = (local.dateRelative || '') + ' • branch: ' + local.branch;
+                }
+
+                if (pushStatusEl) {
+                    if (local.unpushedCount > 0) {
+                        pushStatusEl.innerHTML = '<span style="color: #fbbf24;">⚠️ ' + local.unpushedCount + ' commit belum dipush</span>';
+                    } else if (local.hasUncommitted) {
+                        pushStatusEl.innerHTML = '<span style="color: #fb923c;">⚠️ ' + local.uncommittedCount + ' file belum dicommit</span>';
+                    } else {
+                        pushStatusEl.innerHTML = '<span style="color: #34d399;">✅ Pushed to ' + (local.upstream || 'origin') + '</span>';
+                    }
+                }
+            } else {
+                if (localHashEl) localHashEl.innerText = 'N/A';
+                if (localMsgEl) localMsgEl.innerText = (local && local.error) || 'Git lokal tidak ditemukan';
+                if (localTimeEl) localTimeEl.innerText = '-';
+                if (pushStatusEl) pushStatusEl.innerText = '-';
+            }
+
+            // 2. Render Remote Info
+            if (remote && remote.exists) {
+                if (remoteHashEl) remoteHashEl.innerText = remote.hash;
+                if (remoteMsgEl) {
+                    remoteMsgEl.innerText = remote.message || 'No commit message';
+                    remoteMsgEl.title = '[' + remote.hash + '] ' + remote.message + '\nDate: ' + (remote.dateRelative || '-');
+                }
+                if (remoteTimeEl) remoteTimeEl.innerText = remote.dateRelative || '';
+                if (remoteBranchEl) remoteBranchEl.innerText = 'branch: ' + remote.branch;
+            } else {
+                if (remoteHashEl) remoteHashEl.innerText = 'Offline/Belum Ada';
+                if (remoteMsgEl) {
+                    remoteMsgEl.innerText = (remote && remote.error) || 'VPS offline atau direktori belum di-clone';
+                    remoteMsgEl.title = (remote && remote.error) || '';
+                }
+                if (remoteTimeEl) remoteTimeEl.innerText = '-';
+                if (remoteBranchEl) remoteBranchEl.innerText = '-';
+            }
+
+            // 3. Render Sync Badge
+            if (sync) {
+                if (sync.syncState === 'synced') {
+                    syncBadge.innerText = '✅ Selaras (Up-to-Date)';
+                    syncBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+                    syncBadge.style.color = '#34d399';
+                    syncBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                } else if (sync.syncState === 'outdated') {
+                    syncBadge.innerText = '⚡ Perlu Update';
+                    syncBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+                    syncBadge.style.color = '#fbbf24';
+                    syncBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+                } else if (sync.syncState === 'unpushed') {
+                    syncBadge.innerText = '⚠️ Commit Belum Dipush';
+                    syncBadge.style.background = 'rgba(249, 115, 22, 0.2)';
+                    syncBadge.style.color = '#fb923c';
+                    syncBadge.style.borderColor = 'rgba(249, 115, 22, 0.4)';
+                } else {
+                    syncBadge.innerText = 'ℹ️ Siap Deploy';
+                    syncBadge.style.background = 'rgba(167, 139, 250, 0.2)';
+                    syncBadge.style.color = '#c084fc';
+                    syncBadge.style.borderColor = 'rgba(167, 139, 250, 0.4)';
+                }
+            }
+        })
+        .catch(function(err) {
+            console.error('Git status check error:', err);
+            syncBadge.innerText = 'Error Cek';
+            syncBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+            syncBadge.style.color = '#f87171';
+            syncBadge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        });
 }
 
 function runWorkspaceQuickUpdate() {
@@ -583,3 +712,5 @@ window.toggleBuildModeField = toggleBuildModeField;
 window.browseSSHKeyFile = browseSSHKeyFile;
 window.savePresetSubmit = savePresetSubmit;
 window.deletePreset = deletePreset;
+window.loadWorkspaceGitStatus = loadWorkspaceGitStatus;
+window.refreshWorkspaceGitStatus = refreshWorkspaceGitStatus;
