@@ -622,21 +622,152 @@
                     <div class="progress-bar-container">
                         <div class="progress-bar-fill" id="quick-progress-fill"></div>
                     </div>
-                    <div class="progress-text-container" style="margin-bottom: 15px;">
-                        <span id="quick-progress-status">Menghubungkan SSH...</span>
-                        <span id="quick-progress-percent">0%</span>
+                    <div class="progress-text-container" style="margin-bottom: 12px;">
+                        <span id="quick-progress-status" style="font-weight: 600; color: #e2e8f0;">Menghubungkan SSH...</span>
+                        <span id="quick-progress-percent" style="font-weight: 700; color: #a78bfa;">0%</span>
                     </div>
 
-                    <div class="terminal-header">
-                        <div class="terminal-dots">
-                            <span class="dot dot-red"></span>
-                            <span class="dot dot-yellow"></span>
-                            <span class="dot dot-green"></span>
+                    <!-- 1. PIPELINE STEPPER TRACKER -->
+                    <div id="quick-pipeline-stepper" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 15px;">
+                        <!-- Step 1: Git Pull -->
+                        <div class="pipeline-step-box" id="pipe-step-1" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; transition: all 0.3s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="font-size: 11px; font-weight: 700; color: #94a3b8;">1. Git Pull</span>
+                                <span id="pipe-status-1" style="font-size: 10px; color: #64748b;">○ Menunggu</span>
+                            </div>
+                            <div style="font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Sync kode repo</div>
                         </div>
-                        <div style="font-family: 'Fira Code', monospace; font-size: 12px; color: var(--text-muted);">bash - ssh remote update session</div>
-                        <div></div>
+
+                        <!-- Step 2: Dependencies -->
+                        <div class="pipeline-step-box" id="pipe-step-2" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; transition: all 0.3s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="font-size: 11px; font-weight: 700; color: #94a3b8;">2. Dependencies</span>
+                                <span id="pipe-status-2" style="font-size: 10px; color: #64748b;">○ Menunggu</span>
+                            </div>
+                            <div style="font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">npm install</div>
+                        </div>
+
+                        <!-- Step 3: Backend & DB -->
+                        <div class="pipeline-step-box" id="pipe-step-3" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; transition: all 0.3s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="font-size: 11px; font-weight: 700; color: #94a3b8;">3. Backend & DB</span>
+                                <span id="pipe-status-3" style="font-size: 10px; color: #64748b;">○ Menunggu</span>
+                            </div>
+                            <div style="font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Prisma & NestJS</div>
+                        </div>
+
+                        <!-- Step 4: Frontend UI -->
+                        <div class="pipeline-step-box" id="pipe-step-4" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; transition: all 0.3s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="font-size: 11px; font-weight: 700; color: #94a3b8;">4. Frontend</span>
+                                <span id="pipe-status-4" style="font-size: 10px; color: #64748b;">○ Menunggu</span>
+                            </div>
+                            <div style="font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Vite production</div>
+                        </div>
+
+                        <!-- Step 5: PM2 Reload -->
+                        <div class="pipeline-step-box" id="pipe-step-5" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; transition: all 0.3s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="font-size: 11px; font-weight: 700; color: #94a3b8;">5. Finalisasi</span>
+                                <span id="pipe-status-5" style="font-size: 10px; color: #64748b;">○ Menunggu</span>
+                            </div>
+                            <div style="font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">PM2 restart services</div>
+                        </div>
                     </div>
-                    <div class="console-container" id="quick-terminal-logs" style="height: 320px; border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;"></div>
+
+                    <!-- 2. POST-DEPLOYMENT SUMMARY CARD (AWALNYA TERSEMBUNYI) -->
+                    <div id="quick-update-summary-card" style="display: none; margin-bottom: 15px; background: linear-gradient(135deg, rgba(6,78,59,0.35) 0%, rgba(15,23,42,0.6) 100%); border: 1px solid rgba(52,211,153,0.4); border-radius: 12px; padding: 14px 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: #34d399; margin-bottom: 4px;">
+                                    <span>🎉</span> Deployment Quick Update Sukses Sempurna!
+                                </div>
+                                <div id="summary-meta-desc" style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+                                    Semua service telah dimuat ulang dan berjalan optimal di server target.
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11.5px; border-color: rgba(52,211,153,0.3); color: #34d399;" onclick="openWorkspaceHealth()">
+                                    🩺 Cek Status PM2 Live
+                                </button>
+                                <button type="button" class="btn btn-primary" style="padding: 6px 14px; font-size: 11.5px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);" onclick="openTargetServerSite()">
+                                    🌐 Buka Server Target ↗
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. POST-DEPLOYMENT ERROR ASSISTANCE CARD (AWALNYA TERSEMBUNYI) -->
+                    <div id="quick-update-error-card" style="display: none; margin-bottom: 15px; background: linear-gradient(135deg, rgba(127,29,29,0.35) 0%, rgba(15,23,42,0.6) 100%); border: 1px solid rgba(239,68,68,0.4); border-radius: 12px; padding: 14px 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: #f87171; margin-bottom: 4px;">
+                                    <span>⚠️</span> Quick Update Mengalami Kendala!
+                                </div>
+                                <div id="error-meta-desc" style="font-size: 12px; color: #fca5a5; line-height: 1.5;">
+                                    Terjadi kegagalan pada proses eksekusi remote.
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;" id="error-quick-actions">
+                                <button type="button" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11.5px; border-color: rgba(239,68,68,0.3); color: #f87171;" onclick="testWorkspaceConnection()">
+                                    🔌 Uji SSH & Port
+                                </button>
+                                <button type="button" class="btn btn-primary" style="padding: 6px 14px; font-size: 11.5px; background: #dc2626;" onclick="runWorkspaceQuickUpdate()">
+                                    🔄 Coba Ulang Update
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. TERMINAL HEADER WITH UTILITY TOOLBAR -->
+                    <div class="terminal-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #0b1120; border: 1px solid rgba(255,255,255,0.08); border-bottom: none; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="terminal-dots">
+                                <span class="dot dot-red"></span>
+                                <span class="dot dot-yellow"></span>
+                                <span class="dot dot-green"></span>
+                            </div>
+                            <div style="font-family: 'Fira Code', monospace; font-size: 11.5px; color: #94a3b8;">
+                                bash - ssh remote update session
+                            </div>
+                        </div>
+
+                        <!-- Toolbar Actions -->
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <!-- Clean vs Raw Log Filter Toggle -->
+                            <div style="display: inline-flex; background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 2px;">
+                                <button id="btn-logmode-clean" type="button" onclick="setLogViewMode('clean')" style="padding: 2px 8px; font-size: 10.5px; border: none; background: #6366f1; color: #fff; border-radius: 4px; cursor: pointer; font-weight: 700; transition: all 0.2s;">
+                                    🎯 Ringkas
+                                </button>
+                                <button id="btn-logmode-raw" type="button" onclick="setLogViewMode('raw')" style="padding: 2px 8px; font-size: 10.5px; border: none; background: transparent; color: #94a3b8; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                                    📜 Raw Debug
+                                </button>
+                            </div>
+
+                            <!-- Copy Log Button -->
+                            <button id="btn-copy-log" type="button" onclick="copyQuickTerminalLogs()" title="Salin semua log ke clipboard" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
+                                <span>📋</span> <span id="copy-log-label">Salin</span>
+                            </button>
+
+                            <!-- Maximize / Minimize Button -->
+                            <button id="btn-toggle-terminal" type="button" onclick="toggleQuickTerminalSize()" title="Perbesar / Perkecil Ukuran Terminal" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
+                                ⛶
+                            </button>
+
+                            <!-- Clear Logs Button -->
+                            <button type="button" onclick="clearQuickTerminalLogs()" title="Bersihkan tampilan log" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
+                                🧹
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 5. TERMINAL LOGS & FLOATING STICKY SCROLL BUTTON -->
+                    <div style="position: relative;">
+                        <div class="console-container" id="quick-terminal-logs" style="height: 320px; border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; transition: height 0.3s ease; position: relative;"></div>
+                        <button id="btn-scroll-bottom" type="button" onclick="scrollQuickTerminalToBottom()" style="display: none; position: absolute; bottom: 14px; right: 20px; background: rgba(99, 102, 241, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 20px; padding: 5px 12px; font-size: 11px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 10;">
+                            ⬇️ Scroll ke log terbaru
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
